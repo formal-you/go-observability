@@ -60,7 +60,7 @@ func TestMiddlewareWritesAccessEvent(t *testing.T) {
 	}
 	attrs := attrMap(w.attrsList[0])
 	want := []string{
-		"event.name", "http.request.method", "http.route", "http.request.path",
+		"event.name", "http.request.method", "http.route", "url.path",
 		"http.response.status_code", "request_id", "mall.result",
 	}
 	for _, k := range want {

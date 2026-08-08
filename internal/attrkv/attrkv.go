@@ -37,6 +37,53 @@ func Severity(attrs []slog.Attr) (otelog.Severity, string) {
 	return otelog.SeverityInfo, "INFO"
 }
 
+// recordAttrKeys 是 LogRecord 顶层字段对应的属性键。写 OTLP 时这些键不能作为属性：
+// timestamp/level 映射为 LogRecord 顶层字段，event.name 映射为 EventName 顶层字段，
+// trace_id/span_id 由 ctx 的 span context 承担。
+var recordAttrKeys = map[string]struct{}{
+	"timestamp":  {},
+	"level":      {},
+	"event.name": {},
+	"trace_id":   {},
+	"span_id":    {},
+}
+
+// Record 组装 OTLP LogRecord 的顶层字段，并返回应作为属性的剩余 attrs。
+//
+// timestamp（仅 KindTime）与 level（DEBUG/INFO/WARN/ERROR）映射为 LogRecord 顶层字段，
+// 缺省分别取 time.Now() 与 INFO；event.name（仅 KindString）映射为 EventName 顶层字段；
+// trace_id/span_id 直接剥离——sdk/log 的 Logger.Emit 会从 ctx 的 span context 自动关联到
+// LogRecord（见 go.opentelemetry.io/otel/sdk/log 的 newRecord），事件 metadata 中的这两个值
+// 仅供 file/stdout 等扁平投影使用，不写入 OTLP 属性。
+func Record(msg string, attrs []slog.Attr) (otelog.Record, []slog.Attr) {
+	rec := otelog.Record{}
+	rec.SetTimestamp(time.Now())
+	rec.SetObservedTimestamp(time.Now())
+	severity, text := Severity(attrs)
+	rec.SetSeverity(severity)
+	rec.SetSeverityText(text)
+	rec.SetBody(otelog.StringValue(msg))
+
+	rest := make([]slog.Attr, 0, len(attrs))
+	for _, a := range attrs {
+		switch {
+		case a.Key == "timestamp" && a.Value.Kind() == slog.KindTime:
+			if t := a.Value.Time(); !t.IsZero() {
+				rec.SetTimestamp(t)
+			}
+			continue
+		case a.Key == "event.name" && a.Value.Kind() == slog.KindString:
+			rec.SetEventName(a.Value.String())
+			continue
+		}
+		if _, reserved := recordAttrKeys[a.Key]; reserved {
+			continue
+		}
+		rest = append(rest, a)
+	}
+	return rec, rest
+}
+
 func toKeyValue(a slog.Attr) otelog.KeyValue {
 	v := a.Value
 	switch v.Kind() {

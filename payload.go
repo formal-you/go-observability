@@ -18,7 +18,7 @@ func (e AccessPayload) Attrs() []slog.Attr {
 	attrs := make([]slog.Attr, 0, 11)
 	attrs = append(attrs, slog.String(string(KeyEventName), string(e.EventName)))
 	attrs = appendString(attrs, KeyHTTPRequestMethod, e.HTTP.Method)
-	attrs = appendString(attrs, KeyHTTPRequestPath, e.HTTP.URLPath)
+	attrs = appendString(attrs, KeyURLPath, e.HTTP.URLPath)
 	attrs = appendString(attrs, KeyHTTPRoute, e.HTTP.Route)
 	attrs = appendInt(attrs, KeyHTTPResponseStatusCode, e.HTTP.StatusCode)
 	if e.HTTP.ClientIP != nil {
@@ -84,9 +84,9 @@ func (e ErrorPayload) Attrs() []slog.Attr {
 	attrs = appendBool(attrs, KeyMallRetryable, e.Retryable)
 	attrs = appendInt(attrs, KeyMallRetryCount, e.RetryCount)
 	attrs = appendString(attrs, KeyMallUpstreamService, e.UpstreamService)
-	attrs = appendString(attrs, KeyCodeFunction, e.Source.Function)
-	attrs = appendString(attrs, KeyCodeFilepath, e.Source.Filepath)
-	attrs = appendInt(attrs, KeyCodeLineno, e.Source.Line)
+	attrs = appendString(attrs, KeyCodeFunctionName, e.Source.Function)
+	attrs = appendString(attrs, KeyCodeFilePath, e.Source.Filepath)
+	attrs = appendInt(attrs, KeyCodeLineNumber, e.Source.Line)
 	return appendString(attrs, KeyMallResult, string(e.Result))
 }
 

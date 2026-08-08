@@ -51,7 +51,7 @@ func TestAccessEventAttrsConform(t *testing.T) {
 	want := []string{
 		"timestamp", "level", "request_id", "latency_ms", "trace_id", "span_id",
 		"event.name",
-		"http.request.method", "http.request.path", "http.route", "http.response.status_code",
+		"http.request.method", "url.path", "http.route", "http.response.status_code",
 		"client.address", "user_agent.original",
 		"mall.user_id", "mall.result",
 	}
@@ -86,8 +86,8 @@ func TestErrorEventKeepsFalseRetryable(t *testing.T) {
 	if got, ok := attrs["error.type"].(slog.Value); !ok || got.String() != "db.timeout" {
 		t.Errorf("error.type = %v, want db.timeout", attrs["error.type"])
 	}
-	if _, ok := attrs["code.lineno"]; !ok {
-		t.Error("code.lineno 应输出（Line=42 非零）")
+	if _, ok := attrs["code.line.number"]; !ok {
+		t.Error("code.line.number 应输出（Line=42 非零）")
 	}
 }
 

@@ -16,7 +16,8 @@ const (
 	EventProbe    EventType = "probe"
 )
 
-// EventName 细名：event_type.module.action，如 business.order.paid；作为 event.name 属性输出。
+// EventName 细名：event_type.module.action，如 business.order.paid。
+// OTLP 路径由 attrkv 映射到 LogRecord 的 EventName 顶层字段；file/stdout 扁平投影保留 event.name 键。
 type EventName string
 
 // Level 语义化级别；Writer 适配层转 slog.Level 与 OTel SeverityNumber。

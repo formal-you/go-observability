@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/formal-you/go-observability/internal/attrkv"
 	"go.opentelemetry.io/otel/attribute"
@@ -17,7 +16,8 @@ import (
 )
 
 // Writer 实现 log.Writer：把扁平 attrs 写入 OTLP Logs。
-// trace_id/span_id 由 ctx 中的 span context 自动关联到 LogRecord。
+// trace_id/span_id 由 ctx 中的 span context 自动关联到 LogRecord（sdk/log 的 Emit 行为），
+// 事件 metadata 中的同名键不会写成属性。
 type Writer struct {
 	logger   otelog.Logger
 	provider *sdklog.LoggerProvider
@@ -49,7 +49,7 @@ func New(ctx context.Context, opts ...Option) (*Writer, error) {
 	}
 	if o.res == nil {
 		o.res = resource.NewWithAttributes(
-			"https://opentelemetry.io/schemas/1.26.0",
+			"https://opentelemetry.io/schemas/1.41.0",
 			attribute.String("service.name", "go-observability"),
 		)
 	}
@@ -68,15 +68,11 @@ func New(ctx context.Context, opts ...Option) (*Writer, error) {
 func (w *Writer) Close(ctx context.Context) error { return w.provider.Shutdown(ctx) }
 
 // Write 把事件写为一条 OTLP LogRecord。
+// timestamp/level 映射为 LogRecord 顶层字段；trace_id/span_id 由 ctx 的 span context 关联，
+// 不写入属性。采集频率由 opentelemetry-collector 的 batch processor 控制，本方法同步 Emit 即返回。
 func (w *Writer) Write(ctx context.Context, msg string, attrs ...slog.Attr) error {
-	rec := otelog.Record{}
-	rec.SetTimestamp(time.Now())
-	rec.SetObservedTimestamp(time.Now())
-	severity, text := attrkv.Severity(attrs)
-	rec.SetSeverity(severity)
-	rec.SetSeverityText(text)
-	rec.SetBody(otelog.StringValue(msg))
-	rec.AddAttributes(attrkv.ToKeyValues(attrs)...)
+	rec, rest := attrkv.Record(msg, attrs)
+	rec.AddAttributes(attrkv.ToKeyValues(rest)...)
 	w.logger.Emit(ctx, rec)
 	return nil
 }

@@ -6,13 +6,15 @@ type Key string
 
 const (
 	// 事件（semconv general/events）
+	// event.name 仅作为传输键：OTLP 路径由 attrkv 映射到 LogRecord 的 EventName 顶层字段，
+	// file/stdout 扁平投影保留 event.name 键（1.41.0 的属性名 otel.event.name 只用于桥接场景）。
 	KeyEventName Key = "event.name"
 	KeyTimestamp Key = "timestamp"
 	KeyLevel     Key = "level"
 
-	// HTTP（semconv http）
+	// HTTP（semconv http；路径用 url.path，1.41.0 已移除 http.request.path）
 	KeyHTTPRequestMethod      Key = "http.request.method"
-	KeyHTTPRequestPath        Key = "http.request.path"
+	KeyURLPath                Key = "url.path"
 	KeyHTTPRoute              Key = "http.route"
 	KeyHTTPResponseStatusCode Key = "http.response.status_code"
 	KeyClientAddress          Key = "client.address"
@@ -24,10 +26,10 @@ const (
 	KeyExceptionMessage    Key = "exception.message"
 	KeyExceptionStacktrace Key = "exception.stacktrace"
 
-	// 代码位置（semconv code）
-	KeyCodeFunction Key = "code.function"
-	KeyCodeFilepath Key = "code.filepath"
-	KeyCodeLineno   Key = "code.lineno"
+	// 代码位置（semconv code：1.41.0 命名为 code.function.name / code.file.path / code.line.number）
+	KeyCodeFunctionName Key = "code.function.name"
+	KeyCodeFilePath     Key = "code.file.path"
+	KeyCodeLineNumber   Key = "code.line.number"
 
 	// 通用（关联链路：由 EventMetadata 输出，Writer 再转 OTLP TraceId/SpanId 字节）
 	KeyTraceID Key = "trace_id"

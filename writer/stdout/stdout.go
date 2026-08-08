@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"time"
 
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutlog"
 	otelog "go.opentelemetry.io/otel/log"
@@ -50,16 +49,11 @@ func New(ctx context.Context, opts ...Option) (*Writer, error) {
 // Close 关闭 LoggerProvider，flush 待导出记录。
 func (w *Writer) Close(ctx context.Context) error { return w.provider.Shutdown(ctx) }
 
-// Write 把事件写为一条 stdout LogRecord。
+// Write 把事件写为一条 stdout LogRecord；与 otlp.Writer 共享同一组装逻辑：
+// timestamp/level 映射顶层字段，trace_id/span_id 由 ctx 关联，不写成属性。
 func (w *Writer) Write(ctx context.Context, msg string, attrs ...slog.Attr) error {
-	rec := otelog.Record{}
-	rec.SetTimestamp(time.Now())
-	rec.SetObservedTimestamp(time.Now())
-	severity, text := attrkv.Severity(attrs)
-	rec.SetSeverity(severity)
-	rec.SetSeverityText(text)
-	rec.SetBody(otelog.StringValue(msg))
-	rec.AddAttributes(attrkv.ToKeyValues(attrs)...)
+	rec, rest := attrkv.Record(msg, attrs)
+	rec.AddAttributes(attrkv.ToKeyValues(rest)...)
 	w.logger.Emit(ctx, rec)
 	return nil
 }
