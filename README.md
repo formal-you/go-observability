@@ -6,6 +6,11 @@
 
 模块路径：`github.com/formal-you/go-observability`（发布前请确认为正式仓库地址）。
 
+## 新人引导
+
+新接手先读 [docs/onboarding.md](docs/onboarding.md)（定位 / 阅读顺序 / 15 分钟上手）；
+代码走读看 [docs/architecture.md](docs/architecture.md)，流程与规则看 [docs/workflow.md](docs/workflow.md)。
+
 ## 特性
 
 - 核心包零外部依赖（仅标准库：log/slog、net、time、fmt、strings），属性键直接对齐 OTel semconv 1.41.0 + mall.* vendor 命名空间。
