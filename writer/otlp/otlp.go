@@ -19,8 +19,9 @@ import (
 // trace_id/span_id 由 ctx 中的 span context 自动关联到 LogRecord（sdk/log 的 Emit 行为），
 // 事件 metadata 中的同名键不会写成属性。
 type Writer struct {
-	logger   otelog.Logger
-	provider *sdklog.LoggerProvider
+	logger       otelog.Logger
+	provider     *sdklog.LoggerProvider
+	ownsProvider bool
 }
 
 // Option 配置 New。
@@ -29,6 +30,13 @@ type Option func(*options)
 type options struct {
 	endpoint string
 	res      *resource.Resource
+	provider *sdklog.LoggerProvider
+}
+
+// WithLoggerProvider 注入外部 LoggerProvider（如 internal/telemetry 装配的三信号 provider）。
+// 注入时 Writer 不拥有该 provider，Close 不会 Shutdown 它（由装配层统一关闭）。
+func WithLoggerProvider(provider *sdklog.LoggerProvider) Option {
+	return func(o *options) { o.provider = provider }
 }
 
 // WithEndpoint 设置 OTLP gRPC endpoint；默认 127.0.0.1:4317。
@@ -53,19 +61,27 @@ func New(ctx context.Context, opts ...Option) (*Writer, error) {
 			attribute.String("service.name", "go-observability"),
 		)
 	}
-	exporter, err := otlploggrpc.New(ctx, otlploggrpc.WithEndpointURL(o.endpoint))
-	if err != nil {
-		return nil, fmt.Errorf("otlp: create log exporter: %w", err)
+	if o.provider == nil {
+		exporter, err := otlploggrpc.New(ctx, otlploggrpc.WithEndpointURL(o.endpoint))
+		if err != nil {
+			return nil, fmt.Errorf("otlp: create log exporter: %w", err)
+		}
+		o.provider = sdklog.NewLoggerProvider(
+			sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
+			sdklog.WithResource(o.res),
+		)
 	}
-	provider := sdklog.NewLoggerProvider(
-		sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
-		sdklog.WithResource(o.res),
-	)
-	return &Writer{logger: provider.Logger("go-observability"), provider: provider}, nil
+	return &Writer{logger: o.provider.Logger("go-observability"), provider: o.provider, ownsProvider: true}, nil
 }
 
-// Close 关闭 LoggerProvider，flush 待导出记录。
-func (w *Writer) Close(ctx context.Context) error { return w.provider.Shutdown(ctx) }
+// Close 关闭自建的 LoggerProvider，flush 待导出记录。
+// 注入外部 provider（WithLoggerProvider）时 Close 为 no-op，由装配层统一 Shutdown。
+func (w *Writer) Close(ctx context.Context) error {
+	if !w.ownsProvider {
+		return nil
+	}
+	return w.provider.Shutdown(ctx)
+}
 
 // Write 把事件写为一条 OTLP LogRecord。
 // timestamp/level 映射为 LogRecord 顶层字段；trace_id/span_id 由 ctx 的 span context 关联，
