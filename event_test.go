@@ -34,7 +34,7 @@ func TestAccessEventAttrsConform(t *testing.T) {
 			LatencyMS: 12,
 		},
 		Data: AccessPayload{
-			EventName: "access.http.request",
+			EventName: EventNameAccessHTTPRequest,
 			Subject:   Subject{UserID: "u1"},
 			HTTP: HTTPInfo{
 				Method:     "POST",
@@ -71,7 +71,7 @@ func TestErrorEventKeepsFalseRetryable(t *testing.T) {
 	ev := ErrorEvent{
 		EventMetadata: EventMetadata{Level: LevelError},
 		Data: ErrorPayload{
-			EventName:    "error.system.db.timeout",
+			EventName:    EventNameErrorDBTimeout,
 			ErrorType:    "db.timeout",
 			ErrorMessage: "dial tcp: connection refused",
 			Retryable:    false,
@@ -95,7 +95,7 @@ func TestZeroValueOmission(t *testing.T) {
 	ev := BusinessEvent{
 		EventMetadata: EventMetadata{Level: LevelInfo},
 		Data: BusinessPayload{
-			EventName: "business.order.paid",
+			EventName: EventNameBusinessOrderPaid,
 			Result:    ResultSuccess,
 		},
 	}
@@ -112,7 +112,7 @@ func TestMiddlewareTypeSwitch(t *testing.T) {
 	var ev EventPayload = AccessEvent{
 		EventMetadata: EventMetadata{Level: LevelInfo},
 		Data: AccessPayload{
-			EventName: "access.http.request",
+			EventName: EventNameAccessHTTPRequest,
 			HTTP:      HTTPInfo{Method: "GET", StatusCode: 200},
 			Result:    ResultSuccess,
 		},
@@ -129,5 +129,74 @@ func TestMiddlewareTypeSwitch(t *testing.T) {
 		t.Error("不应断言为 ErrorEvent")
 	default:
 		t.Fatalf("未知事件类型: %T", ev)
+	}
+}
+
+// TestEventNameConventions 验证 EventName 注册表符合 类别.模块.操作 三段式，且构造校验生效。
+func TestEventNameConventions(t *testing.T) {
+	names := []EventName{
+		EventNameAccessHTTPRequest,
+		EventNameBusinessOrderPaid,
+		EventNameErrorDBTimeout,
+	}
+	for _, n := range names {
+		if err := n.Validate(); err != nil {
+			t.Errorf("%s 不符合段式: %v", n, err)
+		}
+	}
+	if got := NewEventName("access", "http", "request"); got != EventNameAccessHTTPRequest {
+		t.Errorf("NewEventName = %q, want %q", got, EventNameAccessHTTPRequest)
+	}
+
+	assertPanics := func(name string, f func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Errorf("%s: 期望 panic，实际未 panic", name)
+			}
+		}()
+		f()
+	}
+	assertPanics("2 段", func() { NewEventName("access", "http") })
+	assertPanics("4 段", func() { NewEventName("access", "http", "a", "b") })
+	assertPanics("大写", func() { NewEventName("Access", "http", "request") })
+	if err := EventName("error.system.db.timeout").Validate(); err == nil {
+		t.Error("4 段事件名应校验失败")
+	}
+}
+
+// TestRequestIDDerivedFromTraceID 验证 A4：RequestID 为空且 TraceID 非空时，归一化派生
+// trace_id 前缀（12 hex）；显式 RequestID 优先；trace 不足长度时原样兜底。
+func TestRequestIDDerivedFromTraceID(t *testing.T) {
+	traceID := "0123456789abcdef0123456789abcdef"
+
+	derive := func(md EventMetadata) string {
+		ev := AccessEvent{
+			EventMetadata: md,
+			Data: AccessPayload{
+				EventName: EventNameAccessHTTPRequest,
+				HTTP:      HTTPInfo{Method: "GET", StatusCode: 200},
+				Result:    ResultSuccess,
+			},
+		}
+		attrs := attrMap(ev.Attrs())
+		v, ok := attrs["request_id"].(slog.Value)
+		if !ok {
+			return ""
+		}
+		return v.String()
+	}
+
+	if got := derive(EventMetadata{TraceID: traceID}); got != "0123456789ab" {
+		t.Errorf("派生 request_id = %q, want 0123456789ab（trace_id 前 12 hex）", got)
+	}
+	if got := derive(EventMetadata{TraceID: traceID, RequestID: "REQ-GW-1"}); got != "REQ-GW-1" {
+		t.Errorf("显式 request_id 应优先, got %q", got)
+	}
+	if got := derive(EventMetadata{TraceID: "abcd"}); got != "abcd" {
+		t.Errorf("短 trace_id 应原样兜底, got %q", got)
+	}
+	if got := derive(EventMetadata{}); got != "" {
+		t.Errorf("无 trace 无显式值应省略, got %q", got)
 	}
 }

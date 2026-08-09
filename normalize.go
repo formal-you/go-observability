@@ -11,6 +11,17 @@ type event[T EventPayload] struct {
 	Data      T
 }
 
+// requestIDPrefixLen 对外报障凭证取 trace_id 的前缀长度（A4：12 hex，48 bit，前缀匹配免映射表）。
+const requestIDPrefixLen = 12
+
+// requestIDFromTraceID 取 trace_id 前缀作为 request_id；trace_id 不足长度时原样返回。
+func requestIDFromTraceID(traceID string) string {
+	if len(traceID) < requestIDPrefixLen {
+		return traceID
+	}
+	return traceID[:requestIDPrefixLen]
+}
+
 // reservedKeys 与公共字段 / SDK 管理的字段冲突的键：payload 输出时直接丢弃。
 // timestamp、level、request_id、latency_ms 由 metadata 承担；
 // trace_id、span_id 由 span context 承担；service.*、deployment.environment 由 Resource 承担。
@@ -36,7 +47,12 @@ func eventAttrs[T EventPayload](ev event[T]) []slog.Attr {
 	attrs = append(attrs, slog.String(string(KeyLevel), string(ev.Metadata.Level)))
 	attrs = appendString(attrs, KeyTraceID, ev.Metadata.TraceID)
 	attrs = appendString(attrs, KeySpanID, ev.Metadata.SpanID)
-	attrs = appendString(attrs, KeyRequestID, ev.Metadata.RequestID)
+	// request_id：显式值优先；为空且 trace_id 非空时派生 trace_id 前缀（A4 免映射表约定）。
+	requestID := ev.Metadata.RequestID
+	if requestID == "" && ev.Metadata.TraceID != "" {
+		requestID = requestIDFromTraceID(ev.Metadata.TraceID)
+	}
+	attrs = appendString(attrs, KeyRequestID, requestID)
 	attrs = appendInt64(attrs, KeyLatencyMS, ev.Metadata.LatencyMS)
 	for _, a := range ev.Data.Attrs() {
 		if a.Key == "" {

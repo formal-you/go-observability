@@ -33,24 +33,30 @@ func (e AccessPayload) Attrs() []slog.Attr {
 // BusinessPayload 记录领域业务动作与业务拒绝。
 type BusinessPayload struct {
 	EventName       EventName
+	ErrorType       string // error.type：business.* / validation.failed（低基数失败类别）
 	Subject         Subject
 	Resource        Resource
-	BusinessCode    string
+	BusinessCode    string // ErrCode：模块.场景.操作（格式校验随 B4 错误体系落地）
 	BusinessMessage string
+	Source          Source // code.function.name / code.file.path / code.line.number
 	Result          Result
 }
 
 func (BusinessPayload) EventType() EventType { return EventBusiness }
 
 func (e BusinessPayload) Attrs() []slog.Attr {
-	attrs := make([]slog.Attr, 0, 10)
+	attrs := make([]slog.Attr, 0, 14)
 	attrs = append(attrs, slog.String(string(KeyEventName), string(e.EventName)))
+	attrs = appendString(attrs, KeyErrorType, e.ErrorType)
 	attrs = appendString(attrs, KeyMallUserID, e.Subject.UserID)
 	attrs = appendString(attrs, KeyMallTenantID, e.Subject.TenantID)
 	attrs = appendString(attrs, KeyMallResourceType, e.Resource.Type)
 	attrs = appendString(attrs, KeyMallResourceID, e.Resource.ID)
 	attrs = appendString(attrs, KeyMallBusinessCode, e.BusinessCode)
 	attrs = appendString(attrs, KeyMallBusinessMessage, e.BusinessMessage)
+	attrs = appendString(attrs, KeyCodeFunctionName, e.Source.Function)
+	attrs = appendString(attrs, KeyCodeFilePath, e.Source.Filepath)
+	attrs = appendInt(attrs, KeyCodeLineNumber, e.Source.Line)
 	return appendString(attrs, KeyMallResult, string(e.Result))
 }
 
