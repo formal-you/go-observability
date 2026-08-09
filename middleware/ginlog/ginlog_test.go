@@ -61,7 +61,7 @@ func TestMiddlewareWritesAccessEvent(t *testing.T) {
 	attrs := attrMap(w.attrsList[0])
 	want := []string{
 		"event.name", "http.request.method", "http.route", "url.path",
-		"http.response.status_code", "request_id", "mall.result",
+		"http.response.status_code", "request_id", "app.result",
 	}
 	for _, k := range want {
 		if _, ok := attrs[k]; !ok {
@@ -106,8 +106,8 @@ func TestMiddlewareStatusMapping(t *testing.T) {
 	if got, ok := attrs["level"].(slog.Value); !ok || got.String() != "ERROR" {
 		t.Errorf("500 应映射 level=ERROR，实际 %v", attrs["level"])
 	}
-	if got, ok := attrs["mall.result"].(slog.Value); !ok || got.String() != "failed" {
-		t.Errorf("500 应映射 result=failed，实际 %v", attrs["mall.result"])
+	if got, ok := attrs["app.result"].(slog.Value); !ok || got.String() != "failed" {
+		t.Errorf("500 应映射 result=failed，实际 %v", attrs["app.result"])
 	}
 }
 
@@ -182,7 +182,7 @@ func TestMiddlewareStatus503IsWarn(t *testing.T) {
 	if got, ok := attrs["level"].(slog.Value); !ok || got.String() != "WARN" {
 		t.Errorf("503 应映射 level=WARN（B3 Q4），实际 %v", attrs["level"])
 	}
-	if got, ok := attrs["mall.result"].(slog.Value); !ok || got.String() != "failed" {
-		t.Errorf("503 应映射 result=failed，实际 %v", attrs["mall.result"])
+	if got, ok := attrs["app.result"].(slog.Value); !ok || got.String() != "failed" {
+		t.Errorf("503 应映射 result=failed，实际 %v", attrs["app.result"])
 	}
 }

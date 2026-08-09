@@ -6,7 +6,7 @@
 ## 项目身份
 
 - 模块路径：`github.com/formal-you/go-observability`；Go 1.25。
-- 定位：基于 OpenTelemetry 语义约定的语义化日志组件，采用「方案2 源即规范」——属性键直接用 OTel semconv 1.41.0 名 + `mall.*` vendor 命名空间。
+- 定位：基于 OpenTelemetry 语义约定的语义化日志组件，采用「方案2 源即规范」——属性键直接用 OTel semconv 1.41.0 名 + `app.*` vendor 命名空间。
 - 核心 log 包零外部依赖（仅标准库：log/slog、net、time、fmt、strings）；OTel 依赖只允许出现在 `internal/attrkv`、`writer/*`、`internal/telemetry`、`middleware/ginlog`、`example/*`。
 - 采集频率归 opentelemetry-collector（batch processor）；核心层每次 Emit 同步写出，不做批处理/定时器。
 
@@ -18,7 +18,7 @@
    - 代码位置用 `code.function.name` / `code.file.path` / `code.line.number`（不是 `code.function` / `code.filepath` / `code.lineno`）；
    - `event.name` 走 LogRecord 的 EventName 顶层字段，不写属性（属性名 `otel.event.name` 仅桥接场景用）。
 3. LogRecord 顶层字段映射由 `internal/attrkv.Record` 集中完成：`timestamp`→Timestamp、`level`→SeverityNumber/SeverityText、`event.name`→EventName；`trace_id`/`span_id` 不写属性，由 ctx 的 span context 自动关联（sdk/log Logger.Emit 行为，ginlog 传 `c.Request.Context()`）。新增保留键必须同时更新 `attrkv.recordAttrKeys` 与 `normalize.reservedKeys`。
-4. 新增/修改字段必须在 `keys.go` 登记常量；vendor 字段一律 `mall.*` 前缀，不与 semconv 冲突。
+4. 新增/修改字段必须在 `keys.go` 登记常量；vendor 字段一律 `app.*` 前缀，不与 semconv 冲突。
 5. 双投影：file/stdout 扁平列保留 `timestamp`/`level`/`trace_id`/`span_id`/`event.name` 等键（运营投影）；OTLP 路径剥离这些键。不要为 OTLP 把顶层字段塞回属性，也不要为 file 把属性拆掉。
 6. schema / 键名 / 字段归属变更必须同步文档（README.md、detailed-design.md、方案2-直接符合规范.md），改代码与改文档应在同一提交内完成。
 7. 零值省略：字符串/数值零值省略；布尔不省略（false 对 retryable/result 语义明确）。

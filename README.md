@@ -13,9 +13,9 @@
 
 ## 特性
 
-- 核心包零外部依赖（仅标准库：log/slog、net、time、fmt、strings），属性键直接对齐 OTel semconv 1.41.0 + mall.* vendor 命名空间。
+- 核心包零外部依赖（仅标准库：log/slog、net、time、fmt、strings），属性键直接对齐 OTel semconv 1.41.0 + app.* vendor 命名空间。
 - 三信号装配（internal/telemetry）：Trace / Metric / Log provider + OTLP gRPC 导出 + A3 采样/频率 + A7 资源属性；env 控制（OTEL_SDK_DISABLED / OTEL_EXPORTER_OTLP_ENDPOINT / GO_OBSERVABILITY_REGION / GO_OBSERVABILITY_INSTANCE）；出口收敛 SetupFromEnvironment + NewLogWriter（B9：endpoint env 空→JSONL、非空→OTLP）。
-- 六类事件：access / business / error / audit / security / probe，每类有具体事件结构体（领域构造、中间件类型断言）；BusinessPayload.ExtraAttrs 承载事件专属 mall.* 键（B4 定稿 10 个 business.* 事件）。
+- 六类事件：access / business / error / audit / security / probe，每类有具体事件结构体（领域构造、中间件类型断言）；BusinessPayload.ExtraAttrs 承载事件专属 app.* 键（B4 定稿 10 个 business.* 事件）。
 - EventPayload + Logger/Writer 抽象：后端可注入替换；Sampler/Masker 为可选接口（默认实现见 Roadmap，接入方可 `WithSampler`/`WithMasker` 注入）。
 - Writer 实现：OTLP（otlploggrpc）、stdout（stdoutlog）、file（JSONL 落盘）。
 - Gin 中间件（middleware/ginlog）开箱即用，自动从 otelgin span 提取 trace_id/span_id；access 级别映射 2xx-3xx=INFO / 4xx=WARN / 503=WARN / 其余 5xx=ERROR（B3 定稿）。
@@ -71,7 +71,7 @@ example/metrics/       使用方自建指标（B5：Meter + PromQL 提示）
 
 ## OTel 符合性
 
-- 属性键直接用 semconv 名（http.request.method、error.type、exception.stacktrace 等）+ mall.* vendor 命名空间。
+- 属性键直接用 semconv 名（http.request.method、error.type、exception.stacktrace 等）+ app.* vendor 命名空间。
 - trace_id/span_id：OTLP 路径由 ctx 的 span context 自动关联到 LogRecord（Writer 不写属性）；ginlog 默认从 otelgin span 提取并填充 EventMetadata，供 file/stdout 扁平列使用。
 - request_id：显式值优先（如网关 X-Request-ID），为空且 trace_id 非空时由归一化层自动派生 trace_id 前缀（12 hex，A4 免映射表约定）；file/stdout 扁平列保留。
 - service/version/env/instance 由 SDK Resource 提供（见 example 的 setupTracer）。

@@ -17,7 +17,7 @@ func TestWriterAppendsJSONLines(t *testing.T) {
 	}
 	defer w.Close(context.Background())
 
-	if err := w.Write(context.Background(), "access", slog.String("http.request.method", "GET"), slog.String("mall.result", "success")); err != nil {
+	if err := w.Write(context.Background(), "access", slog.String("http.request.method", "GET"), slog.String("app.result", "success")); err != nil {
 		t.Fatal(err)
 	}
 	if err := w.Write(context.Background(), "business", slog.String("event.name", "business.order.paid")); err != nil {

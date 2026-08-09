@@ -33,5 +33,5 @@ service:
       exporters: [otlp_http/loki]
 
 # 常用查询键（库已写入属性 / LogRecord）：
-#   event.name, error.type, mall.result, trace_id(via context),
+#   event.name, error.type, app.result, trace_id(via context),
 #   http.request.method, url.path, http.response.status_code

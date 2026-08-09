@@ -20,7 +20,7 @@
 ```
 业务代码构造事件（BusinessEvent{EventName, Subject, Result, ExtraAttrs}）
   → Logger.Emit(ctx, ev)
-  → 归一化：ev.Attrs() 产出扁平 slog.Attr（双投影：semconv 运维键 + mall.* 运营键）
+  → 归一化：ev.Attrs() 产出扁平 slog.Attr（双投影：semconv 运维键 + app.* 运营键）
   → Writer：file（JSONL）或 otlp（LogRecord，trace_id/span_id 由 ctx 自动关联）
 ```
 
@@ -28,7 +28,7 @@
 
 - **扁平输出**：事件结构体内聚组装，对外一律扁平 attrs，无 data 嵌套。
 - **双投影**：运维面用 semconv 名（如 `http.request.method`），运营面 attr 键即扁平列（宽表）；共用一份归一化 attrs，业务只埋一次。
-- **字段单一真源**：所有键在 `keys.go` 登记（semconv 名 + `mall.*`）；事件名在 `types.go` 常量注册表（三段式 `类别.模块.操作`，`NewEventName`/`Validate` 校验）。
+- **字段单一真源**：所有键在 `keys.go` 登记（semconv 名 + `app.*`）；事件名在 `types.go` 常量注册表（三段式 `类别.模块.操作`，`NewEventName`/`Validate` 校验）。
 - **级别不靠猜**：错误事件的缺省级别由 `LevelOf(err)` 规则表推导（B3：validation/business=WARN，system 重试中=WARN、耗尽/不可重试=ERROR），显式 Level 优先。
 - **出口不散落**：`telemetry.SetupFromEnvironment` + `(*Providers).NewLogWriter` 是唯一出口决策点（B9：endpoint env 空→JSONL、非空→OTLP）。
 
@@ -42,7 +42,7 @@
 ## 给新人的最小改动路径：新增一个业务事件
 
 1. `types.go`：登记 `EventNameBusinessXxx` 常量（三段式，注册表唯一真源）。
-2. `keys.go`：登记事件专属 `mall.*` 键（如需）。
+2. `keys.go`：登记事件专属 `app.*` 键（如需）。
 3. 事件载荷：新字段用 `BusinessPayload.ExtraAttrs`（[]slog.Attr）承载，不新建结构体。
 4. 同步 `../../observability-design/outline/B1-event-structs/detailed-design.md` §2 枚举。
 5. 黑盒用例：`blackbox_log_test.go` 补 CASE（期望值来自 `../../observability-design/spec/acceptance.md` Oracle）。

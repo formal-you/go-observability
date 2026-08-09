@@ -8,7 +8,7 @@ import (
 )
 
 // attrValue 读取归一化 attrs 中指定键的 slog.Value；缺失时直接失败。
-// 供各投影测试断言扁平属性键（semconv / mall.*）的实际输出。
+// 供各投影测试断言扁平属性键（semconv / app.*）的实际输出。
 func attrValue(t *testing.T, attrs map[string]any, key string) slog.Value {
 	t.Helper()
 	v, ok := attrs[key].(slog.Value)
@@ -62,8 +62,8 @@ func TestBusinessEventFromValidationError(t *testing.T) {
 	if got := attrValue(t, attrs, "error.type").String(); got != "validation.failed" {
 		t.Errorf("error.type = %q, want validation.failed", got)
 	}
-	if _, ok := attrs["mall.business_code"]; ok {
-		t.Error("mall.business_code 不应输出（validation 无 ErrCode）")
+	if _, ok := attrs["app.business_code"]; ok {
+		t.Error("app.business_code 不应输出（validation 无 ErrCode）")
 	}
 	if got := attrValue(t, attrs, "code.function.name").String(); got != "orderService.Create" {
 		t.Errorf("code.function.name = %q, want orderService.Create", got)
@@ -74,8 +74,8 @@ func TestBusinessEventFromValidationError(t *testing.T) {
 	if got := attrValue(t, attrs, "code.line.number").Int64(); got != 42 {
 		t.Errorf("code.line.number = %d, want 42", got)
 	}
-	if got := attrValue(t, attrs, "mall.result").String(); got != "failed" {
-		t.Errorf("mall.result = %q, want failed", got)
+	if got := attrValue(t, attrs, "app.result").String(); got != "failed" {
+		t.Errorf("app.result = %q, want failed", got)
 	}
 }
 
@@ -103,8 +103,8 @@ func TestBusinessEventFromBusinessError(t *testing.T) {
 	if got := attrValue(t, attrs, "error.type").String(); got != "business.stock_insufficient" {
 		t.Errorf("error.type = %q, want business.stock_insufficient", got)
 	}
-	if got := attrValue(t, attrs, "mall.business_code").String(); got != string(code) {
-		t.Errorf("mall.business_code = %q, want %q", got, code)
+	if got := attrValue(t, attrs, "app.business_code").String(); got != string(code) {
+		t.Errorf("app.business_code = %q, want %q", got, code)
 	}
 }
 
@@ -169,22 +169,22 @@ func TestErrorEventFromSystemError(t *testing.T) {
 	if got := attrValue(t, attrs, "error.type").String(); got != "db.query_timeout" {
 		t.Errorf("error.type = %q, want db.query_timeout", got)
 	}
-	if got := attrValue(t, attrs, "mall.retryable").Bool(); !got {
-		t.Error("mall.retryable = false, want true")
+	if got := attrValue(t, attrs, "app.retryable").Bool(); !got {
+		t.Error("app.retryable = false, want true")
 	}
-	if got := attrValue(t, attrs, "mall.retry_count").Int64(); got != 2 {
-		t.Errorf("mall.retry_count = %d, want 2", got)
+	if got := attrValue(t, attrs, "app.retry_count").Int64(); got != 2 {
+		t.Errorf("app.retry_count = %d, want 2", got)
 	}
-	if _, ok := attrs["mall.operation"]; ok {
-		t.Error("mall.operation 不应输出（未设置 ErrCode）")
+	if _, ok := attrs["app.operation"]; ok {
+		t.Error("app.operation 不应输出（未设置 ErrCode）")
 	}
-	if got := attrValue(t, attrs, "mall.result").String(); got != "error" {
-		t.Errorf("mall.result = %q, want error", got)
+	if got := attrValue(t, attrs, "app.result").String(); got != "error" {
+		t.Errorf("app.result = %q, want error", got)
 	}
 }
 
 // TestErrorEventOperationFromErrCode 验证 SystemError 可选 ErrCode 定稿映射到
-// ErrorPayload.Operation（mall.operation），而非 mall.business_code。
+// ErrorPayload.Operation（app.operation），而非 app.business_code。
 func TestErrorEventOperationFromErrCode(t *testing.T) {
 	err := errs.NewSystem(errs.TypeHTTPUpstream5xx, "payment-gateway: 502", errs.WithCode("ORDER.PAY.UPSTREAM_5XX"))
 	ev := errorEventFromError(EventNameErrorDBTimeout, err, EventMetadata{})
@@ -192,8 +192,8 @@ func TestErrorEventOperationFromErrCode(t *testing.T) {
 		t.Errorf("Operation = %q, want ORDER.PAY.UPSTREAM_5XX", ev.Data.Operation)
 	}
 	attrs := attrMap(ev.Attrs())
-	if got := attrValue(t, attrs, "mall.operation").String(); got != "ORDER.PAY.UPSTREAM_5XX" {
-		t.Errorf("mall.operation = %q, want ORDER.PAY.UPSTREAM_5XX", got)
+	if got := attrValue(t, attrs, "app.operation").String(); got != "ORDER.PAY.UPSTREAM_5XX" {
+		t.Errorf("app.operation = %q, want ORDER.PAY.UPSTREAM_5XX", got)
 	}
 }
 

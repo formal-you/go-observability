@@ -109,7 +109,7 @@ const (
 // Fields 开放扩展结构（审计前后快照等）；Masker 递归处理 map 与 []any，自定义敏感类型由调用方显式净化。
 type Fields map[string]any
 
-// EventPayload 自描述事件：EventType 提供粗分类，Attrs 提供扁平属性（键已按 semconv / mall.* 对齐）。
+// EventPayload 自描述事件：EventType 提供粗分类，Attrs 提供扁平属性（键已按 semconv / app.* 对齐）。
 // Attrs 可返回 nil；空键与公共保留键由归一化逻辑过滤。
 type EventPayload interface {
 	EventType() EventType

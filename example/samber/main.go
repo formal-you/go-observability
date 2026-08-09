@@ -26,7 +26,7 @@ func main() {
 	chain := slogmulti.Pipe(
 		slogsampling.UniformSamplingOption{Rate: 1.0}.NewMiddleware(), // 1.0=全量，便于对照；<1 即真实采样
 		slogformatter.NewFormatterHandler(
-			slogformatter.FormatByKey("mall.user_id", func(_ slog.Value) slog.Value {
+			slogformatter.FormatByKey("app.user_id", func(_ slog.Value) slog.Value {
 				return slog.StringValue("***")
 			}),
 		),

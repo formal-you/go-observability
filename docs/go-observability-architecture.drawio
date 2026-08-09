@@ -22,7 +22,7 @@
         <mxCell id="n4" value="Logger.Emit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="l2">
           <mxGeometry x="180" y="45" width="200" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="n5" value="归一化扁平 attrs&lt;br&gt;双投影 semconv + mall.*" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="l2">
+        <mxCell id="n5" value="归一化扁平 attrs&lt;br&gt;双投影 semconv + app.*" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="l2">
           <mxGeometry x="440" y="45" width="280" height="60" as="geometry"/>
         </mxCell>
         <mxCell id="l3" value="写出层 writer/*" style="swimlane;startSize=30;fillColor=#e8f5e9;strokeColor=#82b366;html=1;" vertex="1" parent="1">

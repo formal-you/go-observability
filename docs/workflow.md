@@ -38,7 +38,7 @@ wayfinder（读 MAP → 认领一张 frontier 票）
 1. 事件名必须用 `types.go` 常量注册表，禁止手写事件名字符串。
 2. semconv 键以 1.41.0 为准（如 `url.path`、`code.function.name`）。
 3. LogRecord 顶层字段映射集中在 `internal/attrkv.Record`。
-4. 新增/修改字段必须在 `keys.go` 登记；vendor 键一律 `mall.*`。
+4. 新增/修改字段必须在 `keys.go` 登记；vendor 键一律 `app.*`。
 5. 双投影：file/stdout 保留顶层键，OTLP 剥离；不要为 OTLP 塞回属性、为 file 拆掉属性。
 6. schema/键名/字段归属变更必须同步文档（README / detailed-design / 方案2）。
 7. 零值省略：字符串/数值零值省略，布尔不省略。

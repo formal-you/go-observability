@@ -60,7 +60,7 @@ func TestEventNameValidateBlackBox(t *testing.T) {
 }
 
 // TestBusinessEventExtraAttrsBlackBox 按验收契约 CASE-B4-01 验证 ExtraAttrs 扁平输出：
-// order.paid 注入 order_id/amount/pay_channel/paid_at → 扁平 attrs 含对应 mall.* 键。
+// order.paid 注入 order_id/amount/pay_channel/paid_at → 扁平 attrs 含对应 app.* 键。
 func TestBusinessEventExtraAttrsBlackBox(t *testing.T) {
 	ev := log.BusinessEvent{
 		EventMetadata: log.EventMetadata{Level: log.LevelInfo},
@@ -68,10 +68,10 @@ func TestBusinessEventExtraAttrsBlackBox(t *testing.T) {
 			EventName: log.EventNameBusinessOrderPaid,
 			Result:    log.ResultSuccess,
 			ExtraAttrs: []slog.Attr{
-				slog.String(string(log.KeyMallOrderID), "ORD-1"),
-				slog.Int64(string(log.KeyMallAmount), 9900),
-				slog.String(string(log.KeyMallPayChannel), "wechat"),
-				slog.String(string(log.KeyMallPaidAt), "2026-08-09T10:00:00+08:00"),
+				slog.String(string(log.KeyAppOrderID), "ORD-1"),
+				slog.Int64(string(log.KeyAppAmount), 9900),
+				slog.String(string(log.KeyAppPayChannel), "wechat"),
+				slog.String(string(log.KeyAppPaidAt), "2026-08-09T10:00:00+08:00"),
 			},
 		},
 	}
@@ -80,16 +80,16 @@ func TestBusinessEventExtraAttrsBlackBox(t *testing.T) {
 		m[a.Key] = a.Value
 	}
 	for key, want := range map[string]string{
-		"mall.order_id":    "ORD-1",
-		"mall.pay_channel": "wechat",
-		"mall.paid_at":     "2026-08-09T10:00:00+08:00",
+		"app.order_id":    "ORD-1",
+		"app.pay_channel": "wechat",
+		"app.paid_at":     "2026-08-09T10:00:00+08:00",
 	} {
 		if got := m[key].String(); got != want {
 			t.Errorf("%s = %q, want %q（Oracle: ACCEPT-B4-02）", key, got, want)
 		}
 	}
-	if got := m["mall.amount"].Int64(); got != 9900 {
-		t.Errorf("mall.amount = %d, want 9900（Oracle: ACCEPT-B4-03 金额整数分）", got)
+	if got := m["app.amount"].Int64(); got != 9900 {
+		t.Errorf("app.amount = %d, want 9900（Oracle: ACCEPT-B4-03 金额整数分）", got)
 	}
 }
 

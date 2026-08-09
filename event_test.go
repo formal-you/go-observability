@@ -53,7 +53,7 @@ func TestAccessEventAttrsConform(t *testing.T) {
 		"event.name",
 		"http.request.method", "url.path", "http.route", "http.response.status_code",
 		"client.address", "user_agent.original",
-		"mall.user_id", "mall.result",
+		"app.user_id", "app.result",
 	}
 	for _, k := range want {
 		if _, ok := attrs[k]; !ok {
@@ -80,8 +80,8 @@ func TestErrorEventKeepsFalseRetryable(t *testing.T) {
 		},
 	}
 	attrs := attrMap(ev.Attrs())
-	if _, ok := attrs["mall.retryable"]; !ok {
-		t.Error("布尔 false 不应被省略（mall.retryable 必须保留）")
+	if _, ok := attrs["app.retryable"]; !ok {
+		t.Error("布尔 false 不应被省略（app.retryable 必须保留）")
 	}
 	if got, ok := attrs["error.type"].(slog.Value); !ok || got.String() != "db.timeout" {
 		t.Errorf("error.type = %v, want db.timeout", attrs["error.type"])
@@ -100,7 +100,7 @@ func TestZeroValueOmission(t *testing.T) {
 		},
 	}
 	attrs := attrMap(ev.Attrs())
-	for _, k := range []string{"mall.user_id", "mall.business_code", "latency_ms"} {
+	for _, k := range []string{"app.user_id", "app.business_code", "latency_ms"} {
 		if _, ok := attrs[k]; ok {
 			t.Errorf("零值字段不应输出：%s", k)
 		}

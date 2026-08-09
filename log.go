@@ -26,7 +26,7 @@ type Writer interface {
 type ErrorHandler func(ctx context.Context, msg string, attrs []slog.Attr, err error)
 
 // Sampler 采样判定：返回 false 丢弃该事件。
-// failed/error/blocked/denied 等高价值结果应强制保留（实现按 mall.result 属性判定）。
+// failed/error/blocked/denied 等高价值结果应强制保留（实现按 app.result 属性判定）。
 type Sampler interface {
 	Sample(ctx context.Context, attrs []slog.Attr) bool
 }

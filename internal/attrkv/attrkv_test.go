@@ -38,9 +38,9 @@ func TestToKeyValuesTypes(t *testing.T) {
 	attrs := []slog.Attr{
 		slog.String("http.request.method", "GET"),
 		slog.Int("http.response.status_code", 200),
-		slog.Bool("mall.retryable", false),
+		slog.Bool("app.retryable", false),
 		slog.Float64("latency", 1.5),
-		slog.Group("mall.audit", slog.String("actor", "admin")),
+		slog.Group("app.audit", slog.String("actor", "admin")),
 	}
 	kvs := ToKeyValues(attrs)
 	if len(kvs) != 5 {
@@ -55,8 +55,8 @@ func TestToKeyValuesTypes(t *testing.T) {
 	if kvs[2].Value.AsBool() {
 		t.Errorf("布尔 false 应保留: %v", kvs[2])
 	}
-	if kvs[4].Key != "mall.audit" {
-		t.Errorf("group 键 = %q, want mall.audit", kvs[4].Key)
+	if kvs[4].Key != "app.audit" {
+		t.Errorf("group 键 = %q, want app.audit", kvs[4].Key)
 	}
 }
 
@@ -101,7 +101,7 @@ func TestRecordDefaults(t *testing.T) {
 	before := time.Now()
 	rec, rest := Record("business", []slog.Attr{
 		slog.String("event.name", "business.order.paid"),
-		slog.String("mall.result", "success"),
+		slog.String("app.result", "success"),
 	})
 	after := time.Now()
 	if rec.Timestamp().Before(before) || rec.Timestamp().After(after) {
@@ -113,7 +113,7 @@ func TestRecordDefaults(t *testing.T) {
 	if rec.EventName() != "business.order.paid" {
 		t.Errorf("EventName = %q, want business.order.paid", rec.EventName())
 	}
-	if len(rest) != 1 || rest[0].Key != "mall.result" {
-		t.Fatalf("rest = %v, want 仅 mall.result", rest)
+	if len(rest) != 1 || rest[0].Key != "app.result" {
+		t.Fatalf("rest = %v, want 仅 app.result", rest)
 	}
 }
