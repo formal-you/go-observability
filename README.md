@@ -3,8 +3,9 @@
 面向 Go 服务的语义化日志与 OpenTelemetry Trace、Metric、Log 三信号装配库。文档以中文为主，字段尽量遵循 OpenTelemetry Semantic Conventions。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/formal-you/go-observability/actions/workflows/ci.yml/badge.svg)](https://github.com/formal-you/go-observability/actions/workflows/ci.yml)
 
-> 发布准备中：仓库尚未配置公开远程地址和版本标签，当前不承诺 `go get`、pkg.go.dev 或 GitHub 链接可用。正式发布前将按 [发布检查清单](docs/release-checklist.md) 完成外部验证。
+> 公开预览中：仓库已经公开，但尚未创建首个版本标签；首次发布前不承诺稳定 API、`@latest` 安装体验或 pkg.go.dev 已完成索引。正式发布将按 [发布检查清单](docs/release-checklist.md) 完成外部验证。
 
 | 项目 | 当前约定 |
 | --- | --- |

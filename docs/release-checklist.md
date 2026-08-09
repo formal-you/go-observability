@@ -4,8 +4,8 @@
 
 ## 仓库与安全
 
-- [ ] 创建公开 GitHub 仓库，并确认远程仓库 URL、仓库所有者和 `go.mod` module path 完全一致。
-- [ ] 配置本地 `origin`，推送默认分支，并从未登录窗口确认 README、LICENSE、CI 和仓库链接可访问。
+- [x] 创建公开 GitHub 仓库，并确认远程仓库 URL、仓库所有者和 `go.mod` module path 完全一致。
+- [x] 配置本地 `origin`，推送默认分支，并从未登录窗口确认 README、LICENSE、CI 和仓库链接可访问。
 - [ ] 在 **Settings > Security > Code security and analysis** 启用 Private vulnerability reporting。
 - [ ] 在 **Settings > Branches** 或 Rulesets 为默认分支启用 branch protection：要求 PR、CI 通过和禁止强推。
 - [ ] 确认 SECURITY.md 的私密报告路径实际可用，不发布虚构邮箱。
