@@ -30,6 +30,11 @@ Grafana LGTM 栈（Tempo 链路 / Loki 日志 / Mimir 指标）。
 4. `../../observability-design/DESIGN-DECISIONS.md`（A1-A7 / B1-B9 决策，看"为什么这么设计"）
 5. 按任务再读：`docs/architecture.md`（代码走读）、`docs/workflow.md`（流程/规则）、`../AGENTS.md`（改代码前必读）
 
+## 一张图看懂架构
+
+[go-observability-architecture.drawio](go-observability-architecture.drawio)（draw.io 原生文件，可用 draw.io 桌面/网页打开编辑）：
+分层（业务代码 → 核心 log → 写出层 → LGTM 栈）+ 数据流（一条日志的旅程）+ errs / telemetry 装配关系。
+文字说明见 [architecture.md](architecture.md)。
 ## 15 分钟上手
 
 ```powershell
