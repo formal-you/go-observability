@@ -1,11 +1,12 @@
 # 获取帮助
 
-| 问题类型 | 去哪 |
-| --- | --- |
-| 用法 / 配置 | [docs/configuration.md](docs/configuration.md)、[docs/onboarding.md](docs/onboarding.md)、[example/config/](example/config/) |
-| 架构 / 设计 | [docs/architecture.md](docs/architecture.md) |
-| Bug | GitHub Issues（尽量附 Go 版本、`go test` 结果、最小复现） |
-| 安全漏洞 | [SECURITY.md](SECURITY.md)（勿公开贴利用细节） |
-| 功能建议 | GitHub Issues 或 Discussions（若已开启） |
+项目处于发布准备阶段，暂不承诺响应时限或长期版本支持。
 
-维护者为业余/有限时间响应；v0.x 无 SLA。欢迎 PR（见 [CONTRIBUTING.md](CONTRIBUTING.md)）。
+| 问题 | 建议渠道 |
+| --- | --- |
+| 使用与配置 | 先查 [配置指南](docs/configuration.md) 和 [示例索引](example/README.md) |
+| 缺陷与功能建议 | 公开仓库上线后使用 GitHub Issues，并附 Go 版本、最小复现和测试输出 |
+| 架构讨论 | 参考 [架构说明](docs/architecture.md)，在 Issue 中描述约束与预期行为 |
+| 安全漏洞 | 仅按 [安全政策](SECURITY.md) 使用私密渠道，不公开利用细节 |
+
+提问前请确认问题可在当前 `main` 重现，并移除日志中的凭证和个人数据。

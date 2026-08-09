@@ -1,0 +1,44 @@
+name: Bug 报告
+description: 报告可复现的功能、兼容性或文档问题
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 安全漏洞请勿提交公开 Issue，请按 SECURITY.md 私密报告。
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 请填写 tag、伪版本或 commit SHA。
+      placeholder: 28a64e5 或发布后的版本标签
+    validations:
+      required: true
+  - type: input
+    id: go-version
+    attributes:
+      label: Go 版本
+      placeholder: go1.25.12 linux/amd64
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 说明预期行为和实际行为。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 最小复现
+      description: 提供可运行代码、命令和必要配置，请删除密钥与个人信息。
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或错误输出
+      description: 请先脱敏。
+      render: text

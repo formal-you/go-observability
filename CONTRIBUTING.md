@@ -1,36 +1,29 @@
 # 贡献指南
 
-欢迎 PR 与 Issue。参与即表示你同意遵守 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
+欢迎提交 Issue 和 PR。参与社区即表示同意遵守 [贡献者公约](CODE_OF_CONDUCT.md)。
 
-## 开发
+## 开发要求
 
-1. 读 [AGENTS.md](AGENTS.md)（防漂移硬规则）。
-2. Go **1.25+**（见 `go.mod`）。
-3. 改代码后：
+- 使用 `go.mod` 声明的 Go 版本。
+- 修改公共行为时同步测试、相关示例和 `CHANGELOG.md` 的 `[Unreleased]`。
+- 领域专属 `business.*` 事件应留在接入方包；核心包只维护跨领域能力。
+- 用户文档用中文为主，首次出现的 OpenTelemetry 术语可保留英文。
+
+## 验证
 
 ```bash
 gofmt -w .
 go vet ./...
 go test ./...
-# 可选
 go test -race ./...
 ```
 
-低内存环境可设 `GOMAXPROCS=1`、`GOGC=30`。
+低内存环境可先运行前三项，并在 PR 中如实注明未执行的检查及原因。提交前检查 `git diff --check`，确保没有本机绝对路径、密钥或生成日志进入仓库。
 
-## 文档与配置样例
+## 提交与 PR
 
-- 用户文档在 `docs/`；索引见 [docs/README.md](docs/README.md)。
-- 配置样例字段注释：`example/config/`、`observability/templates/`。
-- schema / 键名变更必须同步 README、相关 docs、example 与 CHANGELOG `[Unreleased]`。
-
-## 提交
-
-- Conventional Commits：`feat:` / `fix:` / `docs:` / `refactor!:` 等。
-- 领域 `business.*` 事件不要加进核心 `types.go`（放接入方或 `example/mall`）。
-
-## PR
-
-- 附 `go test ./...` 通过说明。
-- 破坏性变更在标题加 `!` 并写清迁移方式。
-- 安全问题请走 [SECURITY.md](SECURITY.md)，不要开公开 Issue 贴利用细节。
+- 推荐 Conventional Commits，例如 `feat:`、`fix:`、`docs:`、`refactor:`。
+- 一个提交聚焦一个可说明的变更；多批次工作可以提交多次，不必压成一个大提交。
+- PR 应说明动机、用户可见变化、兼容性影响和验证结果。
+- 破坏性变更必须给出迁移说明，并记录到 CHANGELOG。
+- 安全问题遵循 [SECURITY.md](SECURITY.md)，不要提交公开复现。

@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    groups:
+      opentelemetry:
+        patterns:
+          - "go.opentelemetry.io/*"
+          - "go.opentelemetry.io/contrib/*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      timezone: Asia/Shanghai
+
+  - package-ecosystem: docker
+    directory: /observability
+    schedule:
+      interval: weekly
+      timezone: Asia/Shanghai
