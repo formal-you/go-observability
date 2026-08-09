@@ -4,7 +4,11 @@
 
 基于 OpenTelemetry 语义约定的 Go 语义化日志组件（源即规范，方案2）。
 
-模块路径：`github.com/formal-you/go-observability`（发布前请确认为正式仓库地址）。
+模块路径：`github.com/formal-you/go-observability`（**发布前请确认**为正式 GitHub 地址后再打 tag）。
+
+- **Go**：1.25+（见 `go.mod`）
+- **语言**：导出注释与文档以**中文**为主（C4）；术语保留英文（span / trace / semconv）
+- **版本**：v0.x 允许破坏性变更，见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 新人引导
 
@@ -16,9 +20,9 @@
 - 核心包零外部依赖（仅标准库：log/slog、net、time、fmt、strings），属性键直接对齐 OTel semconv 1.41.0 + app.* vendor 命名空间。
 - 三信号装配（internal/telemetry）：Trace / Metric / Log provider + OTLP gRPC 导出 + A3 采样/频率 + A7 资源属性；env 控制（OTEL_SDK_DISABLED / OTEL_EXPORTER_OTLP_ENDPOINT / GO_OBSERVABILITY_REGION / GO_OBSERVABILITY_INSTANCE）；出口收敛 SetupFromEnvironment + NewLogWriter（B9：endpoint env 空→JSONL、非空→OTLP）。
 - 六类事件：access / business / error / audit / security / probe；`BusinessPayload.ExtraAttrs` 承载接入方领域键。核心只登记框架级 EventName；领域 business.* 见 [`example/mall`](example/mall)（C2）。
-- EventPayload + Logger/Writer 抽象：后端可注入替换；Sampler/Masker 为可选接口（默认实现见 Roadmap，接入方可 `WithSampler`/`WithMasker` 注入）。
-- Writer 实现：OTLP（otlploggrpc）、stdout（stdoutlog）、file（JSONL 落盘）。
-- Gin 中间件（middleware/ginlog）开箱即用，自动从 otelgin span 提取 trace_id/span_id；access 级别映射 2xx-3xx=INFO / 4xx=WARN / 503=WARN / 其余 5xx=ERROR（B3 定稿）。
+- EventPayload + Logger/Writer：可选 `WithSampler` / `WithMasker`；内置 `ResultKeepSampler`（高价值 result 必留）与 `FieldMasker`（密钥类键脱敏，C6）。
+- Writer：OTLP / stdout / file(JSONL)。
+- **中间件（C3）**：官方仅 Gin（`middleware/ginlog` + `recover`）；`net/http` 见 [`example/nethttp`](example/nethttp)。不 import middleware 即可纯用核心 log。
 - 错误体系（errs）：ErrorKind / ErrorType v1 受控枚举 / AppError 接口 / BizError+SystemError / StackRule（error.type 前缀 → 必记/可选/不记堆栈），零外部依赖；根包 log.EventFromError 一键投影为 business/error 事件，缺省日志级别由 log.LevelOf 规则表推导（B3 定稿：validation/business=WARN、system 重试中=WARN/耗尽=ERROR，显式 Level 优先）。
 - panic 收口中间件（middleware/recover）：recover → runtime.panic ErrorEvent（必记堆栈）+ 统一 500，trace/span 自动填充。
 - 采集频率不在核心：每次 Emit 同步写，频率由 opentelemetry-collector batch processor 配置决定。
@@ -36,10 +40,13 @@ import (
 )
 
 w, _ := file.New("logs/events.jsonl") // 或 otlp.New(ctx)、stdout.New(ctx)
-logger := log.NewLogger(w)
+logger := log.NewLogger(w,
+    log.WithSampler(log.ResultKeepSampler{Ratio: 1}), // 生产可按流量调低
+    log.WithMasker(log.FieldMasker{}),                // 可 Keys 追加 PII 键
+)
 
 r := gin.New()
-r.Use(otelgin.Middleware("my-service")) // 生成 OTel span
+r.Use(otelgin.Middleware("my-service"))
 r.Use(ginlog.Middleware(ginlog.Config{Logger: logger}))
 ```
 
@@ -72,7 +79,9 @@ internal/attrkv/       slog.Attr → OTel KeyValue / Severity 映射（内部共
 internal/telemetry/   三信号装配（Resource + Trace/Metric/Log provider，A3 采样频率 + A7 资源属性）
 example/               演示（默认落盘 example/logs/events.jsonl）
 example/metrics/       使用方自建指标（B5：Meter + PromQL 提示）
-example/mall/          接入方业务事件注册表（C2/B4：10 business.* + 领域键）
+example/mall/          接入方业务事件注册表（C2/B4）
+example/nethttp/       无 Gin 的 access 埋点（C3）
+example/metrics/       使用方 Meter（B5）
 ```
 
 ## OTel 符合性
@@ -101,20 +110,24 @@ samber 的 slog 系列覆盖了我们的大部分零件（fanout/PII/采样/各�
 
 ## Metric 立场
 
-本库 **不** 内置业务/RED 指标注册表。`internal/telemetry` 装配 `MeterProvider`；使用方 `providers.Meter(name)` 自建 Counter/Histogram。  
-参考：`observability/templates/metric-*.example.*`、可运行示例 [`example/metrics`](example/metrics)。
+本库 **不** 内置业务/RED 指标注册表。使用方 `providers.Meter(name)` 自建。  
+见 `observability/templates/metric-*.example.*`、[`example/metrics`](example/metrics)。
+
+## 安全提示
+
+- `FieldMasker` 默认只盖密钥类键，**不是**完整合规方案；生产请按 PII 清单追加 `Keys` 或自实现 `Masker`。
+- 默认 trace 采样率 0.1 为演示值（`telemetry.Config.TraceSampleRatio`），生产按流量调整。
+- 本库不是完整 APM；告警/保留期/容量由接入方 runbook 负责。
 
 ## Roadmap
 
-- [x] OTLP Writer（otlploggrpc）
-- [x] Go 侧 Trace/Metric provider 配置（internal/telemetry，2026-08-09 落地）
-- [x] Log/Trace/Metric/Error 配置模板（observability/templates，使用者自有）
-- [ ] Grafana 联动面板精细化 + collector tail_sampling 错误必采判定属性（A3 详细设计）
-- [ ] Masker / Sampler 默认实现（按 Result 强制保留）
-- [ ] 字段映射表导出（Go 常量 → Collector transform 配置）
-- [ ] 运营宽表列定义（ClickHouse，接入方）
-- [ ] CI 与发布流程
+- [x] OTLP Writer / telemetry 三信号 / 配置模板
+- [x] ResultKeepSampler + FieldMasker（C6）
+- [x] CI（fmt/vet/test/race/govulncheck）
+- [ ] Grafana 面板精细化 + collector tail_sampling 判定属性
+- [ ] 字段映射表导出 Collector transform
+- [ ] 运营宽表（ClickHouse，接入方）
 
 ## License
 
-MIT
+MIT · 见 [LICENSE](LICENSE) · 贡献见 [CONTRIBUTING.md](CONTRIBUTING.md)

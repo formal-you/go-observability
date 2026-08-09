@@ -33,7 +33,7 @@
   - `gofmt -w <改动的文件>`
   - `$env:GOMAXPROCS=1; $env:GOGC=30; go build ./...; go vet ./...; go test ./...`
 - 新增行为必须有测试覆盖（注册表校验、字段映射、剥离规则、writer 形状），并贴回完整输出作为验证证据。
-- 注释标准库级：每条导出声明以标识符名开头，说明"是什么 + 为什么/怎么用"；注释中文，术语保留英文（span、trace、semconv 等）。
+- 注释标准库级：每条导出声明以标识符名开头，说明"是什么 + 为什么/怎么用"；**注释中文**（C4），术语保留英文（span、trace、semconv 等）。
 - 不要把跑 `--help` 或仅 build 当作验证；至少跑一次相关 `go test`。
 
 ## Git 纪律（2026-08-09 用户规范：每次改动必须 commit）
@@ -47,12 +47,12 @@
 - 根包 log：`types.go`（枚举 + EventName 常量注册表）、`keys.go`（属性键常量）、`metadata.go`、`payload.go`（六类载荷）、`events.go`（六类事件结构体）、`normalize.go`（归一化 / 保留键）、`log.go`（Logger / Writer / 采样 / 脱敏接口）。
 - `internal/attrkv/`：slog.Attr ↔ OTel 转换 + Record 顶层字段映射（唯一核心映射层）。
 - `writer/{otlp,stdout,file}/`：后端 Writer（装配层，可替换）。
-- `middleware/ginlog/`：Gin 中间件（otelgin trace 提取、access 事件）。
-- `errs/`：错误体系（ErrorKind / ErrorType v1 / AppError / BizError / SystemError / StackRule / CaptureSource / CaptureStack），零外部依赖；根 log 包经 error_project.go 的 EventFromError 投影。
-- `internal/telemetry/`：三信号装配（trace/metric/log provider + OTLP gRPC 导出 + A3 采样/频率 + A7 资源属性；env: OTEL_SDK_DISABLED / OTEL_EXPORTER_OTLP_ENDPOINT）。
-- `middleware/recover/`：Gin panic 收口中间件（runtime.panic ErrorEvent + 统一 500，StackRule=must 必记堆栈）。
-- `observability/`：LGTM 参考栈（docker-compose + otel-collector-config + tempo/loki/mimir + grafana provisioning），Trace/Metric/Log 部署侧参考配置。
-- `example/`：演示与 spike（samber 对照实验见 `example/samber`）。
+- `middleware/ginlog/`、`middleware/recover/`：仅 Gin 生态（C3）；net/http 见 example/nethttp。
+- `errs/`：错误体系，零外部依赖；`error_project.go` 投影。
+- `internal/telemetry/`：三信号装配；env 见 B9。
+- `ResultKeepSampler` / `FieldMasker`：默认采样与脱敏实现（C6）；NewLogger 不自动挂载。
+- `observability/`：LGTM 参考栈 + templates。
+- `example/{mall,metrics,nethttp,samber}`：接入方示范。
 
 ## 常用真源
 
