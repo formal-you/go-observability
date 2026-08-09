@@ -37,6 +37,10 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/formal-you/go-observability"
+	"github.com/formal-you/go-observability/writer/file"
+	"github.com/formal-you/go-observability/writer/otlp"
 )
 
 // defaultEndpoint 是未显式配置时的 OTLP gRPC 地址，与 observability/docker-compose.yml
@@ -123,7 +127,6 @@ func Setup(ctx context.Context, cfg Config) (*Providers, error) {
 		endpoint = defaultEndpoint
 	}
 	endpoint = endpointURL(strings.TrimSpace(endpoint))
-	normalizeEndpointEnvironment()
 
 	res := cfg.Resource
 	if res == nil {
@@ -190,6 +193,18 @@ func Setup(ctx context.Context, cfg Config) (*Providers, error) {
 	}, nil
 }
 
+// SetupFromEnvironment 按环境变量装配三信号 provider（B9 定稿：出口决策收敛点之一）。
+// 启用开关从 OTEL_SDK_DISABLED 读取，endpoint 从 OTEL_EXPORTER_OTLP_ENDPOINT 读取
+// （缺省 127.0.0.1:4317），其余配置由 cfg 提供；内部调用 Setup。组合根只需调本函数
+// + NewLogWriter，不再各自写 env 判断。
+func SetupFromEnvironment(ctx context.Context, cfg Config) (*Providers, error) {
+	cfg.Enabled = EnabledFromEnvironment()
+	if cfg.Endpoint == "" {
+		cfg.Endpoint = EndpointFromEnvironment()
+	}
+	return Setup(ctx, cfg)
+}
+
 // Shutdown 在进程退出前 flush log / metric / trace。
 // 顺序刻意：先 log 再 metric 后 trace——log 可能携带 span 上下文，先 flush 保证关联完整。
 func (p *Providers) Shutdown(ctx context.Context) error {
@@ -248,6 +263,21 @@ func (p *Providers) LoggerProvider() *sdklog.LoggerProvider {
 	return p.loggerProvider
 }
 
+// NewLogWriter 返回按环境选择的日志 Writer（B9 定稿：出口决策收敛点之二）。
+// OTEL_EXPORTER_OTLP_ENDPOINT 已设置且 Providers 已启用 → OTLP Writer（复用本进程的
+// Resource 与 LoggerProvider）；否则 → 本地 JSONL file Writer（写 jsonlPath）。
+// 未启用（空 Providers）时走 file Writer，保证本地离线可核对。
+func (p *Providers) NewLogWriter(ctx context.Context, jsonlPath string) (log.Writer, error) {
+	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" && p != nil && p.LoggerProvider() != nil {
+		opts := []otlp.Option{otlp.WithLoggerProvider(p.LoggerProvider())}
+		if res := p.Resource(); res != nil {
+			opts = append(opts, otlp.WithResource(res))
+		}
+		return otlp.New(ctx, opts...)
+	}
+	return file.New(jsonlPath)
+}
+
 // EnabledFromEnvironment 从 OTEL_SDK_DISABLED 读取启用开关（B9：本地可一键关闭）。
 func EnabledFromEnvironment() bool {
 	return !strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_SDK_DISABLED")), "true")
@@ -267,21 +297,4 @@ func endpointURL(endpoint string) string {
 		return endpoint
 	}
 	return "http://" + endpoint
-}
-
-// normalizeEndpointEnvironment 把 OTEL_EXPORTER_OTLP_* 统一规范成 URL，
-// 保证 SDK 环境变量路径拼接 /v1/... 正确。
-func normalizeEndpointEnvironment() {
-	for _, name := range []string{
-		"OTEL_EXPORTER_OTLP_ENDPOINT",
-		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
-		"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
-		"OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
-	} {
-		value, ok := os.LookupEnv(name)
-		if !ok || strings.TrimSpace(value) == "" {
-			continue
-		}
-		_ = os.Setenv(name, endpointURL(strings.TrimSpace(value)))
-	}
 }

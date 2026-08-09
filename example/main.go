@@ -18,22 +18,18 @@ import (
 	"github.com/formal-you/go-observability"
 	"github.com/formal-you/go-observability/internal/telemetry"
 	"github.com/formal-you/go-observability/middleware/ginlog"
-	"github.com/formal-you/go-observability/writer/file"
-	"github.com/formal-you/go-observability/writer/otlp"
 )
 
 func main() {
 	ctx := context.Background()
 
 	// 三信号装配（A3 采样/频率 + A7 资源属性）：trace/metric/log provider 全局安装。
-	providers, err := telemetry.Setup(ctx, telemetry.Config{
+	providers, err := telemetry.SetupFromEnvironment(ctx, telemetry.Config{
 		ServiceName:    "go-observability",
 		ServiceVersion: "0.1.0",
 		Environment:    "dev",
 		Region:         os.Getenv("GO_OBSERVABILITY_REGION"),
 		Instance:       os.Getenv("GO_OBSERVABILITY_INSTANCE"),
-		Endpoint:       telemetry.EndpointFromEnvironment(),
-		Enabled:        telemetry.EnabledFromEnvironment(),
 	})
 	if err != nil {
 		slog.Error("init telemetry", "err", err)
@@ -82,17 +78,8 @@ func main() {
 // newLogWriter 优先 OTLP（OTEL_EXPORTER_OTLP_ENDPOINT），否则写入 example/logs/events.jsonl。
 // OTLP 路径注入 telemetry 的 Resource 与 LoggerProvider，三信号共享同一份资源与装配。
 func newLogWriter(ctx context.Context, p *telemetry.Providers) (log.Writer, error) {
-	if ep := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); ep != "" {
-		opts := []otlp.Option{}
-		if p != nil && p.Resource() != nil {
-			opts = append(opts, otlp.WithResource(p.Resource()))
-		}
-		if p != nil && p.LoggerProvider() != nil {
-			opts = append(opts, otlp.WithLoggerProvider(p.LoggerProvider()))
-		}
-		return otlp.New(ctx, opts...)
-	}
-	return file.New(filepath.Join("logs", "events.jsonl"))
+	// B9 定稿：出口决策收敛在 telemetry.NewLogWriter（env 驱动 file/OTLP 切换）。
+	return p.NewLogWriter(ctx, filepath.Join("logs", "events.jsonl"))
 }
 
 // closeWriter 关闭实现了 Close(ctx) 的 writer。
