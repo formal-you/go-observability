@@ -6,6 +6,7 @@ package telemetry_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/formal-you/go-observability/internal/telemetry"
@@ -59,21 +60,27 @@ func TestNewLogWriterEnvMatrixBlackBox(t *testing.T) {
 	}
 	defer func() { _ = p.Shutdown(ctx) }()
 
-	w, err := p.NewLogWriter(ctx, "logs/blackbox.jsonl")
+	w, err := p.NewLogWriter(ctx, filepath.Join(t.TempDir(), "blackbox.jsonl"))
 	if err != nil {
 		t.Fatalf("NewLogWriter(file) failed: %v", err)
 	}
 	if _, ok := w.(*file.Writer); !ok {
 		t.Errorf("endpoint 未设置应返回 *file.Writer，实际 %T（Oracle: ACCEPT-B9-04）", w)
 	}
+	if c, ok := w.(interface{ Close(context.Context) error }); ok {
+		_ = c.Close(ctx)
+	}
 
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "collector:4317")
-	w2, err := p.NewLogWriter(ctx, "logs/blackbox.jsonl")
+	w2, err := p.NewLogWriter(ctx, filepath.Join(t.TempDir(), "blackbox.jsonl"))
 	if err != nil {
 		t.Fatalf("NewLogWriter(otlp) failed: %v", err)
 	}
 	if _, ok := w2.(*otlp.Writer); !ok {
 		t.Errorf("endpoint 设置应返回 *otlp.Writer，实际 %T（Oracle: ACCEPT-B9-05）", w2)
+	}
+	if c, ok := w2.(interface{ Close(context.Context) error }); ok {
+		_ = c.Close(ctx)
 	}
 }
 
