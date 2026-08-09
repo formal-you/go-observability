@@ -45,11 +45,11 @@ func main() {
 	defer closeWriter(ctx, w)
 	logger := log.NewLogger(w)
 
-	// metric 示例：HTTP 请求耗时直方图（semconv http.server.request.duration，B5 定稿后校准命名与桶）。
+	// metric：使用方自建（B5）；完整 RED+业务 counter 见 example/metrics。
 	httpDuration, err := providers.Meter("go-observability/example").Int64Histogram(
 		"http.server.request.duration",
 		metric.WithUnit("ms"),
-		metric.WithDescription("HTTP server request duration"),
+		metric.WithDescription("HTTP server request duration (consumer-defined)"),
 	)
 	if err != nil {
 		slog.Warn("init histogram", "err", err)

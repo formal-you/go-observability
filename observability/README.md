@@ -70,7 +70,7 @@ Metric 名与直方图桶以 B5 定稿为准。
 
 1. Go 侧 Trace/Metric provider 配置 —— 已落地（internal/telemetry，2026-08-09；采样率、资源标签可调）。
 2. Grafana 初版面板 —— 已落地（go-observability-overview + datasource 联动）。
-3. Metric 命名与直方图桶 —— **接入方自定**（模板见 templates/；库不上业务 Metric 代码）。
+3. Metric 命名与直方图桶 —— **已定：使用方自定**（B5；`Providers.Meter()` + templates/ + `example/metrics`）。
 4. 是否需要 CI/发布流程（Roadmap / 开源工程）。
 5. collector tail_sampling 错误必采的判定属性（templates/trace-pipeline 注释块；接入方定）。
 
