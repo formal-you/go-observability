@@ -141,3 +141,48 @@ func TestMiddlewareTraceFromOTelSpan(t *testing.T) {
 		t.Errorf("span_id = %v, want 0123456789abcdef", attrs["span_id"])
 	}
 }
+
+// TestDefaultLevelForStatus 验证 access 状态码→级别映射（B3 Q4 定稿）：
+// 2xx-3xx=INFO、4xx=WARN、503=WARN（暂时不可用、调用方可重试）、其余 5xx=ERROR。
+func TestDefaultLevelForStatus(t *testing.T) {
+	cases := []struct {
+		status int
+		want   log.Level
+	}{
+		{http.StatusOK, log.LevelInfo},
+		{http.StatusMovedPermanently, log.LevelInfo},
+		{http.StatusBadRequest, log.LevelWarn},
+		{http.StatusNotFound, log.LevelWarn},
+		{http.StatusServiceUnavailable, log.LevelWarn},
+		{http.StatusInternalServerError, log.LevelError},
+		{http.StatusBadGateway, log.LevelError},
+	}
+	for _, tc := range cases {
+		if got := defaultLevelForStatus(tc.status); got != tc.want {
+			t.Errorf("defaultLevelForStatus(%d) = %q, want %q", tc.status, got, tc.want)
+		}
+	}
+}
+
+// TestMiddlewareStatus503IsWarn 端到端验证 503 请求的 access 事件 level=WARN、
+// result=failed（B3 Q4：503 记 WARN 而非 ERROR，避免重试噪音淹没告警）。
+func TestMiddlewareStatus503IsWarn(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	r := gin.New()
+	r.Use(Middleware(Config{Logger: logger}))
+	r.GET("/unavailable", func(c *gin.Context) { c.AbortWithStatus(http.StatusServiceUnavailable) })
+
+	req := httptest.NewRequest(http.MethodGet, "/unavailable", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	attrs := attrMap(w.attrsList[0])
+	if got, ok := attrs["level"].(slog.Value); !ok || got.String() != "WARN" {
+		t.Errorf("503 应映射 level=WARN（B3 Q4），实际 %v", attrs["level"])
+	}
+	if got, ok := attrs["mall.result"].(slog.Value); !ok || got.String() != "failed" {
+		t.Errorf("503 应映射 result=failed，实际 %v", attrs["mall.result"])
+	}
+}

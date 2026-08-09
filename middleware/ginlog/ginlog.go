@@ -4,6 +4,7 @@ package ginlog
 
 import (
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,7 +30,9 @@ type Config struct {
 	// SkipPaths 跳过不记录的路径（如健康检查）。
 	SkipPaths map[string]bool
 
-	// LevelForStatus 状态码映射级别；默认 5xx=ERROR、4xx=WARN、其余=INFO。
+	// LevelForStatus 状态码映射缺省级别；默认 2xx-3xx=INFO、4xx=WARN、503=WARN、
+	// 其余 5xx=ERROR（B3 Q4 定稿：503 属暂时不可用、调用方可重试，记 WARN 而非 ERROR，
+	// 避免重试噪音淹没告警）。
 	LevelForStatus func(status int) log.Level
 
 	// ResultForStatus 状态码映射业务结果；默认 >=400=failed，否则 success。
@@ -54,8 +57,13 @@ func defaultTraceContext(c *gin.Context) log.TraceContext {
 
 func defaultUserID(c *gin.Context) string { return c.GetString("user_id") }
 
+// defaultLevelForStatus 状态码映射缺省级别（B3 Q4 定稿）：
+// 2xx-3xx=INFO；4xx=WARN；503=WARN（暂时不可用、调用方可重试）；其余 5xx=ERROR。
+// 调用方可通过 Config.LevelForStatus 整体覆盖。
 func defaultLevelForStatus(status int) log.Level {
 	switch {
+	case status == http.StatusServiceUnavailable:
+		return log.LevelWarn
 	case status >= 500:
 		return log.LevelError
 	case status >= 400:
@@ -119,7 +127,7 @@ func Middleware(cfg Config) gin.HandlerFunc {
 				LatencyMS: time.Since(start).Milliseconds(),
 			},
 			Data: log.AccessPayload{
-				EventName: "access.http.request",
+				EventName: log.EventNameAccessHTTPRequest,
 				Subject:   log.Subject{UserID: getUserID(c)},
 				HTTP: log.HTTPInfo{
 					Method:     c.Request.Method,
