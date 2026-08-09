@@ -81,7 +81,6 @@ example/               演示（默认落盘 example/logs/events.jsonl）
 example/metrics/       使用方自建指标（B5：Meter + PromQL 提示）
 example/mall/          接入方业务事件注册表（C2/B4）
 example/nethttp/       无 Gin 的 access 埋点（C3）
-example/metrics/       使用方 Meter（B5）
 ```
 
 ## OTel 符合性
