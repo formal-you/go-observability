@@ -38,6 +38,10 @@ type Config struct {
 
 	// StatusForError 错误到 HTTP 状态码的映射；空值使用 defaultStatusForError。
 	StatusForError func(err error) int
+
+	// ResponseProjector 自定义错误响应体与状态码；nil 使用默认（扁平 {code,message,request_id?}）。
+	// 接入方可用它注入自定义契约形状（如嵌套 error 对象），状态码与响应体一次决定。
+	ResponseProjector func(err error, requestID string) (int, gin.H)
 }
 
 // Middleware 返回收口显式业务/系统错误的 Gin 中间件。
@@ -55,6 +59,13 @@ func Middleware(cfg Config) gin.HandlerFunc {
 	statusForError := cfg.StatusForError
 	if statusForError == nil {
 		statusForError = defaultStatusForError
+	}
+	projector := cfg.ResponseProjector
+	if projector == nil {
+		// 默认投影组合调用方可能覆盖的 StatusForError 与缺省响应体，保证向后兼容。
+		projector = func(err error, requestID string) (int, gin.H) {
+			return statusForError(err), responseBody(err, requestID)
+		}
 	}
 
 	return func(c *gin.Context) {
@@ -80,7 +91,8 @@ func Middleware(cfg Config) gin.HandlerFunc {
 		ev := log.EventFromError(eventName, err, md)
 		cfg.Logger.Emit(c.Request.Context(), ev)
 
-		c.AbortWithStatusJSON(statusForError(err), responseBody(err, md.RequestID))
+		status, body := projector(err, md.RequestID)
+		c.AbortWithStatusJSON(status, body)
 	}
 }
 

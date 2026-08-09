@@ -344,3 +344,35 @@ func TestMiddlewareCustomEventName(t *testing.T) {
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "error.http.custom")
 }
+
+// TestResponseProjectorOverride 验证 ResponseProjector 可注入自定义契约形状：
+// 状态码与响应体由投影决定，错误事件仍照常写出。
+func TestResponseProjectorOverride(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	engine := gin.New()
+	engine.Use(Middleware(Config{
+		Logger: logger,
+		ResponseProjector: func(err error, _ string) (int, gin.H) {
+			return http.StatusUnauthorized, gin.H{"error": gin.H{"code": "invalid_credentials", "message": err.Error()}}
+		},
+	}))
+	engine.GET("/login", func(c *gin.Context) {
+		Abort(c, errs.NewBusiness("invalid_credentials", errs.ErrorType("business.auth.invalid_credentials"), "email or password is incorrect"))
+	})
+	rec := doRequest(engine, "/login")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401（由投影决定）", rec.Code)
+	}
+	var body map[string]map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if body["error"]["code"] != "invalid_credentials" || body["error"]["message"] == "" {
+		t.Fatalf("body = %#v, want nested invalid_credentials", body)
+	}
+	if len(w.msgs) != 1 || w.msgs[0] != "business" {
+		t.Fatalf("events = %v, want one business event", w.msgs)
+	}
+}
