@@ -53,7 +53,7 @@ func accessEvent() obs.AccessEvent {
 			LatencyMS: 12,
 		},
 		Data: obs.AccessPayload{
-			EventName: "access.http.request",
+			EventName: obs.EventNameAccessHTTPRequest,
 			Subject:   obs.Subject{UserID: "u_12345"},
 			HTTP: obs.HTTPInfo{
 				Method:     "GET",
@@ -77,7 +77,7 @@ func businessEvent() obs.BusinessEvent {
 			RequestID: "req-001",
 		},
 		Data: obs.BusinessPayload{
-			EventName:    "business.order.paid",
+			EventName:    obs.EventNameBusinessOrderPaid,
 			BusinessCode: "ORD-200",
 			Result:       obs.ResultSuccess,
 		},
