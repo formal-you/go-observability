@@ -8,9 +8,9 @@
 
 请不要在公开 Issue、讨论区或 PR 中提交利用细节、真实密钥或个人数据。
 
-当前仓库没有可公开承诺的安全邮箱。维护者必须在公开仓库上线前启用 GitHub **Private vulnerability reporting**；启用后，请从仓库的 **Security > Advisories > Report a vulnerability** 私密报告。
+本仓库已启用 GitHub **Private vulnerability reporting**。请通过 [提交私密漏洞报告](https://github.com/formal-you/go-observability/security/advisories/new)，或从仓库的 **Security > Advisories > Report a vulnerability** 进入。
 
-如果该入口尚未出现，请只提交不含敏感细节的公开 Issue，说明“需要私密安全联系渠道”，等待维护者建立私密通道后再发送详情。
+如果 GitHub 暂时无法打开该入口，请只提交不含敏感细节的公开 Issue，说明“私密报告入口不可用”，不要公开复现与利用细节。
 
 报告建议包含：受影响版本或 commit、影响范围、最小复现、风险判断、是否已公开，以及可行的缓解措施。
 

@@ -6,9 +6,9 @@
 
 - [x] 创建公开 GitHub 仓库，并确认远程仓库 URL、仓库所有者和 `go.mod` module path 完全一致。
 - [x] 配置本地 `origin`，推送默认分支，并从未登录窗口确认 README、LICENSE、CI 和仓库链接可访问。
-- [ ] 在 **Settings > Security > Code security and analysis** 启用 Private vulnerability reporting。
+- [x] 在 **Settings > Security > Code security and analysis** 启用 Private vulnerability reporting。
 - [ ] 在 **Settings > Branches** 或 Rulesets 为默认分支启用 branch protection：要求 PR、CI 通过和禁止强推。
-- [ ] 确认 SECURITY.md 的私密报告路径实际可用，不发布虚构邮箱。
+- [x] 确认 SECURITY.md 的私密报告路径实际可用，不发布虚构邮箱。
 
 ## 版本质量
 
@@ -23,4 +23,4 @@
 - [ ] 在一个全新的临时模块中执行 `go get github.com/formal-you/go-observability@v0.1.0`，编译 README 示例。
 - [ ] 打开对应 pkg.go.dev 页面，确认根包、`telemetry`、writer 和 middleware 文档可索引。
 - [ ] 从仓库外网络检查 GitHub release、tag、CI badge、源码链接和文档相对链接。
-- [ ] 只有以上检查全部通过后，才在 README 展示安装命令、CI badge、Go Reference badge 和稳定支持声明。
+- [ ] 只有以上检查全部通过后，才在 README 展示正式版本安装命令、Go Reference badge 和稳定支持声明。
