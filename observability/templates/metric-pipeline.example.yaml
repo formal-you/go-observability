@@ -1,0 +1,36 @@
+# Metric 管线模板（使用者自有）
+# 复制后改：endpoint、job 标签、histogram 桶、保留策略。
+# go-observability 不强制任何业务指标名；应用用 OTel Meter 自建。
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 512
+  # 可选：丢掉高基数标签（按接入方标签策略开启）
+  # attributes/metric_drop:
+  #   actions:
+  #     - key: http.route
+  #       action: delete
+
+exporters:
+  prometheusremotewrite/mimir:
+    endpoint: http://mimir:9009/api/v1/push
+    tls:
+      insecure: true
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheusremotewrite/mimir]

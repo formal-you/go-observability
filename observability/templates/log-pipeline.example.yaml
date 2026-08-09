@@ -1,0 +1,37 @@
+# Log 管线模板（使用者自有）
+# 对齐 go-observability writer/otlp → Collector → Loki。
+# 应用侧：file/stdout/OTLP Writer；事件模型见根包 Access/Business/Error/Audit/Security/Probe。
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 256
+  # 可选：Collector 二次脱敏（A6 兜底）。规则由接入方维护。
+  # transform/logs_redact:
+  #   log_statements:
+  #     - context: log
+  #       statements:
+  #         - replace_pattern(attributes["user.agent.original"], "token=[^&]+", "token=***")
+
+exporters:
+  otlp_http/loki:
+    endpoint: http://loki:3100/otlp
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http/loki]
+
+# 常用查询键（库已写入属性 / LogRecord）：
+#   event.name, error.type, mall.result, trace_id(via context),
+#   http.request.method, url.path, http.response.status_code

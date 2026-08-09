@@ -61,13 +61,18 @@ A3 采样/频率（trace 头部采样默认 0.1、trace 5s、metric 15s、log 1s
 
 Metric 名与直方图桶以 B5 定稿为准。
 
+## 配置模板（使用者自有）
+
+见 [templates/](templates/)：Log / Trace / Metric 管线与 Error 告警示例、Metric 命名惯例。
+库不强制业务指标集；复制后按自己的服务改 endpoint、桶、阈值。
+
 ## 待你确定清单
 
 1. Go 侧 Trace/Metric provider 配置 —— 已落地（internal/telemetry，2026-08-09；采样率、资源标签可调）。
 2. Grafana 初版面板 —— 已落地（go-observability-overview + datasource 联动）。
-3. Metric 命名与直方图桶（由 B5 Metric 清单输出，供 Mimir/告警用）。
-4. 是否需要 CI/发布流程（Roadmap）。
-5. collector tail_sampling 错误必采的判定属性（A3 详细设计待定项）。
+3. Metric 命名与直方图桶 —— **接入方自定**（模板见 templates/；库不上业务 Metric 代码）。
+4. 是否需要 CI/发布流程（Roadmap / 开源工程）。
+5. collector tail_sampling 错误必采的判定属性（templates/trace-pipeline 注释块；接入方定）。
 
 ## 备注
 

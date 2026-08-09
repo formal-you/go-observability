@@ -1,0 +1,47 @@
+# Trace 管线模板（使用者自有）
+# 应用侧：internal/telemetry 头部采样 + otelhttp/otelgin 等 instrumentation。
+# 错误必采：生产建议在 Gateway Collector 开 tail_sampling（见下方注释块）。
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 512
+  # --- 可选：尾部采样（错误/慢请求必留）---
+  # 判定属性由接入方 span 约定（status code / error.type / http.status_code）。
+  # tail_sampling:
+  #   decision_wait: 10s
+  #   num_traces: 50000
+  #   policies:
+  #     - name: errors-legal
+  #       type: status_code
+  #       status_code: { status_codes: [ERROR] }
+  #     - name: probabilistic-rest
+  #       type: probabilistic
+  #       probabilistic: { sampling_percentage: 10 }
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      # processors: [tail_sampling, batch]
+      exporters: [otlp/tempo]
+
+# 应用侧默认（telemetry.Config，可改）：
+#   TraceSampleRatio: 0.1
+#   TraceBatchTimeout: 5s
+#   ParentBased + TraceIDRatioBased

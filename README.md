@@ -92,14 +92,19 @@ samber 的 slog 系列覆盖了我们的大部分零件（fanout/PII/采样/各�
 - `go test ./...` 全过：核心 20 + errs 14 + ginlog 6 + recover 3 + telemetry 8 + attrkv 4 + file 1 + stdout 2 + otlp 3。
 - 端到端：example 起 Gin → 请求 → access 事件落盘 example/logs/events.jsonl，字段含 semconv 键、trace_id/span_id、level/result 映射（200→INFO/success，404→WARN/failed，503→WARN/failed）。
 
+## Metric 立场
+
+本库 **不** 内置业务/RED 指标注册表。Metric provider 只负责导出通道；指标名、直方图桶、标签与告警由接入方定义。参考：`observability/templates/metric-*.example.*`。
+
 ## Roadmap
 
 - [x] OTLP Writer（otlploggrpc）
 - [x] Go 侧 Trace/Metric provider 配置（internal/telemetry，2026-08-09 落地）
+- [x] Log/Trace/Metric/Error 配置模板（observability/templates，使用者自有）
 - [ ] Grafana 联动面板精细化 + collector tail_sampling 错误必采判定属性（A3 详细设计）
 - [ ] Masker / Sampler 默认实现（按 Result 强制保留）
 - [ ] 字段映射表导出（Go 常量 → Collector transform 配置）
-- [ ] 运营宽表列定义（ClickHouse）
+- [ ] 运营宽表列定义（ClickHouse，接入方）
 - [ ] CI 与发布流程
 
 ## License

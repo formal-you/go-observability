@@ -1,0 +1,41 @@
+# Error 告警规则模板（Prometheus / Mimir ruler 风格示例）
+# 对齐设计 A5：按 error.type 聚合；business.* / validation 不进系统告警。
+# 阈值、路由、通知渠道由接入方填写。库只保证日志/span 上有 error.type。
+
+groups:
+  - name: go-observability-errors
+    interval: 1m
+    rules:
+      # 示例：从日志指标或 span metrics 聚合；真实 metric 名由接入方导出方式决定。
+      - alert: RuntimePanic
+        expr: sum(rate(log_events_total{error_type="runtime.panic"}[5m])) > 0
+        for: 0m
+        labels:
+          severity: P0
+        annotations:
+          summary: "runtime.panic detected"
+          description: "error.type=runtime.panic；带 trace_id 跳转排障。"
+
+      - alert: InfraErrorRateHigh
+        expr: |
+          sum(rate(log_events_total{error_type=~"db\\..*|redis\\..*|mq\\..*"}[5m]))
+          /
+          clamp_min(sum(rate(http_server_requests_total[5m])), 1) > 0.01
+        for: 5m
+        labels:
+          severity: P1
+        annotations:
+          summary: "infra error rate > 1% (5m)"
+
+      - alert: UpstreamHTTPErrors
+        expr: |
+          sum(rate(log_events_total{error_type=~"http\\.upstream_.*"}[5m])) by (error_type)
+          > 0.02
+        for: 5m
+        labels:
+          severity: P2
+        annotations:
+          summary: "upstream HTTP errors elevated"
+
+# 明确不告警（只看板 / 业务 SLO）：
+#   error.type = validation.failed | business.*
