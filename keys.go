@@ -20,6 +20,11 @@ const (
 	KeyClientAddress          Key = "client.address"
 	KeyUserAgentOriginal      Key = "user_agent.original"
 
+	// RPC（semconv rpc）
+	KeyRPCSystem  Key = "rpc.system"
+	KeyRPCService Key = "rpc.service"
+	KeyRPCMethod  Key = "rpc.method"
+
 	// 错误（semconv error / exception）
 	KeyErrorType           Key = "error.type"
 	KeyExceptionType       Key = "exception.type"

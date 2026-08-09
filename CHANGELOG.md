@@ -7,6 +7,7 @@
 ### Added
 
 - 六类类型化事件、`Logger` / `Writer` 接口，以及 JSONL、stdout、OTLP Writer。
+- `AccessPayload` 新增 `RPCInfo`（semconv `rpc.*`）与框架级事件名 `access.rpc.request` / `error.rpc.request`，支持 gRPC 传输层访问/错误事件。
 - `errs` 错误分类、错误事件投影、Gin access、recover 与统一错误收口（`errresp`）中间件，以及框架级事件名 `error.http.request`。
 - 公开 `telemetry` 包，提供 Trace、Metric、Log Provider 装配、环境变量入口和统一关闭。
 - `ResultKeepSampler`、`FieldMasker` 与写入错误回调。
