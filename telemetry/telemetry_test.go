@@ -111,10 +111,54 @@ func TestEndpointFromEnvironment(t *testing.T) {
 }
 
 func TestEndpointURL(t *testing.T) {
-	if got := endpointURL("127.0.0.1:4317"); got != "http://127.0.0.1:4317" {
+	got, err := endpointURL("127.0.0.1:4317")
+	if err != nil || got != "http://127.0.0.1:4317" {
 		t.Errorf("host:port 规范化 = %q", got)
 	}
-	if got := endpointURL("https://collector:4317"); got != "https://collector:4317" {
+	got, err = endpointURL("https://collector:4317")
+	if err != nil || got != "https://collector:4317" {
 		t.Errorf("完整 URL 不应改写 = %q", got)
+	}
+	for _, invalid := range []string{
+		"collector",
+		"collector:",
+		":4317",
+		"collector:not-a-port",
+		"collector:0",
+		"collector:70000",
+		"://bad",
+		"ftp://collector:4317",
+		"https://user@collector:4317",
+		"https://collector:4317/v1/logs",
+	} {
+		if _, err := endpointURL(invalid); err == nil {
+			t.Errorf("endpointURL(%q) 应返回错误", invalid)
+		}
+	}
+}
+
+func TestSetupRejectsNegativeDurations(t *testing.T) {
+	tests := []Config{
+		{Enabled: true, ServiceName: "svc", TraceBatchTimeout: -1},
+		{Enabled: true, ServiceName: "svc", MetricExportInterval: -1},
+		{Enabled: true, ServiceName: "svc", LogBatchTimeout: -1},
+	}
+	for _, cfg := range tests {
+		if _, err := Setup(context.Background(), cfg); err == nil {
+			t.Errorf("Setup(%+v) 应拒绝负数周期", cfg)
+		}
+	}
+}
+
+func TestSetupRejectsInvalidEndpoint(t *testing.T) {
+	for _, endpoint := range []string{"collector", ":4317", "collector:not-a-port", "grpc://collector:4317"} {
+		_, err := Setup(context.Background(), Config{
+			Enabled:     true,
+			ServiceName: "svc",
+			Endpoint:    endpoint,
+		})
+		if err == nil {
+			t.Errorf("Setup Endpoint=%q error = nil, want non-nil", endpoint)
+		}
 	}
 }

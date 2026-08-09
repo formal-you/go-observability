@@ -1,6 +1,6 @@
 # =============================================================================
 # Metric 管线模板（使用者自有）— 字段注释版
-# 库不强制业务指标名；应用用 Providers.Meter() 自建（B5）
+# 库不强制业务指标名；应用用 Providers.Meter() 自建
 # =============================================================================
 
 receivers:
@@ -22,7 +22,7 @@ processors:
   #       action: delete
 
 exporters:
-  # prometheusremotewrite: A1 规定 Prometheus 仅兼容面，存储用 Mimir 等
+  # prometheusremotewrite: Prometheus remote-write 兼容面，存储用 Mimir 等
   prometheusremotewrite/mimir:
     # endpoint: Mimir remote_write 推送 URL
     endpoint: http://mimir:9009/api/v1/push

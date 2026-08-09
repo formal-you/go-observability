@@ -58,7 +58,7 @@
         <mxCell id="errs" value="错误体系 errs&lt;br&gt;AppError / error.type / LevelOf" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;dashed=1;" vertex="1" parent="1">
           <mxGeometry x="960" y="190" width="200" height="150" as="geometry"/>
         </mxCell>
-        <mxCell id="tele" value="internal/telemetry&lt;br&gt;SetupFromEnvironment / NewLogWriter&lt;br&gt;三信号 provider" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;dashed=1;" vertex="1" parent="1">
+        <mxCell id="tele" value="telemetry&lt;br&gt;SetupFromEnvironment / NewLogWriter&lt;br&gt;三信号 provider" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;dashed=1;" vertex="1" parent="1">
           <mxGeometry x="960" y="360" width="200" height="150" as="geometry"/>
         </mxCell>
         <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="n1" target="n2">

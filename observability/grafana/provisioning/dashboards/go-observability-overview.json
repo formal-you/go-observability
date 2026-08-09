@@ -41,7 +41,7 @@
       "id": 3,
       "type": "timeseries",
       "title": "请求错误率（Mimir）",
-      "description": "PromQL 示例（metric 名为 OTel semconv http.server.request.duration，B5 定稿后校准命名与直方图桶）；exemplar 已配置，数据点可跳 Tempo（metric 到 trace 联动）。",
+      "description": "PromQL 示例（metric 名为 OTel semconv http.server.request.duration，实际命名与直方图桶由使用方确定）；exemplar 已配置，数据点可跳 Tempo（metric 到 trace 联动）。",
       "datasource": { "type": "prometheus", "uid": "mimir" },
       "targets": [
         {

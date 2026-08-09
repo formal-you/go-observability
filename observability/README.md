@@ -1,87 +1,67 @@
-# observability — LGTM 参考栈（Trace / Log / Metric）
+# 本地 LGTM 参考栈
 
-本目录是 go-observability 的本地可运行 Observability 参考栈，对应设计决策 A1（LGTM：
-Tempo 存储 trace、Loki 存储 log、Mimir 存储 metric、Grafana 展示）与 A2（collector 用
-contrib 发行版）。本组件（根包 log 的 writer/otlp 等）统一走 OTLP 直推 collector。
+本目录提供开发和演示用的 OpenTelemetry Collector、Tempo、Loki、Mimir 与 Grafana。应用通过 OTLP 把 Trace、Metric、Log 发给 Collector，再由 Collector 分发到各存储。
 
-**应用侧配置（env / YAML，带字段注释）** → [`example/config/`](../example/config/)
+这套 Compose 配置不是生产方案。上线前必须补 TLS、认证、租户隔离、容量、保留期限、备份和升级策略。
 
-**配置语义说明** → [`docs/configuration.md`](../docs/configuration.md)
+## 组件
 
-**可复制管线模板（字段注释）** → [`templates/`](templates/)
+| 组件 | 用途 | 本地端口 |
+| --- | --- | --- |
+| OpenTelemetry Collector Contrib | 接收 OTLP 并分发三信号 | 4317 / 4318 |
+| Tempo | Trace 存储与查询 | 3200 |
+| Loki | Log 存储与查询 | 3100 |
+| Mimir | Metric 存储与 Prometheus 兼容查询 | 9009 |
+| Grafana | 统一查询与预置面板 | 3000 |
 
-## 组成
+## 启动与停止
 
-- otel-collector（otel/opentelemetry-collector-contrib）— 接收 OTLP（4317/4318），批量后分发
-- tempo — trace 存储与查询（3200）
-- loki — log 存储与查询（3100，/otlp 接收）
-- mimir — metric 存储与查询（9009，Prometheus 兼容面）
-- grafana — 统一看板（3000，已预置 tempo/loki/mimir 三个 datasource 与 go-observability-overview 联动面板）
+从仓库根目录运行：
 
-## 快速启动
+```powershell
+docker compose -f .\observability\docker-compose.yml up -d
+docker compose -f .\observability\docker-compose.yml ps
+```
 
-    docker compose -f observability/docker-compose.yml up -d
+```bash
+docker compose -f ./observability/docker-compose.yml up -d
+docker compose -f ./observability/docker-compose.yml ps
+```
 
 停止：
 
-    docker compose -f observability/docker-compose.yml down
+```bash
+docker compose -f observability/docker-compose.yml down
+```
 
-## 健康检查
+## 发送示例数据
 
-| 组件 | 地址 | 期望 |
-| --- | --- | --- |
-| Tempo | http://127.0.0.1:3200/ready | 200 |
-| Loki | http://127.0.0.1:3100/ready | 200 |
-| Mimir | http://127.0.0.1:9009/ready | 200 |
-| Grafana | http://127.0.0.1:3000 | 200（admin/admin） |
+PowerShell：
 
-## 验证
+```powershell
+$env:OTEL_EXPORTER_OTLP_ENDPOINT = "127.0.0.1:4317"
+go run ./example
+```
 
-1. 起栈后四个健康地址返回 200；
-2. Grafana -> Connections -> Data sources：Tempo / Loki / Mimir 显示连通；
-3. 运行 example（设 OTEL_EXPORTER_OTLP_ENDPOINT=127.0.0.1:4317）并请求后：
-   - Grafana -> Explore -> Tempo 查 trace（service.name=go-observability）；
-   - Grafana -> Explore -> Loki 查 access/business/error 日志（event.name、error.type 过滤）；
-   - Grafana -> Explore -> Mimir 查指标（metric 清单见 B5，直方图桶待定）。
+bash：
 
-## Go 侧装配（internal/telemetry）
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=127.0.0.1:4317 go run ./example
+```
 
-仓库已实现 internal/telemetry：Trace / Metric / Log 三信号 provider + OTLP gRPC 导出，
-A3 采样/频率（trace 头部采样默认 0.1、trace 5s、metric 15s、log 1s）与 A7 资源属性
-（service.name/version/env + region/instance）。example 已装配。
+打开 `http://127.0.0.1:3000` 后，可在 Explore 中选择 Tempo、Loki 或 Mimir。默认本地登录信息仅适合开发环境，禁止直接用于公网部署。
 
-环境变量：
+## 应用侧装配
 
-- OTEL_SDK_DISABLED=true 离线运行（provider 全部 noop）
-- OTEL_EXPORTER_OTLP_ENDPOINT（默认 127.0.0.1:4317）
-- GO_OBSERVABILITY_REGION / GO_OBSERVABILITY_INSTANCE（A7 低基数标签）
-- TraceSampleRatio 在 Config 可调（0-1，默认 0.1；严格 100% 错误 trace 设 1.0）
+公开包 [`telemetry`](../telemetry/) 提供三信号 Provider、资源属性、OTLP gRPC 导出和统一 Shutdown。默认 trace 头部采样率为 `0.1`，批量间隔分别为 trace 5 秒、metric 15 秒、log 1 秒。
 
-## Grafana 看板（初版）
+Collector 的 `tail_sampling` 只能处理已经到达 Collector 的 trace。SDK 头部采样丢弃的 trace 无法恢复；需要按错误或延迟做尾部决策时，应用侧通常设 `TraceSampleRatio=1.0`，再配置 Collector 采样并完成容量评估。
 
-已预置 go-observability-overview 面板（Trace / Log / Metric 联动）：
+## 配置入口
 
-- Tempo 面板：TraceQL 按 service.name 查最近 trace；
-- Loki 面板：错误日志（error.type 非空）与访问日志；日志行 trace_id 已配 derived field，点击跳 Tempo（log 到 trace 联动）；
-- Mimir 面板：请求错误率 PromQL 示例（semconv 名 http.server.request.duration，B5 定稿后校准命名与直方图桶）；exemplar 已配（metric 到 trace 联动）。
+- 应用与环境变量：[配置指南](../docs/configuration.md)
+- 带注释的应用/Collector 模板：[`example/config`](../example/config/)
+- 可复制的分信号管线：[`templates`](templates/)
+- 指标命名建议：[`templates/metric-names.example.md`](templates/metric-names.example.md)
 
-Metric 名与直方图桶以 B5 定稿为准。
-
-## 配置模板（使用者自有）
-
-见 [templates/](templates/)：Log / Trace / Metric 管线与 Error 告警示例、Metric 命名惯例。
-库不强制业务指标集；复制后按自己的服务改 endpoint、桶、阈值。
-
-## 待你确定清单
-
-1. Go 侧 Trace/Metric provider 配置 —— 已落地（internal/telemetry，2026-08-09；采样率、资源标签可调）。
-2. Grafana 初版面板 —— 已落地（go-observability-overview + datasource 联动）。
-3. Metric 命名与直方图桶 —— **已定：使用方自定**（B5；`Providers.Meter()` + templates/ + `example/metrics`）。
-4. 是否需要 CI/发布流程（Roadmap / 开源工程）。
-5. collector tail_sampling 错误必采的判定属性（templates/trace-pipeline 注释块；接入方定）。
-
-## 备注
-
-- 镜像固定到具体版本 tag（collector 0.158.0 / tempo 2.9.4 / loki 3.6.15 / mimir 3.1.4 / grafana 13.0.6，2026-08-09 确认）。
-- 指标走 Prometheus remote-write 兼容面进 Mimir（A1：Prometheus 仅作格式/兼容面，不作长期存储）。
-- collector 日志采集默认 OTLP 直推（本组件 writer 已是 OTLP）；filelog 零代码采集见 otel-collector-config.yaml 注释块（参考）。
+镜像使用固定版本以减少本地环境漂移；升级前应阅读各上游项目的 release notes，并重新验证健康检查、数据源和 dashboard 查询。

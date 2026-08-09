@@ -1,40 +1,29 @@
-# 安全与脱敏
+# 安全与隐私指南
 
-## 责任边界
+本库提供事件模型和基础脱敏钩子，不替代组织的日志治理、访问控制、合规评估或事件响应流程。
 
-| 层 | 职责 |
-| --- | --- |
-| 应用 | 入口脱敏、`FieldMasker` / 自定义 `Masker`、不把密钥打进日志 |
-| Collector | 二次兜底 transform（可选，见 collector 样例注释） |
-| 存储 / 访问控制 | 审计独立、权限、保留期（接入方） |
+## 默认不应记录
 
-本库 **不是** 合规产品；默认 Masker 仅覆盖常见密钥键名。
+- 密码、令牌、Cookie、Authorization 头、私钥和数据库连接串。
+- 完整身份证件、银行卡、生物识别信息或其他高敏个人数据。
+- 未经评估的请求体、响应体、查询字符串和错误对象。
+- 可以用低敏标识或哈希替代的真实用户信息。
 
-## FieldMasker
+`FieldMasker` 根据键名递归处理常见 map 和 slice，但无法识别所有业务语义、自定义类型或嵌入字符串中的秘密。使用方必须维护自己的敏感字段清单，并在进入事件前减少采集。
 
-```go
-log.NewLogger(w, log.WithMasker(log.FieldMasker{
-    Keys:   []string{"app.phone", "app.id_card"}, // 追加 PII
-    Redact: "***",
-}))
-```
+## 写入与存储
 
-- 默认键：`DefaultSensitiveKeys`（password、token、authorization、api_key…）
-- 匹配：精确键（大小写不敏感）或后缀 `*.token` / `*_password`
-- Group：递归
-- **默认不含** `app.user_id`（业务标识）；需要时自行加入 `Keys`
+- 通过 `WithErrorHandler` 监控 Writer 失败，避免静默丢失安全或审计事件。
+- File Writer 创建的目录和文件权限仍受进程 umask 与宿主系统影响；生产中由部署平台限制访问。
+- OTLP 链路、Collector、Loki/Tempo/Mimir 的 TLS、认证、租户隔离、保留期限和删除流程由部署方负责。
+- 审计事件需要防篡改时，应写入具备追加保护、访问审计和保留策略的专用存储；本库的 JSONL 文件不提供这些保证。
 
-## Sampler 与噪音
+## 采样风险
 
-- `ResultKeepSampler`：高价值 `app.result` 必留，避免采样丢掉故障面
-- 生产 debug 级流量请用级别 + ratio 双控
+默认 trace 头部采样率为 `0.1`。未被头部采样选中的 trace 不会导出到 Collector，后续 `tail_sampling` 无法恢复，因此不能宣称“错误 trace 必留”。
 
-## 密钥与仓库
+若安全调查或错误追踪要求 Collector 基于完整 trace 决策，应把应用侧采样率设为 `1.0`，再配置尾部采样，并容量评估 Collector。日志 Sampler 应对 failed、error、blocked、denied 等高价值结果强制保留，但这仍不保证对应 trace 存在。
 
-- 禁止把真实 token、云密钥提交进 git
-- CI 跑 `govulncheck`（见 `.github/workflows/ci.yml`）
-- 漏洞报告见 [SECURITY.md](../SECURITY.md)
+## 发布和漏洞报告
 
-## Trace 采样
-
-默认 `TraceSampleRatio=0.1` 为**演示值**。生产按流量与合规（是否允许丢 trace）调整；严格错误必采可 ratio=1 或 Collector `tail_sampling`。
+依赖升级后运行 `govulncheck ./...`。发现漏洞时不要公开利用细节，按仓库根目录的 [SECURITY.md](../SECURITY.md) 报告。安全报告私密入口未启用或已知高危问题未修复时，必须阻断发布。

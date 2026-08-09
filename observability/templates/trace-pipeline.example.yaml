@@ -1,6 +1,6 @@
 # =============================================================================
 # Trace 管线模板（使用者自有）— 字段注释版
-# 应用侧：internal/telemetry 头部采样 + otelgin/otelhttp
+# 应用侧：telemetry 头部采样 + otelgin/otelhttp
 # =============================================================================
 
 receivers:
@@ -18,7 +18,8 @@ processors:
     timeout: 1s
     send_batch_size: 512
 
-  # tail_sampling（可选）：错误/慢请求必留
+  # tail_sampling（可选）：启用前先将应用 TraceSampleRatio 设为 1.0 完整导出；
+  # Collector 只能从已收到的 trace 中按错误、延迟或概率做保留决策。
   # decision_wait: 等 trace 凑齐的时间窗口
   # num_traces: 内存中未决 trace 上限
   # policies[].type: status_code | probabilistic | ...
@@ -50,6 +51,6 @@ service:
       exporters: [otlp/tempo]
 
 # 应用侧 telemetry.Config 对应关系：
-#   TraceSampleRatio   默认 0.1   — 头部采样
+#   TraceSampleRatio   默认 0.1   — 头部采样；启用 tail_sampling 前设为 1.0
 #   TraceBatchTimeout  默认 5s    — BatchSpanProcessor
 #   ParentBased + TraceIDRatioBased

@@ -1,4 +1,4 @@
-# Metric 命名惯例模板（使用者自有，非库契约）
+# Metric 命名惯例模板（使用方自有，非库契约）
 
 > go-observability **不** 把下列名称写进核心 API。接入方按 OTel semantic conventions
 > 与自身领域命名；直方图桶按 SLA 校准。
@@ -48,4 +48,4 @@
 ## 5. Exemplar
 
 若后端支持（Mimir + Grafana），在 histogram 上开 exemplar，实现 metric → trace 跳转
-（设计 A4）。桶与导出间隔由接入方 `PeriodicReader` / Collector batch 决定。
+。桶与导出间隔由接入方 `PeriodicReader` / Collector batch 决定。

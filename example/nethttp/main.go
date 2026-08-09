@@ -1,4 +1,4 @@
-// Command nethttp 演示无 Gin 时使用方如何记 access 事件（C3）。
+// Command nethttp 演示不使用 Gin 时如何记录 access 事件。
 // 框架中间件仅官方提供 ginlog/recover；net/http 由接入方 10 行包装即可。
 package main
 

@@ -1,25 +1,26 @@
-// Package telemetry 装配 OTel Trace / Metric / Log 三信号 provider（A1-A7 落地）。
+// Package telemetry 为应用装配 OTel Trace、Metric 和 Log provider。
 //
-// 职责与 function-call-loop 的 internal/telemetry 一致，补齐 metric：
-//  1. Resource：A7 标准属性（service.name / service.version / deployment.environment）
+// 本包提供应用可直接导入的三信号装配入口：
+//  1. Resource：标准属性（service.name / service.version / deployment.environment）
 //     加低基数标签（region / instance）；
 //  2. OTLP gRPC exporter：trace / metric / log 各一，默认 127.0.0.1:4317；
 //  3. Provider：trace（头部采样 + 批量 5s/512）、metric（PeriodicReader 15s）、
 //     log（批量 1s/512），并全局安装（otel / global 包）与 TextMapPropagator；
 //  4. Shutdown：退出前 flush 三信号。
 //
-// 环境变量：启用与否由 OTEL_SDK_DISABLED 控制（EnabledFromEnvironment）；
-// endpoint 由 OTEL_EXPORTER_OTLP_ENDPOINT 覆盖（EndpointFromEnvironment），
-// 启动前会把 OTEL_EXPORTER_OTLP_* 统一规范成 URL 形式。
+// 环境变量：SetupFromEnvironment 从 OTEL_SDK_DISABLED 读取启用状态，从
+// OTEL_EXPORTER_OTLP_ENDPOINT 读取 endpoint；Setup 时在内存中校验并规范为 URL，
+// 不修改 os.Environ。
 //
-// 采样（A3）：头部采样默认 TraceIDRatioBased(0.1) + ParentBased；尾部错误必采
-// 由 collector tail_sampling 兜底（见 observability/otel-collector-config.yaml），
-// 严格 100% 错误 trace 时把 TraceSampleRatio 设为 1.0。
+// 采样默认使用 ParentBased(TraceIDRatioBased(0.1))。未被头部采样的 trace 不会到达
+// Collector；若要使用 tail_sampling，必须把 TraceSampleRatio 设为 1，让 Collector
+// 收到完整 trace 后再做尾部决策。
 package telemetry
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -39,6 +40,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/formal-you/go-observability"
+	"github.com/formal-you/go-observability/internal/otlpendpoint"
 	"github.com/formal-you/go-observability/writer/file"
 	"github.com/formal-you/go-observability/writer/otlp"
 )
@@ -47,7 +49,7 @@ import (
 // 中 Collector 暴露的端口一致。
 const defaultEndpoint = "127.0.0.1:4317"
 
-// A3 采集/导出频率缺省值：trace 5s、metric 15s（建议 15-60s）、log 1s。
+// 采集/导出频率缺省值：trace 5s、metric 15s（建议 15-60s）、log 1s。
 const (
 	defaultTraceBatchTimeout    = 5 * time.Second
 	defaultMetricExportInterval = 15 * time.Second
@@ -62,25 +64,26 @@ type Config struct {
 	ServiceName string
 	// ServiceVersion 写入 service.version，区分部署版本。
 	ServiceVersion string
-	// Environment 写入 deployment.environment（A7）。
+	// Environment 写入 deployment.environment。
 	Environment string
-	// Region 低基数标签 region（A7）；空则省略。
+	// Region 写入低基数资源属性 region；空则省略。
 	Region string
-	// Instance 低基数标签 instance（A7）；空则省略。
+	// Instance 写入资源属性 instance；空则省略。
 	Instance string
-	// Endpoint OTLP gRPC endpoint（host:port 或完整 URL）；空用 defaultEndpoint。
+	// Endpoint OTLP gRPC endpoint（裸 host:port 为明文，URL 保留 http/https）；空用 defaultEndpoint。
+	// 显式设置时 NewLogWriter 复用本次 Setup 的 LoggerProvider 写 OTLP。
 	Endpoint string
 	// Enabled false 时跳过全部初始化，返回空 Providers（进程可离线运行）。
 	Enabled bool
-	// TraceSampleRatio 头部采样率（A3），默认 0.1；必须落在 (0, 1]。
+	// TraceSampleRatio 头部采样率，默认 0.1；必须落在 (0, 1]。
 	TraceSampleRatio float64
-	// TraceBatchTimeout trace 批量导出间隔（A3），默认 5s。
+	// TraceBatchTimeout trace 批量导出间隔，默认 5s。
 	TraceBatchTimeout time.Duration
-	// MetricExportInterval metric 周期导出间隔（A3），默认 15s。
+	// MetricExportInterval metric 周期导出间隔，默认 15s。
 	MetricExportInterval time.Duration
-	// LogBatchTimeout log 批量导出间隔（A3），默认 1s。
+	// LogBatchTimeout log 批量导出间隔，默认 1s。
 	LogBatchTimeout time.Duration
-	// Resource 显式注入的 Resource；nil 时由 ServiceName/Version/Environment/Region/Instance 构建（A7）。
+	// Resource 显式注入的 Resource；nil 时由 ServiceName/Version/Environment/Region/Instance 构建。
 	Resource *resource.Resource
 }
 
@@ -92,6 +95,7 @@ type Providers struct {
 	tracerProvider *sdktrace.TracerProvider
 	meterProvider  *sdkmetric.MeterProvider
 	loggerProvider *sdklog.LoggerProvider
+	useOTLPLogs    bool
 }
 
 // Setup 装配并全局安装三信号 provider，返回进程运行时对象。
@@ -112,21 +116,34 @@ func Setup(ctx context.Context, cfg Config) (*Providers, error) {
 	if cfg.TraceBatchTimeout == 0 {
 		cfg.TraceBatchTimeout = defaultTraceBatchTimeout
 	}
+	if cfg.TraceBatchTimeout < 0 {
+		return nil, errors.New("telemetry: trace batch timeout must be positive")
+	}
 	if cfg.MetricExportInterval == 0 {
 		cfg.MetricExportInterval = defaultMetricExportInterval
 	}
+	if cfg.MetricExportInterval < 0 {
+		return nil, errors.New("telemetry: metric export interval must be positive")
+	}
 	if cfg.LogBatchTimeout == 0 {
 		cfg.LogBatchTimeout = defaultLogBatchTimeout
+	}
+	if cfg.LogBatchTimeout < 0 {
+		return nil, errors.New("telemetry: log batch timeout must be positive")
 	}
 	if cfg.Environment == "" {
 		cfg.Environment = "dev"
 	}
 
-	endpoint := cfg.Endpoint
+	endpoint := strings.TrimSpace(cfg.Endpoint)
+	useOTLPLogs := endpoint != ""
 	if endpoint == "" {
 		endpoint = defaultEndpoint
 	}
-	endpoint = endpointURL(strings.TrimSpace(endpoint))
+	endpoint, err := endpointURL(endpoint)
+	if err != nil {
+		return nil, err
+	}
 
 	res := cfg.Resource
 	if res == nil {
@@ -190,17 +207,18 @@ func Setup(ctx context.Context, cfg Config) (*Providers, error) {
 		tracerProvider: tracerProvider,
 		meterProvider:  meterProvider,
 		loggerProvider: loggerProvider,
+		useOTLPLogs:    useOTLPLogs,
 	}, nil
 }
 
-// SetupFromEnvironment 按环境变量装配三信号 provider（B9 定稿：出口决策收敛点之一）。
+// SetupFromEnvironment 按环境变量装配三信号 provider。
 // 启用开关从 OTEL_SDK_DISABLED 读取，endpoint 从 OTEL_EXPORTER_OTLP_ENDPOINT 读取
 // （缺省 127.0.0.1:4317），其余配置由 cfg 提供；内部调用 Setup。组合根只需调本函数
 // + NewLogWriter，不再各自写 env 判断。
 func SetupFromEnvironment(ctx context.Context, cfg Config) (*Providers, error) {
 	cfg.Enabled = EnabledFromEnvironment()
-	if cfg.Endpoint == "" {
-		cfg.Endpoint = EndpointFromEnvironment()
+	if strings.TrimSpace(cfg.Endpoint) == "" {
+		cfg.Endpoint = strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
 	}
 	return Setup(ctx, cfg)
 }
@@ -246,7 +264,7 @@ func (p *Providers) Meter(name string) metric.Meter {
 	return p.meterProvider.Meter(name)
 }
 
-// Resource 返回共享的 OTel Resource（A7）；未启用（Enabled=false）时为 nil，调用方需自行判空。
+// Resource 返回共享的 OTel Resource；未启用（Enabled=false）时为 nil，调用方需自行判空。
 func (p *Providers) Resource() *resource.Resource {
 	if p == nil {
 		return nil
@@ -263,12 +281,12 @@ func (p *Providers) LoggerProvider() *sdklog.LoggerProvider {
 	return p.loggerProvider
 }
 
-// NewLogWriter 返回按环境选择的日志 Writer（B9 定稿：出口决策收敛点之二）。
-// OTEL_EXPORTER_OTLP_ENDPOINT 已设置且 Providers 已启用 → OTLP Writer（复用本进程的
-// Resource 与 LoggerProvider）；否则 → 本地 JSONL file Writer（写 jsonlPath）。
+// NewLogWriter 返回按环境选择的日志 Writer。
+// Setup 时显式配置 endpoint（含 SetupFromEnvironment 读取到环境变量）且 Providers
+// 已启用 → OTLP Writer（复用本进程的 Resource 与 LoggerProvider）；否则写本地 JSONL。
 // 未启用（空 Providers）时走 file Writer，保证本地离线可核对。
 func (p *Providers) NewLogWriter(ctx context.Context, jsonlPath string) (log.Writer, error) {
-	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" && p != nil && p.LoggerProvider() != nil {
+	if p != nil && p.useOTLPLogs && p.LoggerProvider() != nil {
 		opts := []otlp.Option{otlp.WithLoggerProvider(p.LoggerProvider())}
 		if res := p.Resource(); res != nil {
 			opts = append(opts, otlp.WithResource(res))
@@ -278,7 +296,7 @@ func (p *Providers) NewLogWriter(ctx context.Context, jsonlPath string) (log.Wri
 	return file.New(jsonlPath)
 }
 
-// EnabledFromEnvironment 从 OTEL_SDK_DISABLED 读取启用开关（B9：本地可一键关闭）。
+// EnabledFromEnvironment 从 OTEL_SDK_DISABLED 读取启用开关。
 func EnabledFromEnvironment() bool {
 	return !strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_SDK_DISABLED")), "true")
 }
@@ -291,10 +309,11 @@ func EndpointFromEnvironment() string {
 	return defaultEndpoint
 }
 
-// endpointURL 规范化 endpoint：接受 host:port 与完整 URL 两种形式。
-func endpointURL(endpoint string) string {
-	if strings.Contains(endpoint, "://") {
-		return endpoint
+// endpointURL 校验并规范化 endpoint：接受 host:port 与 http(s) URL 两种形式。
+func endpointURL(endpoint string) (string, error) {
+	normalized, err := otlpendpoint.Parse(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("telemetry: %w", err)
 	}
-	return "http://" + endpoint
+	return normalized, nil
 }

@@ -1,5 +1,5 @@
-// Command example 演示 go-observability 的三信号装配（internal/telemetry）+ Gin 中间件 + 日志写出。
-// 默认把日志写入本目录 logs/events.jsonl；设置 OTEL_EXPORTER_OTLP_ENDPOINT 时改走 OTLP。
+// Command example 演示 go-observability 的三信号装配（telemetry）+ Gin 中间件 + 日志写出。
+// 默认把日志写入当前工作目录的 logs/events.jsonl；设置 OTEL_EXPORTER_OTLP_ENDPOINT 时改走 OTLP。
 // 设 OTEL_SDK_DISABLED=true 可离线运行（trace/metric/log provider 全部 noop）。
 package main
 
@@ -16,14 +16,14 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/formal-you/go-observability"
-	"github.com/formal-you/go-observability/internal/telemetry"
 	"github.com/formal-you/go-observability/middleware/ginlog"
+	"github.com/formal-you/go-observability/telemetry"
 )
 
 func main() {
 	ctx := context.Background()
 
-	// 三信号装配（A3 采样/频率 + A7 资源属性）：trace/metric/log provider 全局安装。
+	// 三信号装配：全局安装 trace、metric、log provider。
 	providers, err := telemetry.SetupFromEnvironment(ctx, telemetry.Config{
 		ServiceName:    "go-observability",
 		ServiceVersion: "0.1.0",
@@ -45,7 +45,7 @@ func main() {
 	defer closeWriter(ctx, w)
 	logger := log.NewLogger(w)
 
-	// metric：使用方自建（B5）；完整 RED+业务 counter 见 example/metrics。
+	// metric 由使用方自建；完整 RED 和业务 counter 见 example/metrics。
 	httpDuration, err := providers.Meter("go-observability/example").Int64Histogram(
 		"http.server.request.duration",
 		metric.WithUnit("ms"),
@@ -75,10 +75,10 @@ func main() {
 	}
 }
 
-// newLogWriter 优先 OTLP（OTEL_EXPORTER_OTLP_ENDPOINT），否则写入 example/logs/events.jsonl。
+// newLogWriter 优先 OTLP（OTEL_EXPORTER_OTLP_ENDPOINT），否则写入当前工作目录的 logs/events.jsonl。
 // OTLP 路径注入 telemetry 的 Resource 与 LoggerProvider，三信号共享同一份资源与装配。
 func newLogWriter(ctx context.Context, p *telemetry.Providers) (log.Writer, error) {
-	// B9 定稿：出口决策收敛在 telemetry.NewLogWriter（env 驱动 file/OTLP 切换）。
+	// 出口决策由 SetupFromEnvironment 固化，NewLogWriter 复用该决策。
 	return p.NewLogWriter(ctx, filepath.Join("logs", "events.jsonl"))
 }
 

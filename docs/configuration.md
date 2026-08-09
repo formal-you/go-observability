@@ -1,85 +1,83 @@
 # 配置指南
 
-本文说明 **应用如何配置 go-observability**，以及 **部署侧配置落在哪里**。
+配置分三层：应用代码负责事件、Logger 和 `telemetry.Config`；进程环境负责启用状态与 OTLP 地址；Collector 和存储由部署平台维护。本库不读取 YAML 配置文件，仓库中的 YAML 只作为可复制模板。
 
-## 1. 配置分层
+## telemetry.Config
 
-| 层 | 谁拥有 | 载体 |
+| 字段 | 默认值 | 说明 |
 | --- | --- | --- |
-| 应用代码 | 接入方 | `telemetry.Config`、`log.NewLogger` 选项、事件埋点 |
-| 进程环境 | 接入方 / 平台 | `OTEL_*`、`GO_OBSERVABILITY_*`（见 [example/config/.env.example](../example/config/.env.example)） |
-| Collector / 存储 | 运维 | [example/config/collector.example.yaml](../example/config/collector.example.yaml)、[observability/](../observability/) |
-| 告警 / 看板 | 运维 | [observability/templates/](../observability/templates/)、Grafana provisioning |
-
-库 **不** 内置配置文件解析器；YAML 样例仅作字段文档。
-
-## 2. 环境变量（库实际读取）
-
-| 变量 | 读取点 | 行为 |
-| --- | --- | --- |
-| `OTEL_SDK_DISABLED=true` | `EnabledFromEnvironment` | 空 Providers，三信号 noop |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `EndpointFromEnvironment` / `NewLogWriter` | Setup 默认 endpoint；**非空** 且已启用 → 日志走 OTLP，否则 JSONL |
-| `GO_OBSERVABILITY_REGION` | example（可选） | 写入 resource `region` |
-| `GO_OBSERVABILITY_INSTANCE` | example（可选） | 写入 resource `instance` |
-
-完整注释清单：[example/config/.env.example](../example/config/.env.example)。
-
-## 3. telemetry.Config 字段
-
-| 字段 | 必填 | 默认 | 含义 |
-| --- | --- | --- | --- |
-| `ServiceName` | 是 | — | `service.name` |
-| `ServiceVersion` | 否 | `""` | `service.version` |
-| `Environment` | 否 | `dev` | `deployment.environment` |
-| `Region` / `Instance` | 否 | 省略 | 低基数标签 |
-| `Endpoint` | 否 | env 或 `127.0.0.1:4317` | OTLP gRPC |
-| `Enabled` | 否 | env | 是否装配 SDK |
-| `TraceSampleRatio` | 否 | `0.1` | 头部采样 **(0,1]** |
-| `TraceBatchTimeout` | 否 | `5s` | span 批导出 |
-| `MetricExportInterval` | 否 | `15s` | metric 周期 |
-| `LogBatchTimeout` | 否 | `1s` | log 批导出 |
-| `Resource` | 否 | 由上列构建 | 自定义 Resource |
-
-结构示意 YAML：[example/config/app.example.yaml](../example/config/app.example.yaml)。
-
-## 4. Logger 选项
+| `ServiceName` | 无 | 启用 telemetry 时必填，写入 `service.name` |
+| `ServiceVersion` | 空 | 写入 `service.version` |
+| `Environment` | `dev` | 写入 `deployment.environment` |
+| `Region` / `Instance` | 省略 | 可选低基数资源属性 |
+| `Endpoint` | 环境变量或 `127.0.0.1:4317` | OTLP gRPC endpoint，可用 `host:port` 或 URL |
+| `Enabled` | `SetupFromEnvironment` 从环境读取 | `false` 返回空 Providers |
+| `TraceSampleRatio` | `0.1` | SDK 头部采样比例，范围 `(0, 1]` |
+| `TraceBatchTimeout` | `5s` | span 批量导出间隔 |
+| `MetricExportInterval` | `15s` | metric 周期导出间隔 |
+| `LogBatchTimeout` | `1s` | log 批量导出间隔 |
+| `Resource` | 自动构建 | 自定义 OpenTelemetry Resource |
 
 ```go
-log.NewLogger(w,
-    log.WithSampler(log.ResultKeepSampler{Ratio: 1}), // 高价值 result 必留
-    log.WithMasker(log.FieldMasker{Keys: []string{"app.phone"}}),
-    log.WithBaseMetadata(log.EventMetadata{/* ... */}),
-    log.WithErrorHandler(func(ctx context.Context, msg string, attrs []slog.Attr, err error) { /* ... */ }),
+providers, err := telemetry.SetupFromEnvironment(ctx, telemetry.Config{
+	ServiceName:     "order-api",
+	ServiceVersion:  "0.1.0",
+	Environment:     "production",
+	TraceSampleRatio: 1.0,
+})
+if err != nil {
+	return err
+}
+defer func() {
+	if err := providers.Shutdown(context.Background()); err != nil {
+		slog.Error("shutdown telemetry", "err", err)
+	}
+}()
+```
+
+`SetupFromEnvironment` 会安装全局 Trace、Metric、Log Provider 和 W3C Trace Context/Baggage propagator。库类型不负责监听配置变化；运行中修改需由应用重建并安全切换 Provider。
+
+## 日志出口
+
+`providers.NewLogWriter(ctx, "logs/events.jsonl")` 的选择规则：
+
+- `Setup` 时显式设置 `Config.Endpoint`，或 `SetupFromEnvironment` 当时读取到 `OTEL_EXPORTER_OTLP_ENDPOINT`，且 telemetry 已启用：复用 Provider 写 OTLP。
+- 其他情况：写当前工作目录下的 JSONL 路径。
+
+出口选择在 Setup 时固化；后续修改环境变量不会改变已有 `Providers` 的 endpoint 或日志出口，需要重新 Setup 后再切换。
+
+应用应检查构造错误，配置 `log.WithErrorHandler` 观察异步写入失败，并关闭实现了 `Close(context.Context)` 的 Writer。完整代码见 [README](../README.md) 和 [`example/main.go`](../example/main.go)。
+
+## Logger 选项
+
+```go
+logger := log.NewLogger(w,
+	log.WithSampler(log.ResultKeepSampler{Ratio: 1}),
+	log.WithMasker(log.FieldMasker{Keys: []string{"app.phone"}}),
+	log.WithBaseMetadata(log.EventMetadata{Level: log.LevelInfo}),
+	log.WithErrorHandler(func(ctx context.Context, msg string, attrs []slog.Attr, err error) {
+		slog.ErrorContext(ctx, "observability write failed", "event", msg, "err", err)
+	}),
 )
 ```
 
-| 选项 | 默认 | 说明 |
+| 选项 | 默认行为 | 生产建议 |
 | --- | --- | --- |
-| Sampler | 无（全量写） | `ResultKeepSampler`：failed/error/blocked/denied 必留 |
-| Masker | 无 | `FieldMasker`：默认密钥类键 → `***` |
-| BaseMetadata | 空 | 补全缺失的 level/trace/span/request/latency |
-| ErrorHandler | 无 | Writer 失败观察，不返回业务 |
+| Sampler | 全量日志事件 | 为低价值事件设置比例，高价值失败结果强制保留 |
+| Masker | 不脱敏 | 维护业务 PII 键清单并在写出前脱敏 |
+| BaseMetadata | 不补全 | 注入服务内稳定的公共元数据 |
+| ErrorHandler | 写入错误不可见 | 接入独立、不会递归使用同一 Writer 的告警路径 |
 
-## 5. B9 出口决策矩阵
+## 头部与尾部采样
 
-| `OTEL_SDK_DISABLED` | `OTEL_EXPORTER_OTLP_ENDPOINT` | Trace/Metric | Log Writer |
-| --- | --- | --- | --- |
-| `true` | * | noop | 建议 file/stdout |
-| 非 true | 空 | 若 Enabled 仍可能连默认 endpoint* | **JSONL**（`NewLogWriter`） |
-| 非 true | 非空 | OTLP | **OTLP** |
+`TraceSampleRatio=0.1` 在应用 SDK 入口丢弃约 90% trace。被丢弃的数据从未导出，Collector `tail_sampling` 无法恢复。若需要按错误、延迟或属性在 Collector 侧决定保留，应用侧通常应设 `TraceSampleRatio=1.0`，再由 Collector 尾部采样；这会增加出口与 Collector 的吞吐和内存压力。
 
-\*本地推荐：未就绪时 `OTEL_SDK_DISABLED=true`，或只跑 JSONL 且不调用需要真实 exporter 的路径。
+日志事件采样由根包 `Sampler` 控制，与 trace 采样相互独立。不要假设保留日志就一定能查询到对应 trace。
 
-## 6. 部署侧
+## 部署配置
 
-1. 复制 [example/config/collector.example.yaml](../example/config/collector.example.yaml) 或使用 [observability/otel-collector-config.yaml](../observability/otel-collector-config.yaml)。
-2. `docker compose -f observability/docker-compose.yml up -d`（需 Docker）。
-3. 告警骨架：`observability/templates/error-alerts.example.yaml`（阈值自定）。
-4. Metric 名/桶：**接入方自定**（B5），见 `templates/metric-names.example.md`。
-
-## 7. 相关文档
-
-- [environment.md](environment.md) — 环境变量速查
-- [security.md](security.md) — 脱敏与密钥
-- [onboarding.md](onboarding.md) — 上手
-- [architecture.md](architecture.md) — 架构
+- 环境变量模板：[`example/config/.env.example`](../example/config/.env.example)
+- 应用配置结构示意：[`example/config/app.example.yaml`](../example/config/app.example.yaml)
+- Collector 示例：[`example/config/collector.example.yaml`](../example/config/collector.example.yaml)
+- 本地参考栈：[`observability`](../observability/)
+- 分信号模板：[`observability/templates`](../observability/templates/)

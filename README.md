@@ -1,146 +1,138 @@
 # go-observability
 
-基于 [OpenTelemetry](https://opentelemetry.io/) 语义约定的 Go **语义化日志 + 三信号装配** 组件（源即规范）。
+面向 Go 服务的语义化日志与 OpenTelemetry Trace、Metric、Log 三信号装配库。文档以中文为主，字段尽量遵循 OpenTelemetry Semantic Conventions。
 
-[![CI](https://github.com/formal-you/go-observability/actions/workflows/ci.yml/badge.svg)](https://github.com/formal-you/go-observability/actions/workflows/ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/formal-you/go-observability.svg)](https://pkg.go.dev/github.com/formal-you/go-observability)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> **模块路径**：`github.com/formal-you/go-observability`（公开发布前请确认 org/repo 与 `go.mod` 一致后再打 tag）。
->
-> Agent/协作者硬规则：[AGENTS.md](AGENTS.md)
+> 发布准备中：仓库尚未配置公开远程地址和版本标签，当前不承诺 `go get`、pkg.go.dev 或 GitHub 链接可用。正式发布前将按 [发布检查清单](docs/release-checklist.md) 完成外部验证。
 
-| | |
+| 项目 | 当前约定 |
 | --- | --- |
-| **Go** | 1.25+（见 `go.mod`） |
-| **文档语言** | 中文为主；术语保留英文（span / trace / semconv） |
-| **版本** | v0.x 允许破坏性变更 → [CHANGELOG.md](CHANGELOG.md) |
-| **许可证** | MIT |
+| Go | 1.25+（以 `go.mod` 为准） |
+| 版本 | v0.x 期间公共 API 仍可能调整，见 [CHANGELOG](CHANGELOG.md) |
+| 许可证 | MIT |
 
-## 文档地图
+## 能做什么
 
-| 文档 | 说明 |
-| --- | --- |
-| [docs/README.md](docs/README.md) | **文档索引** |
-| [docs/onboarding.md](docs/onboarding.md) | 15 分钟上手 |
-| [docs/configuration.md](docs/configuration.md) | **配置总览**（env / Config / Logger / 部署） |
-| [docs/environment.md](docs/environment.md) | 环境变量速查 |
-| [docs/security.md](docs/security.md) | 脱敏与安全责任 |
-| [docs/architecture.md](docs/architecture.md) | 架构与数据流 |
-| [example/config/](example/config/) | **可复制配置（逐字段注释）** |
-| [observability/](observability/) | 本地 LGTM 全栈 |
-| [CONTRIBUTING.md](CONTRIBUTING.md) · [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) · [SECURITY.md](SECURITY.md) · [SUPPORT.md](SUPPORT.md) | 开源协作 |
+- 六类类型化事件：access、business、error、audit、security、probe
+- JSONL 文件、标准输出与 OTLP 日志 Writer
+- 可注入的采样、脱敏和写入错误回调
+- 公开的 [`telemetry`](telemetry/) 包：装配 Trace、Metric、Log Provider 并统一关闭
+- Gin access/recover 中间件；标准库 `net/http` 接入示例
+- 可选的本地 OpenTelemetry Collector、Loki、Tempo、Mimir、Grafana 参考栈
 
-## 特性
+## 最小 JSONL 示例
 
-- 核心包零外部依赖（标准库）；属性键对齐 OTel semconv **1.41.0** + vendor **`app.*`**
-- **三信号装配**（`internal/telemetry`）：Trace / Metric / Log + OTLP gRPC；B9 env 切换（disabled / JSONL / OTLP）
-- **六类事件**：access / business / error / audit / security / probe；领域 `business.*` 由接入方自建（[`example/mall`](example/mall)）
-- **errs**：Kind / Type v1 / AppError / StackRule；`LevelOf` + `EventFromError`（B2/B3）
-- **Sampler / Masker**：`ResultKeepSampler`、`FieldMasker`（可选注入，C6）
-- **Writer**：OTLP / stdout / file(JSONL)
-- **中间件**：官方仅 Gin（`ginlog` + `recover`）；`net/http` 见 [`example/nethttp`](example/nethttp)
-- **Metric**：库不内置业务指标；`Providers.Meter()` + [`example/metrics`](example/metrics)（B5）
-
-## 快速开始
-
-```bash
-go get github.com/formal-you/go-observability@latest   # 公开仓库后
-```
+完整程序位于 [`example/minimal/main.go`](example/minimal/main.go)，从仓库根目录执行 `go run ./example/minimal`，输出位于 `logs/events.jsonl`。发布标签就绪后，可在你自己的模块中按届时公布的版本安装。
 
 ```go
+package main
+
 import (
-    "github.com/gin-gonic/gin"
-    "go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
 
-    log "github.com/formal-you/go-observability"
-    "github.com/formal-you/go-observability/middleware/ginlog"
-    "github.com/formal-you/go-observability/writer/file"
+	log "github.com/formal-you/go-observability"
+	"github.com/formal-you/go-observability/writer/file"
 )
 
-w, _ := file.New("logs/events.jsonl")
-logger := log.NewLogger(w,
-    log.WithSampler(log.ResultKeepSampler{Ratio: 1}),
-    log.WithMasker(log.FieldMasker{}),
-)
+func main() {
+	ctx := context.Background()
+	w, err := file.New("logs/events.jsonl")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "create log writer:", err)
+		os.Exit(1)
+	}
 
-r := gin.New()
-r.Use(otelgin.Middleware("my-service"))
-r.Use(ginlog.Middleware(ginlog.Config{Logger: logger}))
+	writeFailed := false
+	logger := log.NewLogger(w, log.WithErrorHandler(func(_ context.Context, _ string, _ []slog.Attr, err error) {
+		writeFailed = true
+		fmt.Fprintln(os.Stderr, "write event:", err)
+	}))
+	logger.Emit(ctx, log.BusinessEvent{
+		EventMetadata: log.EventMetadata{Level: log.LevelInfo},
+		Data: log.BusinessPayload{
+			EventName: log.NewEventName("business", "order", "paid"),
+			Result:    log.ResultSuccess,
+		},
+	})
+
+	if err := w.Close(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, "close log writer:", err)
+		os.Exit(1)
+	}
+	if writeFailed {
+		os.Exit(1)
+	}
+}
 ```
 
-业务事件（领域名用接入方常量或 `NewEventName`）：
+`Logger.Emit` 不返回 Writer 错误；生产接入必须配置 `WithErrorHandler`，并监控降级输出或丢日志风险。
 
-```go
-logger.Emit(ctx, log.BusinessEvent{
-    EventMetadata: log.EventMetadata{Level: log.LevelInfo, TraceID: tid, SpanID: sid},
-    Data: log.BusinessPayload{
-        EventName: log.NewEventName("business", "order", "paid"),
-        Result:    log.ResultSuccess,
-    },
-})
+## 进阶接入
+
+- Gin：[`example/main.go`](example/main.go) 与 [`middleware/ginlog`](middleware/ginlog/)
+- 标准库 HTTP：[`example/nethttp`](example/nethttp/)
+- OTLP 与三信号：[`telemetry`](telemetry/) 和 [配置指南](docs/configuration.md)
+- 本地 LGTM 栈：[`observability`](observability/)
+- 指标：[`example/metrics`](example/metrics/)
+- 领域事件注册：[`example/mall`](example/mall/)
+
+从仓库根目录运行示例：
+
+```powershell
+$env:OTEL_SDK_DISABLED = "true"
+go run ./example
+Get-Content .\logs\events.jsonl
 ```
-
-### 配置怎么用
-
-1. 复制 [example/config/.env.example](example/config/.env.example)（**每个变量都有类型/默认/行为注释**）
-2. 应用结构对照 [example/config/app.example.yaml](example/config/app.example.yaml)
-3. Collector：[example/config/collector.example.yaml](example/config/collector.example.yaml) 或 [observability/](observability/)
-4. 说明文档：[docs/configuration.md](docs/configuration.md)
 
 ```bash
-# 可选：本地 LGTM
-docker compose -f observability/docker-compose.yml up -d
-
-# 演示（未设 endpoint 时写 example/logs/events.jsonl）
-go run ./example
+OTEL_SDK_DISABLED=true go run ./example
+tail -n 1 ./logs/events.jsonl
 ```
 
-更多 example 索引：[example/README.md](example/README.md)。
+设置 `OTEL_EXPORTER_OTLP_ENDPOINT` 后，主示例改走 OTLP；未设置时写入仓库根目录下的 `logs/events.jsonl`。完整命令见 [示例索引](example/README.md)。
 
 ## 包布局
 
+```text
+根包 log                 事件、Logger、Sampler、Masker
+errs                     错误分类与事件投影
+middleware/ginlog        Gin access 日志
+middleware/recover       Gin panic 恢复
+writer/file              JSONL 文件 Writer
+writer/stdout            标准输出 Writer
+writer/otlp              OTLP 日志 Writer
+telemetry                三信号 Provider 装配
+example                  可运行示例
+observability            本地参考栈与管线模板
+docs                     用户与贡献文档
 ```
-log/                      核心 API（types/keys/payload/events/normalize/logger/sampler/masker）
-errs/                     错误体系（零外部依赖）
-middleware/ginlog|recover Gin 集成（C3）
-writer/{otlp,stdout,file} 后端
-internal/telemetry        三信号装配
-internal/attrkv           slog ↔ OTel
-example/config            配置样例（字段注释）
-example/{mall,metrics,nethttp,samber}
-observability/            LGTM compose + templates
-docs/                     用户文档
-```
 
-## OTel 符合性（摘要）
+## 采样与安全边界
 
-- 键名：semconv 1.41.0（`url.path`、`code.function.name` 等）+ `app.*`
-- `event.name` → LogRecord EventName 顶层；双投影（JSONL 扁平 vs OTLP）
-- `request_id`：显式优先，否则 trace_id 前缀 12 hex（A4）
-- Resource：`service.name` / `version` / `deployment.environment` + region/instance
+- `TraceSampleRatio` 默认 `0.1`，这是头部采样。未被 SDK 导出的 trace 不会到达 Collector，因此 Collector 的 `tail_sampling` 无法恢复它。
+- 需要按错误、延迟做尾部采样时，SDK 侧应先导出完整 trace（通常设为 `1.0`），再由 Collector 决定保留比例；同时评估成本与隐私影响。
+- `FieldMasker` 只提供通用键名脱敏，不替代业务 PII 清单、访问控制、保留期限和审计策略。详见 [安全指南](docs/security.md)。
 
-## 安全提示
+## 文档与协作
 
-- `FieldMasker` 默认只盖密钥类键，**不是**完整合规方案 → [docs/security.md](docs/security.md)
-- 默认 trace 采样 **0.1** 为演示值，生产请改 `TraceSampleRatio`
-- 漏洞报告 → [SECURITY.md](SECURITY.md)
+- [文档索引](docs/README.md)
+- [配置指南](docs/configuration.md)
+- [架构说明](docs/architecture.md)
+- [贡献指南](CONTRIBUTING.md)
+- [安全政策](SECURITY.md)
+- [支持渠道](SUPPORT.md)
 
-## 验证
+## 本地验证
 
 ```bash
 go test ./...
+go vet ./...
 ```
-
-## Roadmap
-
-- [x] OTLP / telemetry / 配置模板与 example/config 字段注释
-- [x] ResultKeepSampler + FieldMasker
-- [x] CI + 开源文档（CONTRIBUTING / CoC / SECURITY / SUPPORT）
-- [ ] Grafana 面板精细化 + collector tail_sampling 判定属性
-- [ ] 字段映射表导出 Collector transform
-- [ ] 运营宽表（ClickHouse，接入方）
 
 ## License
 
-MIT · [LICENSE](LICENSE)
+MIT，见 [LICENSE](LICENSE)。

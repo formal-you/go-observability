@@ -21,7 +21,7 @@ processors:
   batch:
     timeout: 1s
     send_batch_size: 256
-  # 可选 A6 二次脱敏（示例，默认关闭）
+  # 可选二次脱敏（示例，默认关闭）
   # transform/logs_redact:
   #   log_statements:
   #     - context: log

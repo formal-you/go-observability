@@ -1,6 +1,5 @@
-// Package telemetry_test 是 internal/telemetry 的外部黑盒测试层（package telemetry_test）。
-// 期望值来自 observability-design/spec/acceptance.md 的 B9 验收契约（Oracle），只用公开 API，
-// 不读取实现内部——防"同代理写实现+测试"的自证幻觉。用例引用 CASE/RULE/ACCEPT ID。
+// Package telemetry_test 是 telemetry 的外部黑盒测试层（package telemetry_test）。
+// 用例只通过公开 API 验证环境变量与出口选择，不读取实现内部。
 package telemetry_test
 
 import (
@@ -9,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/formal-you/go-observability/internal/telemetry"
+	"github.com/formal-you/go-observability/telemetry"
 	"github.com/formal-you/go-observability/writer/file"
 	"github.com/formal-you/go-observability/writer/otlp"
 )
@@ -72,7 +71,12 @@ func TestNewLogWriterEnvMatrixBlackBox(t *testing.T) {
 	}
 
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "collector:4317")
-	w2, err := p.NewLogWriter(ctx, filepath.Join(t.TempDir(), "blackbox.jsonl"))
+	p2, err := telemetry.SetupFromEnvironment(ctx, telemetry.Config{ServiceName: "svc-otlp"})
+	if err != nil {
+		t.Fatalf("OTLP setup failed: %v", err)
+	}
+	defer func() { _ = p2.Shutdown(ctx) }()
+	w2, err := p2.NewLogWriter(ctx, filepath.Join(t.TempDir(), "blackbox.jsonl"))
 	if err != nil {
 		t.Fatalf("NewLogWriter(otlp) failed: %v", err)
 	}
@@ -80,6 +84,50 @@ func TestNewLogWriterEnvMatrixBlackBox(t *testing.T) {
 		t.Errorf("endpoint 设置应返回 *otlp.Writer，实际 %T（Oracle: ACCEPT-B9-05）", w2)
 	}
 	if c, ok := w2.(interface{ Close(context.Context) error }); ok {
+		_ = c.Close(ctx)
+	}
+}
+
+// TestNewLogWriterFreezesSetupDecision 验证 Writer 出口在 Setup 时固化，不受后续 env 变化影响。
+func TestNewLogWriterFreezesSetupDecision(t *testing.T) {
+	ctx := context.Background()
+	_ = os.Unsetenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+
+	fileProviders, err := telemetry.SetupFromEnvironment(ctx, telemetry.Config{ServiceName: "file-svc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = fileProviders.Shutdown(ctx) }()
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "collector:4317")
+	w, err := fileProviders.NewLogWriter(ctx, filepath.Join(t.TempDir(), "frozen-file.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := w.(*file.Writer); !ok {
+		t.Fatalf("Setup 后设置 env 得到 %T, want *file.Writer", w)
+	}
+	if c, ok := w.(interface{ Close(context.Context) error }); ok {
+		_ = c.Close(ctx)
+	}
+
+	otlpProviders, err := telemetry.Setup(ctx, telemetry.Config{
+		Enabled:     true,
+		ServiceName: "otlp-svc",
+		Endpoint:    "collector:4317",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = otlpProviders.Shutdown(ctx) }()
+	_ = os.Unsetenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	w, err = otlpProviders.NewLogWriter(ctx, filepath.Join(t.TempDir(), "frozen-otlp.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := w.(*otlp.Writer); !ok {
+		t.Fatalf("显式 Config.Endpoint 得到 %T, want *otlp.Writer", w)
+	}
+	if c, ok := w.(interface{ Close(context.Context) error }); ok {
 		_ = c.Close(ctx)
 	}
 }

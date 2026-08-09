@@ -73,7 +73,7 @@ func Middleware(cfg Config) gin.HandlerFunc {
 				errs.WithStack(errs.CaptureStack()),
 				errs.WithSource(errs.CaptureSource(2)),
 			)
-			// 统一走 log.EventFromError 投影（B2 定稿映射，单一投影源，避免中间件手写载荷漂移）。
+			// 统一走 log.EventFromError 投影，避免中间件重复维护字段映射。
 			ev := log.EventFromError(eventName, err, md)
 			cfg.Logger.Emit(c.Request.Context(), ev)
 

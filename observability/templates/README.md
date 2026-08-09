@@ -1,19 +1,14 @@
-# 配置文件模板（使用者自有）
+# 管线配置模板
 
-本目录只提供 **可复制改写的参考模板**，不绑定具体业务指标集。
+本目录提供可复制的参考配置，不是库的运行时配置，也不承诺适合生产默认值。
 
-**带完整字段注释** 的应用侧样例见 [`example/config/`](../../example/config/)。
+| 信号 | 文件 | 使用方需要决定 |
+| --- | --- | --- |
+| Log | [`log-pipeline.example.yaml`](log-pipeline.example.yaml) | 脱敏、保留期、租户、索引与访问控制 |
+| Trace | [`trace-pipeline.example.yaml`](trace-pipeline.example.yaml) | SDK 头部采样率、Collector 尾部规则与容量 |
+| Metric | [`metric-pipeline.example.yaml`](metric-pipeline.example.yaml) | 指标名、单位、直方图桶与标签基数 |
+| Error | [`error-alerts.example.yaml`](error-alerts.example.yaml) | `error.type`、阈值、窗口与通知路由 |
 
-| 信号 | 模板 | 组件侧状态 | 谁定清单 |
-| --- | --- | --- | --- |
-| Log | `log-pipeline.example.yaml` | SDK + 事件模型已完备 | 应用决定埋哪些事件 |
-| Trace | `trace-pipeline.example.yaml` | SDK 装配 + 采样钩子已完备 | 应用/运维定采样率与 tail 规则 |
-| Error | `error-alerts.example.yaml`（+ log/trace） | errs + LevelOf + 投影已完备 | 应用定 error.type 扩展与告警路由 |
-| Metric | `metric-pipeline.example.yaml` + `metric-names.example.md` | **库不内置业务指标** | **完全由使用者定义** |
+指标命名建议见 [`metric-names.example.md`](metric-names.example.md)。复制到应用的部署目录后，至少修改 endpoint、`service.name`、认证、保留期限和告警阈值。
 
-原则：
-
-1. go-observability 提供语义事件、错误模型、OTLP 出口与 LGTM 参考栈骨架。
-2. Metric 命名、直方图桶、标签基数、告警阈值一律由接入方决定。
-3. 复制到自己的 `deploy/` / `ops/` 后改 `service.name`、endpoint、保留期与阈值。
-4. 字段级说明优先读模板内注释与 [docs/configuration.md](../../docs/configuration.md)。
+重要采样限制：应用 SDK 以 `TraceSampleRatio=0.1` 做头部采样时，未导出的 trace 不会到达 Collector，`tail_sampling` 无法恢复。要让 Collector 按完整 trace 判断错误或慢请求，应用侧通常需要先设为 `1.0`。

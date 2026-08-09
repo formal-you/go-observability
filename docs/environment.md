@@ -1,12 +1,28 @@
 # 环境变量速查
 
-| 变量 | 组件 | 必填 | 默认 | 说明 |
-| --- | --- | --- | --- | --- |
-| `OTEL_SDK_DISABLED` | telemetry | 否 | 未设置=启用 | `true` → 空 Providers |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | telemetry / NewLogWriter | 否 | Setup 默认 `127.0.0.1:4317`；Writer 以「是否设置」分支 | host:port 或 URL |
-| `GO_OBSERVABILITY_REGION` | example | 否 | 空 | resource `region` |
-| `GO_OBSERVABILITY_INSTANCE` | example | 否 | 空 | resource `instance` |
+| 变量 | 读取位置 | 默认 | 行为 |
+| --- | --- | --- | --- |
+| `OTEL_SDK_DISABLED` | `telemetry.SetupFromEnvironment` | 未设置，即启用 | 值为 `true` 时返回空 Providers；日志出口回退 JSONL |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `telemetry.SetupFromEnvironment` | `127.0.0.1:4317` | Setup 时设置后，Provider 使用该 OTLP gRPC 地址，日志 Writer 选择 OTLP |
+| `GO_OBSERVABILITY_REGION` | 主示例 | 空 | 示例写入 resource `region`；库不自动读取 |
+| `GO_OBSERVABILITY_INSTANCE` | 主示例 | 空 | 示例写入 resource `instance`；库不自动读取 |
 
-带逐字段注释的可复制文件：[example/config/.env.example](../example/config/.env.example)。
+`OTEL_EXPORTER_OTLP_ENDPOINT` 接受 `host:port` 或完整 URL，内部会为无 scheme 的地址补 `http://`。TLS、证书、认证头等生产配置目前不由 `telemetry.Config` 暴露；需要这些能力时，应评估扩展 API 或在应用侧自建 Provider。
 
-标准 OTel 变量（如 `OTEL_SERVICE_NAME`）本库 **优先** 使用 `telemetry.Config` 显式字段；未接入的变量行为以 OTel Go SDK 为准。
+环境变量只在 Setup 时读取；`Providers.NewLogWriter` 使用已固化的出口决策，不会因运行中修改环境变量而切换目标。
+
+PowerShell：
+
+```powershell
+$env:OTEL_SDK_DISABLED = "true"
+go run ./example
+Remove-Item Env:OTEL_SDK_DISABLED
+```
+
+bash：
+
+```bash
+OTEL_SDK_DISABLED=true go run ./example
+```
+
+标准 OTel 环境变量并非都会被本库读取。以 `telemetry.Config`、本表和源码为准，不要假设 SDK 支持的任意变量都已接入。

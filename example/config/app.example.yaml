@@ -5,7 +5,7 @@
 # =============================================================================
 
 observability:
-  # --- 服务身份（A7 Resource）---
+  # --- 服务身份（OTel Resource）---
   service:
     # name: OTel service.name，Grafana/Tempo 筛选主键；必填，稳定短名
     name: order-api
@@ -18,16 +18,17 @@ observability:
     # instance: 低基数实例标识，可空
     instance: ""
 
-  # --- OTLP 出口（B9）---
+  # --- OTLP 出口 ---
   otlp:
     # disabled: 对应 OTEL_SDK_DISABLED；true = 全离线 noop Providers
     disabled: false
-    # endpoint: host:port 或 URL；空 = NewLogWriter 走本地 JSONL
+    # endpoint: telemetry.Config 的 Provider OTLP 地址，支持 host:port 或 URL
+    # 注意: 显式 endpoint 或 SetupFromEnvironment 启动时读到环境变量，都会固化为 OTLP 出口
     endpoint: "127.0.0.1:4317"
-    # jsonl_path: endpoint 空或 disabled 时日志落盘路径
+    # jsonl_path: endpoint 为空或 disabled 时的日志落盘路径
     jsonl_path: "logs/events.jsonl"
 
-  # --- 采样与导出频率（A3；库默认见 internal/telemetry）---
+  # --- 采样与导出频率（库默认见 telemetry）---
   sampling:
     # trace_ratio: 头部采样率 (0,1]；演示 0.1，生产按 QPS 调
     trace_ratio: 0.1
@@ -39,7 +40,7 @@ observability:
     # log_batch_timeout: BatchLogRecordProcessor 间隔
     log_batch_timeout: 1s
 
-  # --- 日志治理（C6；NewLogger 选项，默认不自动挂载）---
+  # --- 日志治理（NewLogger 选项，默认不自动挂载）---
   log:
     sampler:
       # type: none | result_keep
@@ -51,12 +52,12 @@ observability:
       # enabled: 是否 WithMasker(FieldMasker)
       enabled: true
       # extra_keys: 追加敏感键（完整属性名，如 app.phone）
-      # 默认已含 password/token/authorization 等，见 log.DefaultSensitiveKeys
+      # 默认已含 password/token/authorization 等，见 log.DefaultSensitiveKeys()
       extra_keys: []
       # redact: 替换文本
       redact: "***"
 
-  # --- 中间件（C3：仅 Gin 官方提供）---
+  # --- 中间件（官方提供 Gin 集成）---
   middleware:
     # ginlog: access 事件；需配合 otelgin 才能自动填 trace_id/span_id
     ginlog: true

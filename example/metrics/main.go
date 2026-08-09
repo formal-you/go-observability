@@ -1,6 +1,6 @@
 // Command metrics 演示使用方如何用 go-observability 的 MeterProvider 自建指标。
 //
-// 库不提供业务/RED 指标注册表（B5）：本文件即「使用方代码」模板。
+// 库不提供业务/RED 指标注册表；本文件是使用方代码模板。
 // 跑法：
 //
 //	OTEL_EXPORTER_OTLP_ENDPOINT=127.0.0.1:4317 go run ./example/metrics
@@ -18,7 +18,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/formal-you/go-observability/internal/telemetry"
+	"github.com/formal-you/go-observability/telemetry"
 )
 
 func main() {

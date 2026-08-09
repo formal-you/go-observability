@@ -8,7 +8,7 @@
 # 数据流：
 #   traces  -> Tempo（otlp gRPC）
 #   logs    -> Loki（otlp HTTP /otlp）
-#   metrics -> Mimir（prometheusremotewrite；A1：Prometheus 仅兼容面）
+#   metrics -> Mimir（prometheusremotewrite 兼容面）
 
 receivers:
   # otlp: 唯一默认接收器；应用 writer/otlp + telemetry 三 exporter 打到此

@@ -31,7 +31,7 @@ type Config struct {
 	SkipPaths map[string]bool
 
 	// LevelForStatus 状态码映射缺省级别；默认 2xx-3xx=INFO、4xx=WARN、503=WARN、
-	// 其余 5xx=ERROR（B3 Q4 定稿：503 属暂时不可用、调用方可重试，记 WARN 而非 ERROR，
+	// 其余 5xx=ERROR（503 属暂时不可用、调用方可重试，记 WARN 而非 ERROR，
 	// 避免重试噪音淹没告警）。
 	LevelForStatus func(status int) log.Level
 
@@ -57,7 +57,7 @@ func defaultTraceContext(c *gin.Context) log.TraceContext {
 
 func defaultUserID(c *gin.Context) string { return c.GetString("user_id") }
 
-// defaultLevelForStatus 状态码映射缺省级别（B3 Q4 定稿）：
+// defaultLevelForStatus 映射 HTTP 状态码的缺省级别：
 // 2xx-3xx=INFO；4xx=WARN；503=WARN（暂时不可用、调用方可重试）；其余 5xx=ERROR。
 // 调用方可通过 Config.LevelForStatus 整体覆盖。
 func defaultLevelForStatus(status int) log.Level {

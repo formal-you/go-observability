@@ -23,7 +23,8 @@ processors:
     # send_batch_size: 条数上限（span/log/metric 点，视信号而定）
     send_batch_size: 512
 
-  # --- 可选：尾部采样（错误/慢请求必留）。默认注释；开启后 traces pipeline 加入本 processor ---
+  # --- 可选：尾部采样。必须先将应用 TraceSampleRatio 设为 1.0 完整导出，
+  #     再启用本 processor 按错误/概率保留；Collector 无法恢复 SDK 头部采样已丢弃的 trace。---
   # tail_sampling:
   #   decision_wait: 10s          # 等待 trace 完整的时间
   #   num_traces: 50000           # 内存中 trace 上限
@@ -37,7 +38,7 @@ processors:
   #       probabilistic:
   #         sampling_percentage: 10
 
-  # --- 可选：日志二次脱敏（A6 Collector 兜底）---
+  # --- 可选：Collector 日志二次脱敏兜底 ---
   # transform/logs_redact:
   #   log_statements:
   #     - context: log
@@ -58,7 +59,7 @@ exporters:
     # endpoint: 须含 /otlp 路径（Loki OTLP）
     endpoint: http://loki:3100/otlp
 
-  # prometheusremotewrite/mimir: Metric → Mimir（Prometheus 兼容面，A1）
+  # prometheusremotewrite/mimir: Metric → Mimir（Prometheus remote-write 兼容面）
   prometheusremotewrite/mimir:
     endpoint: http://mimir:9009/api/v1/push
     tls:

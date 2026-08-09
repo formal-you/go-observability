@@ -1,33 +1,17 @@
 # 文档索引
 
-| 文档 | 内容 |
+| 文档 | 适合何时阅读 |
 | --- | --- |
-| [onboarding.md](onboarding.md) | 新人 15 分钟上手 |
-| [architecture.md](architecture.md) | 分层与数据流 |
-| [workflow.md](workflow.md) | 开发流程与防漂移 |
-| [configuration.md](configuration.md) | **配置总览**（env / Config / Logger / 部署） |
-| [environment.md](environment.md) | 环境变量速查 |
-| [security.md](security.md) | 脱敏、采样、使用方责任 |
-| [samber-comparison.md](samber-comparison.md) | 与 samber 生态对比 |
-| [go-observability-architecture.drawio](go-observability-architecture.drawio) | 架构图 |
+| [onboarding.md](onboarding.md) | 首次克隆后快速运行与定位代码 |
+| [configuration.md](configuration.md) | 配置 telemetry、Logger 和部署侧 Collector |
+| [environment.md](environment.md) | 查询库实际读取的环境变量 |
+| [architecture.md](architecture.md) | 理解包边界和事件数据流 |
+| [security.md](security.md) | 设计脱敏、采样和日志治理策略 |
+| [workflow.md](workflow.md) | 提交代码、测试与维护兼容性 |
+| [samber-comparison.md](samber-comparison.md) | 评估与 samber slog 生态的取舍 |
+| [release-checklist.md](release-checklist.md) | 首次公开发布和后续发版 |
+| [go-observability-architecture.drawio](go-observability-architecture.drawio) | 可编辑架构图 |
 
-## 可复制配置
+可复制的部署配置位于 [`example/config`](../example/config/)；本地 LGTM 栈位于 [`observability`](../observability/)；分信号模板位于 [`observability/templates`](../observability/templates/)。
 
-| 路径 | 内容 |
-| --- | --- |
-| [example/config/](../example/config/) | `.env` / app YAML / collector / compose 示意（**字段注释**） |
-| [observability/](../observability/) | 本地 LGTM 全栈 |
-| [observability/templates/](../observability/templates/) | Log/Trace/Metric/告警管线模板 |
-
-## 仓库根文档
-
-| 文件 | 内容 |
-| --- | --- |
-| [README.md](../README.md) | 项目入口 |
-| [CONTRIBUTING.md](../CONTRIBUTING.md) | 贡献 |
-| [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | 行为规范 |
-| [SECURITY.md](../SECURITY.md) | 安全政策 |
-| [SUPPORT.md](../SUPPORT.md) | 求助渠道 |
-| [CHANGELOG.md](../CHANGELOG.md) | 变更 |
-| [LICENSE](../LICENSE) | MIT |
-| [AGENTS.md](../AGENTS.md) | Agent/协作者硬规则 |
+开源协作文档：[贡献指南](../CONTRIBUTING.md)、[贡献者公约](../CODE_OF_CONDUCT.md)、[安全政策](../SECURITY.md)、[支持渠道](../SUPPORT.md)、[变更记录](../CHANGELOG.md)。

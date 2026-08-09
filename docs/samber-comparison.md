@@ -1,34 +1,18 @@
-# 生态对比：samber slog 系列与 go-observability
+# 与 samber slog 生态的关系
 
-> 日期：2026-08-08。结论：samber 覆盖了我们组件的绝大多数零件，但没有「类型化领域事件 + semconv 语义治理 + 双投影」这一层——那正是我们的差异化。
+[`example/samber`](../example/samber/) 展示如何把本项目事件属性交给 samber 的 handler 链。它是互操作示例，不代表核心 writer 已由 samber 实现。
 
-## 对应关系
-
-| samber 仓库 | 定位 | 对应我们 |
+| 能力 | 本项目 | samber 生态 |
 | --- | --- | --- |
-| samber/slog-multi | slog handler 工作流：fanout / 中间件 / 路由 / failover | Logger 链 / fanout / Writer 抽象 |
-| samber/slog-gin | Gin 中间件 | middleware/ginlog |
-| samber/slog-formatter | 属性格式化 + PII 匿名化 | Masker |
-| samber/slog-sampling | 采样 / 降噪 / rate-limiting | Sampler |
-| samber/slog-loki、slog-quickwit、slog-fluentd、slog-parquet、slog-zerolog、slog-zap、slog-webhook、slog-channel、slog-mattermost、slog-microsoft-teams、slog-rollbar | 各后端 handler | writer/otlp、writer/stdout、writer/file |
-| samber/slog-echo、slog-fiber、slog-http、slog-chi | 其他框架中间件 | （未实现） |
-| samber/slog-otel | OTEL toolchain（很小） | 参考 |
-| samber/slog-mock | 测试 mock handler | 测试辅助 |
+| 类型化可观测事件 | 内置六类事件与字段规范 | 由应用自行定义 |
+| JSONL/stdout/OTLP | 提供独立 Writer | 可通过 slog handler 组合，OTLP 需其他桥接 |
+| fan-out、格式化、通用采样 | 基础接口，组合能力有限 | `slog-multi`、`slog-formatter`、`slog-sampling` 较成熟 |
+| 核心依赖 | 根包只依赖标准库 | 接入相应第三方模块 |
 
-## samber 没有的（我们的差异化）
+示例验证了 attrs 可以进入 slog 链，但使用时要注意：
 
-- 没有 slog-otlp：OTLP 直出不在 samber，官方路径是 go.opentelemetry.io/contrib/bridges/otelslog。
-- 没有类型化事件模型：samber 全是 slog 原生 key-value record；没有六域（access/business/error/audit/security/probe）、没有 EventPayload 接口、没有具体事件结构体、没有中间件类型断言。
-- 没有 semconv 语义治理：键不强制对齐 semconv；没有「源即规范 + 双投影（运维面 semconv / 运营面扁平宽表）」。
-- 没有设计文档绑定：wayfinder 决策树 / DESIGN-DECISIONS / CONTEXT 词汇表。
+- slog 自带字段可能与事件的 level/timestamp 重复，应在适配层去重。
+- 基于值模式的 PII formatter 不能替代按业务键维护的脱敏策略。
+- samber 的采样与本项目 Logger Sampler 是两个阶段，叠加会改变实际保留率。
 
-## 借鉴路线与边界
-
-- 边界：核心包保持零外部依赖（仅 log/slog、net、time）不变；samber 只进 writer / 中间件 / example 层。
-- 借鉴：slog-multi（fanout/failover）、slog-formatter（PII 掩码）、slog-sampling（采样策略，参考「高价值结果保留」思路）、slog-gin（中间件细节对照）。
-- 兼容性：我们的 EventPayload.Attrs() 输出 []slog.Attr，与 samber 的 slog handler 生态天然兼容，可无痛接入。
-- 实践：feat/samber-integration 分支做 spike 对照实验（example/samber），验证后再决定是否替换 writer 层。
-
-## 决策建议
-
-语义层（类型化事件 + semconv + 双投影）保留；零件层可视验证结果直接依赖或借鉴 samber，减少重复造轮子。
+当前建议是保留现有 Writer 作为默认路径；需要 fan-out 或复杂 handler 管线的使用方，可以在应用侧增加适配层。引入新的核心依赖应通过兼容性、性能和维护成本评估后再决定。
