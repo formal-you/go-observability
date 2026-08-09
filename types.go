@@ -33,6 +33,8 @@ const (
 	EventNameErrorDBTimeout EventName = "error.db.timeout"
 	// EventNameErrorRuntimePanic 错误事件：运行时 panic（recover 中间件默认值）。
 	EventNameErrorRuntimePanic EventName = "error.runtime.panic"
+	// EventNameErrorHTTPRequest 错误事件：HTTP 请求处理失败（errresp 中间件默认值）。
+	EventNameErrorHTTPRequest EventName = "error.http.request"
 )
 
 // NewEventName 由三段（类别.模块.操作）构造 EventName 并做构造校验。

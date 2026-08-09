@@ -7,7 +7,7 @@
 ### Added
 
 - 六类类型化事件、`Logger` / `Writer` 接口，以及 JSONL、stdout、OTLP Writer。
-- `errs` 错误分类、错误事件投影、Gin access 与 recover 中间件。
+- `errs` 错误分类、错误事件投影、Gin access、recover 与统一错误收口（`errresp`）中间件，以及框架级事件名 `error.http.request`。
 - 公开 `telemetry` 包，提供 Trace、Metric、Log Provider 装配、环境变量入口和统一关闭。
 - `ResultKeepSampler`、`FieldMasker` 与写入错误回调。
 - `net/http`、Gin、指标、领域事件和 samber 对照示例。

@@ -23,9 +23,9 @@
 | OTel 映射 | `internal/attrkv` | `slog.Attr` ↔ OTel 值转换 + LogRecord 顶层字段映射（唯一核心映射层） |
 | endpoint 校验 | `internal/otlpendpoint` | OTLP gRPC endpoint 统一校验与规范化（host:port / http(s) URL） |
 | 三信号装配 | `telemetry` | 创建并关闭 Trace / Metric / Log Provider，选择日志出口 |
-| HTTP 集成 | `middleware/ginlog`、`middleware/recover` | Gin access 日志与 panic 收口；net/http 见 `example/nethttp` |
+| HTTP 集成 | `middleware/ginlog`、`middleware/recover`、`middleware/errresp` | Gin access 日志、panic 收口与统一错误响应；net/http 见 `example/nethttp` |
 
-依赖方向：`errs` 与根包 `log` 互不依赖对方实现（根包经 `EventFromError` 消费 `errs.AppError` 接口，`errs` 不依赖根包）；`middleware` 依赖根包与 `errs`；`writer/*`、`telemetry` 依赖根包与 `internal/*`。
+依赖方向：`errs` 与根包 `log` 互不依赖对方实现（根包经 `EventFromError` 消费 `errs.AppError` 接口，`errs` 不依赖根包）；`middleware` 依赖根包与 `errs`（ginlog 只依赖根包，errresp/recover 还依赖 `errs`）；`writer/*`、`telemetry` 依赖根包与 `internal/*`。
 
 ## 3. 文件树（代码导航图）
 
@@ -75,6 +75,7 @@ go-observability/
 │
 ├── middleware/
 │   ├── ginlog/ginlog.go         # Gin access 事件中间件（status→level/result 映射、trace/request 提取）
+│   ├── errresp/errresp.go       # Gin 统一错误收口：读 c.Errors，按 errs.Kind 映射状态码/响应体并投影事件
 │   └── recover/recover.go       # Gin panic 收口（构造 SystemError → EventFromError → 统一 500）
 │
 ├── telemetry/
@@ -142,7 +143,7 @@ go-observability/
   -> 进入 4.1 同一条 Emit 管线写出
 ```
 
-错误事件名必须由调用方从 `types.go` 常量注册表传入，`EventFromError` 不自动派生；Trace/Span 由调用方从 span context 提取后填入 `md`。
+错误事件名必须由调用方从 `types.go` 常量注册表传入，`EventFromError` 不自动派生；Trace/Span 由调用方从 span context 提取后填入 `md`。Gin 接入时，显式业务/系统错误由 `middleware/errresp` 在链尾统一收口（`c.Errors` + `Abort`），panic 仍由 `middleware/recover` 处理，二者组合时一个请求最多一个错误出口。
 
 ## 5. 双投影：同一事件两种出口
 
@@ -191,6 +192,7 @@ go-observability/
 | 双投影形状 | `writer/otlp`、`writer/file`、`writer/stdout` 的输出测试 | `go test ./writer/...` |
 | 错误投影 | `error_project.go`：Kind 分派、`LevelOf`、`StackRule`、值/指针/`%w` 链/nil | `go test ./... -run Error` |
 | 采样/脱敏 | `sampler.go` 高价值保留、`masker.go` 递归脱敏与并发契约 | `go test ./... -run 'Sample|Mask'` |
+| 错误收口 | `errresp.go`：Kind→状态码映射、system 响应不泄露、`Abort(nil)` 兜底、与 recover 不双写 | `go test ./middleware/errresp/...` |
 | 并发安全 | Logger 构造后只读；Writer/ErrorHandler 多 goroutine 语义 | `go test -race ./...` |
 | 三信号装配 | `telemetry.go` Setup 失败回滚、Shutdown 顺序、出口选择固化 | `go test ./telemetry/...` |
 
