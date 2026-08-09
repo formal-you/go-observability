@@ -95,7 +95,7 @@ func TestZeroValueOmission(t *testing.T) {
 	ev := BusinessEvent{
 		EventMetadata: EventMetadata{Level: LevelInfo},
 		Data: BusinessPayload{
-			EventName: EventNameBusinessOrderPaid,
+			EventName: EventName("business.order.paid"),
 			Result:    ResultSuccess,
 		},
 	}
@@ -136,7 +136,7 @@ func TestMiddlewareTypeSwitch(t *testing.T) {
 func TestEventNameConventions(t *testing.T) {
 	names := []EventName{
 		EventNameAccessHTTPRequest,
-		EventNameBusinessOrderPaid,
+		EventName("business.order.paid"),
 		EventNameErrorDBTimeout,
 	}
 	for _, n := range names {

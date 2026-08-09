@@ -20,35 +20,16 @@ const (
 	EventProbe    EventType = "probe"
 )
 
-// EventName 细名：固定段式 类别.模块.操作，如 access.http.request / business.order.paid。
-// 常量即注册表：新增事件名必须在此登记并符合段式，避免手写字符串漂移。
+// EventName 细名：固定段式 类别.模块.操作，如 access.http.request / error.runtime.panic。
+// 本文件只登记框架级事件（中间件/通用错误）；领域 business.* 由接入方自建注册表
+// （见 example/mall），用 NewEventName 或经 Validate 的常量，禁止散落手写字符串。
 // OTLP 路径由 attrkv 映射到 LogRecord 的 EventName 顶层字段；file/stdout 扁平投影保留 event.name 键。
 type EventName string
 
 const (
 	// EventNameAccessHTTPRequest 访问事件：HTTP 请求完成（ginlog 中间件默认值）。
 	EventNameAccessHTTPRequest EventName = "access.http.request"
-	// EventNameBusinessOrderCreated 业务事件：订单创建。
-	EventNameBusinessOrderCreated EventName = "business.order.created"
-	// EventNameBusinessOrderPaid 业务事件：订单支付成功。
-	EventNameBusinessOrderPaid EventName = "business.order.paid"
-	// EventNameBusinessOrderCancelled 业务事件：订单取消（用户侧）。
-	EventNameBusinessOrderCancelled EventName = "business.order.cancelled"
-	// EventNameBusinessRefundCreated 业务事件：退款发起。
-	EventNameBusinessRefundCreated EventName = "business.refund.created"
-	// EventNameBusinessRefundSuccess 业务事件：退款成功。
-	EventNameBusinessRefundSuccess EventName = "business.refund.success"
-	// EventNameBusinessCartAdded 业务事件：加购。
-	EventNameBusinessCartAdded EventName = "business.cart.added"
-	// EventNameBusinessProductViewed 业务事件：浏览商品。
-	EventNameBusinessProductViewed EventName = "business.product.viewed"
-	// EventNameBusinessUserLogin 业务事件：用户登录。
-	EventNameBusinessUserLogin EventName = "business.user.login"
-	// EventNameBusinessUserRegistered 业务事件：用户注册。
-	EventNameBusinessUserRegistered EventName = "business.user.registered"
-	// EventNameBusinessCouponRedeemed 业务事件：优惠券核销。
-	EventNameBusinessCouponRedeemed EventName = "business.coupon.redeemed"
-	// EventNameErrorDBTimeout 错误事件：数据库超时。
+	// EventNameErrorDBTimeout 错误事件：数据库超时（示例/投影用框架级名）。
 	EventNameErrorDBTimeout EventName = "error.db.timeout"
 	// EventNameErrorRuntimePanic 错误事件：运行时 panic（recover 中间件默认值）。
 	EventNameErrorRuntimePanic EventName = "error.runtime.panic"

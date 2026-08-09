@@ -38,7 +38,7 @@ func TestLevelOfBlackBox(t *testing.T) {
 // 输入字符串是 Validate 的黑盒测试数据，不是事件埋点（AGENTS.md 规则 1 约束生产侧）。
 func TestEventNameValidateBlackBox(t *testing.T) {
 	valid := []log.EventName{
-		"business.order.paid", // CASE-B1-01
+		"business.order.paid", // CASE-B1-01 文法样例（领域名不在核心注册表）
 		"access.http.request", // CASE-B1-02
 	}
 	for _, name := range valid {
@@ -59,19 +59,19 @@ func TestEventNameValidateBlackBox(t *testing.T) {
 	}
 }
 
-// TestBusinessEventExtraAttrsBlackBox 按验收契约 CASE-B4-01 验证 ExtraAttrs 扁平输出：
-// order.paid 注入 order_id/amount/pay_channel/paid_at → 扁平 attrs 含对应 app.* 键。
+// TestBusinessEventExtraAttrsBlackBox 按验收契约 CASE-B4-01：接入方 ExtraAttrs 键
+// 经 BusinessPayload 扁平输出（领域键不在核心 keys.go，C2）。
 func TestBusinessEventExtraAttrsBlackBox(t *testing.T) {
 	ev := log.BusinessEvent{
 		EventMetadata: log.EventMetadata{Level: log.LevelInfo},
 		Data: log.BusinessPayload{
-			EventName: log.EventNameBusinessOrderPaid,
+			EventName: log.EventName("business.order.paid"),
 			Result:    log.ResultSuccess,
 			ExtraAttrs: []slog.Attr{
-				slog.String(string(log.KeyAppOrderID), "ORD-1"),
-				slog.Int64(string(log.KeyAppAmount), 9900),
-				slog.String(string(log.KeyAppPayChannel), "wechat"),
-				slog.String(string(log.KeyAppPaidAt), "2026-08-09T10:00:00+08:00"),
+				slog.String("app.order_id", "ORD-1"),
+				slog.Int64("app.amount", 9900),
+				slog.String("app.pay_channel", "wechat"),
+				slog.String("app.paid_at", "2026-08-09T10:00:00+08:00"),
 			},
 		},
 	}
@@ -90,30 +90,5 @@ func TestBusinessEventExtraAttrsBlackBox(t *testing.T) {
 	}
 	if got := m["app.amount"].Int64(); got != 9900 {
 		t.Errorf("app.amount = %d, want 9900（Oracle: ACCEPT-B4-03 金额整数分）", got)
-	}
-}
-
-// TestBusinessEventNamesBlackBox 按验收契约 CASE-B4-02/03 验证 B4 定稿的 10 个
-// business.* 事件名三段式合法且为注册表全集（order.rejected 有意不埋，RULE-B4-01）。
-func TestBusinessEventNamesBlackBox(t *testing.T) {
-	names := []log.EventName{
-		log.EventNameBusinessOrderCreated,
-		log.EventNameBusinessOrderPaid,
-		log.EventNameBusinessOrderCancelled,
-		log.EventNameBusinessRefundCreated,
-		log.EventNameBusinessRefundSuccess,
-		log.EventNameBusinessCartAdded,
-		log.EventNameBusinessProductViewed,
-		log.EventNameBusinessUserLogin,
-		log.EventNameBusinessUserRegistered,
-		log.EventNameBusinessCouponRedeemed,
-	}
-	if len(names) != 10 {
-		t.Fatalf("business 事件应为 10 个，实际 %d（Oracle: RULE-B4-01）", len(names))
-	}
-	for _, n := range names {
-		if err := n.Validate(); err != nil {
-			t.Errorf("Validate(%q) = %v, want nil（Oracle: ACCEPT-B4-01）", n, err)
-		}
 	}
 }

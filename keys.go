@@ -70,21 +70,6 @@ const (
 	KeyAppProbeType         Key = "app.probe_type"
 	KeyAppErrorCode         Key = "app.error_code"
 	KeyAppSource            Key = "app.source"
-
-	// 业务事件专属字段（B4 定稿：app.<snake_case>，随 ExtraAttrs 注入）
-	KeyAppOrderID         Key = "app.order_id"
-	KeyAppAmount          Key = "app.amount"
-	KeyAppItemCount       Key = "app.item_count"
-	KeyAppChannel         Key = "app.channel"
-	KeyAppPayChannel      Key = "app.pay_channel"
-	KeyAppPaidAt          Key = "app.paid_at"
-	KeyAppCancelledAt     Key = "app.cancelled_at"
-	KeyAppRefundID        Key = "app.refund_id"
-	KeyAppRefundedAt      Key = "app.refunded_at"
-	KeyAppProductID       Key = "app.product_id"
-	KeyAppQuantity        Key = "app.quantity"
-	KeyAppCategoryID      Key = "app.category_id"
-	KeyAppLoginMethod     Key = "app.login_method"
-	KeyAppRegisterChannel Key = "app.register_channel"
-	KeyAppCouponID        Key = "app.coupon_id"
+	// 领域专属键（order_id/amount/…）不在核心登记：由接入方自建（example/mall）
+	// 经 BusinessPayload.ExtraAttrs 注入，前缀仍用 app.*（C1）。
 )

@@ -51,7 +51,7 @@ func TestLoggerBaseMetadataFillsMissing(t *testing.T) {
 	w := &captureWriter{}
 	l := NewLogger(w, WithBaseMetadata(EventMetadata{Level: LevelWarn, RequestID: "base-req"}))
 	l.Emit(context.Background(), BusinessEvent{
-		Data: BusinessPayload{EventName: EventNameBusinessOrderPaid, Result: ResultSuccess},
+		Data: BusinessPayload{EventName: EventName("business.order.paid"), Result: ResultSuccess},
 	})
 	attrs := attrMap(w.attrsList[0])
 	if attrs["level"] == nil {
@@ -71,7 +71,7 @@ func TestLoggerMaskerAndSampler(t *testing.T) {
 		WithSampler(SamplerFunc(func(_ context.Context, _ []slog.Attr) bool { return false })),
 	)
 	l.Emit(context.Background(), BusinessEvent{
-		Data: BusinessPayload{EventName: EventNameBusinessOrderPaid, Result: ResultSuccess},
+		Data: BusinessPayload{EventName: EventName("business.order.paid"), Result: ResultSuccess},
 	})
 	if len(w.msgs) != 0 {
 		t.Error("sampler 返回 false 时不应写入")
@@ -85,7 +85,7 @@ func TestLoggerErrorHandler(t *testing.T) {
 		got = err
 	}))
 	l.Emit(context.Background(), BusinessEvent{
-		Data: BusinessPayload{EventName: EventNameBusinessOrderPaid, Result: ResultSuccess},
+		Data: BusinessPayload{EventName: EventName("business.order.paid"), Result: ResultSuccess},
 	})
 	if got == nil {
 		t.Error("writer 失败时 error handler 应被调用")

@@ -15,7 +15,7 @@
 
 - 核心包零外部依赖（仅标准库：log/slog、net、time、fmt、strings），属性键直接对齐 OTel semconv 1.41.0 + app.* vendor 命名空间。
 - 三信号装配（internal/telemetry）：Trace / Metric / Log provider + OTLP gRPC 导出 + A3 采样/频率 + A7 资源属性；env 控制（OTEL_SDK_DISABLED / OTEL_EXPORTER_OTLP_ENDPOINT / GO_OBSERVABILITY_REGION / GO_OBSERVABILITY_INSTANCE）；出口收敛 SetupFromEnvironment + NewLogWriter（B9：endpoint env 空→JSONL、非空→OTLP）。
-- 六类事件：access / business / error / audit / security / probe，每类有具体事件结构体（领域构造、中间件类型断言）；BusinessPayload.ExtraAttrs 承载事件专属 app.* 键（B4 定稿 10 个 business.* 事件）。
+- 六类事件：access / business / error / audit / security / probe；`BusinessPayload.ExtraAttrs` 承载接入方领域键。核心只登记框架级 EventName；领域 business.* 见 [`example/mall`](example/mall)（C2）。
 - EventPayload + Logger/Writer 抽象：后端可注入替换；Sampler/Masker 为可选接口（默认实现见 Roadmap，接入方可 `WithSampler`/`WithMasker` 注入）。
 - Writer 实现：OTLP（otlploggrpc）、stdout（stdoutlog）、file（JSONL 落盘）。
 - Gin 中间件（middleware/ginlog）开箱即用，自动从 otelgin span 提取 trace_id/span_id；access 级别映射 2xx-3xx=INFO / 4xx=WARN / 503=WARN / 其余 5xx=ERROR（B3 定稿）。
@@ -48,9 +48,14 @@ r.Use(ginlog.Middleware(ginlog.Config{Logger: logger}))
 ```go
 logger.Emit(ctx, log.BusinessEvent{
     EventMetadata: log.EventMetadata{Level: log.LevelInfo, TraceID: traceID, SpanID: spanID},
-    Data: log.BusinessPayload{EventName: log.EventNameBusinessOrderPaid, BusinessCode: "ORD-200", Result: log.ResultSuccess},
+    Data: log.BusinessPayload{
+        EventName: log.NewEventName("business", "order", "paid"), // 或接入方注册表常量
+        Result:    log.ResultSuccess,
+    },
 })
 ```
+
+领域 10 事件 + ExtraAttrs 键示范：[`example/mall`](example/mall)。
 
 ## 包布局
 
@@ -67,6 +72,7 @@ internal/attrkv/       slog.Attr → OTel KeyValue / Severity 映射（内部共
 internal/telemetry/   三信号装配（Resource + Trace/Metric/Log provider，A3 采样频率 + A7 资源属性）
 example/               演示（默认落盘 example/logs/events.jsonl）
 example/metrics/       使用方自建指标（B5：Meter + PromQL 提示）
+example/mall/          接入方业务事件注册表（C2/B4：10 business.* + 领域键）
 ```
 
 ## OTel 符合性

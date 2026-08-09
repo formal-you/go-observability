@@ -41,8 +41,8 @@
 
 ## 给新人的最小改动路径：新增一个业务事件
 
-1. `types.go`：登记 `EventNameBusinessXxx` 常量（三段式，注册表唯一真源）。
-2. `keys.go`：登记事件专属 `app.*` 键（如需）。
+1. 框架级事件名登记核心 `types.go`；领域 `business.*` 在接入方包（`example/mall`）自建注册表。
+2. 核心公共 `app.*` 键在 `keys.go`；领域专属键在接入方包登记，经 ExtraAttrs 注入。
 3. 事件载荷：新字段用 `BusinessPayload.ExtraAttrs`（[]slog.Attr）承载，不新建结构体。
 4. 同步 `../../observability-design/outline/B1-event-structs/detailed-design.md` §2 枚举。
 5. 黑盒用例：`blackbox_log_test.go` 补 CASE（期望值来自 `../../observability-design/spec/acceptance.md` Oracle）。

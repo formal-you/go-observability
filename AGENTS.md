@@ -12,13 +12,15 @@
 
 ## 防漂移硬规则（违反即视为实现漂移）
 
-1. 事件名（EventName）必须使用 `types.go` 的常量注册表（如 `EventNameAccessHTTPRequest`），禁止在载荷、中间件、示例、文档里手写 `"access.http.request"` 这类字符串。新增事件名必须：在 `types.go` 登记常量、符合段式 `类别.模块.操作`（3 段，仅小写字母/数字/下划线，可用 `NewEventName`/`Validate` 校验）、同步 detailed-design.md §2。
+1. 事件名（EventName）须为经 `Validate` 的三段式常量，禁止在中间件/生产埋点里散落手写字符串。
+   - **框架级**（access/error 中间件默认等）登记在核心 `types.go`（如 `EventNameAccessHTTPRequest`）。
+   - **领域 business.*** 由接入方自建注册表（见 `example/mall`），可用 `NewEventName` 或包内 `const EventName = "business.…"`；不要把电商等领域名写进核心 `types.go`（C2）。
 2. semconv 键名以 1.41.0 为准（核对 `$GOMODCACHE/go.opentelemetry.io/otel@v1.44.0/semconv/v1.41.0` 常量）：
    - 路径用 `url.path`（不是 `http.request.path`）；
    - 代码位置用 `code.function.name` / `code.file.path` / `code.line.number`（不是 `code.function` / `code.filepath` / `code.lineno`）；
    - `event.name` 走 LogRecord 的 EventName 顶层字段，不写属性（属性名 `otel.event.name` 仅桥接场景用）。
 3. LogRecord 顶层字段映射由 `internal/attrkv.Record` 集中完成：`timestamp`→Timestamp、`level`→SeverityNumber/SeverityText、`event.name`→EventName；`trace_id`/`span_id` 不写属性，由 ctx 的 span context 自动关联（sdk/log Logger.Emit 行为，ginlog 传 `c.Request.Context()`）。新增保留键必须同时更新 `attrkv.recordAttrKeys` 与 `normalize.reservedKeys`。
-4. 新增/修改字段必须在 `keys.go` 登记常量；vendor 字段一律 `app.*` 前缀，不与 semconv 冲突。
+4. 核心公共字段必须在 `keys.go` 登记；vendor 一律 `app.*`。领域专属键（order_id 等）由接入方自建，不进核心 `keys.go`（C2 / example/mall）。
 5. 双投影：file/stdout 扁平列保留 `timestamp`/`level`/`trace_id`/`span_id`/`event.name` 等键（运营投影）；OTLP 路径剥离这些键。不要为 OTLP 把顶层字段塞回属性，也不要为 file 把属性拆掉。
 6. schema / 键名 / 字段归属变更必须同步文档（README.md、detailed-design.md、方案2-直接符合规范.md），改代码与改文档应在同一提交内完成。
 7. 零值省略：字符串/数值零值省略；布尔不省略（false 对 retryable/result 语义明确）。

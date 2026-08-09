@@ -77,7 +77,7 @@ func businessEvent() obs.BusinessEvent {
 			RequestID: "req-001",
 		},
 		Data: obs.BusinessPayload{
-			EventName:    obs.EventNameBusinessOrderPaid,
+			EventName:    obs.EventName("business.order.paid"),
 			BusinessCode: "ORD-200",
 			Result:       obs.ResultSuccess,
 		},

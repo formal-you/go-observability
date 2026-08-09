@@ -34,10 +34,10 @@ func eventLevel(ev EventPayload) Level {
 func TestBusinessEventFromValidationError(t *testing.T) {
 	src := errs.Source{Function: "orderService.Create", Filepath: "service/order.go", Line: 42}
 	err := errs.NewValidation("order.create: 数量必须为正整数").WithSource(src)
-	ev := businessEventFromError(EventNameBusinessOrderPaid, err, EventMetadata{})
+	ev := businessEventFromError(EventName("business.order.paid"), err, EventMetadata{})
 
-	if ev.Data.EventName != EventNameBusinessOrderPaid {
-		t.Errorf("EventName = %q, want %q", ev.Data.EventName, EventNameBusinessOrderPaid)
+	if ev.Data.EventName != EventName("business.order.paid") {
+		t.Errorf("EventName = %q, want %q", ev.Data.EventName, EventName("business.order.paid"))
 	}
 	if ev.Data.ErrorType != "validation.failed" {
 		t.Errorf("ErrorType = %q, want validation.failed", ev.Data.ErrorType)
@@ -84,7 +84,7 @@ func TestBusinessEventFromValidationError(t *testing.T) {
 func TestBusinessEventFromBusinessError(t *testing.T) {
 	const code errs.ErrorCode = "ORDER.CREATE.STOCK_INSUFFICIENT"
 	err := errs.NewBusiness(code, errs.ErrorType("business.stock_insufficient"), "库存不足，当前仅剩 2 件")
-	ev := businessEventFromError(EventNameBusinessOrderPaid, err, EventMetadata{Level: LevelInfo})
+	ev := businessEventFromError(EventName("business.order.paid"), err, EventMetadata{Level: LevelInfo})
 
 	if ev.Data.ErrorType != "business.stock_insufficient" {
 		t.Errorf("ErrorType = %q, want business.stock_insufficient", ev.Data.ErrorType)
@@ -226,7 +226,7 @@ func TestEventFromErrorDispatchesByKind(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ev := EventFromError(EventNameBusinessOrderPaid, tc.err, EventMetadata{})
+			ev := EventFromError(EventName("business.order.paid"), tc.err, EventMetadata{})
 			if ev.EventType() != tc.want {
 				t.Errorf("EventType() = %q, want %q", ev.EventType(), tc.want)
 			}
@@ -260,7 +260,7 @@ func TestProjectedLevelDefaults(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ev := EventFromError(EventNameBusinessOrderPaid, tc.err, EventMetadata{})
+			ev := EventFromError(EventName("business.order.paid"), tc.err, EventMetadata{})
 			if got := eventLevel(ev); got != tc.want {
 				t.Errorf("Level = %q, want %q", got, tc.want)
 			}
@@ -271,7 +271,7 @@ func TestProjectedLevelDefaults(t *testing.T) {
 // TestCallerLevelNotOverridden 验证调用方已设置的 md.Level 不被投影覆盖：
 // business 与重试中的 system 在显式 LevelError 下保持 ERROR。
 func TestCallerLevelNotOverridden(t *testing.T) {
-	biz := EventFromError(EventNameBusinessOrderPaid,
+	biz := EventFromError(EventName("business.order.paid"),
 		errs.NewBusiness("C", errs.ErrorType("business.x"), "b"),
 		EventMetadata{Level: LevelError})
 	if got := eventLevel(biz); got != LevelError {
@@ -292,7 +292,7 @@ func TestBusinessPayloadErrorFieldsOmittedWhenEmpty(t *testing.T) {
 	ev := BusinessEvent{
 		EventMetadata: EventMetadata{Level: LevelInfo},
 		Data: BusinessPayload{
-			EventName: EventNameBusinessOrderPaid,
+			EventName: EventName("business.order.paid"),
 			Result:    ResultSuccess,
 		},
 	}

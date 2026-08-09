@@ -40,8 +40,8 @@ type BusinessPayload struct {
 	BusinessMessage string
 	Source          Source // code.function.name / code.file.path / code.line.number
 	Result          Result
-	// ExtraAttrs 事件专属扩展字段（B4 定稿）：业务侧按事件注入 app.* 键，
-	// 随公共字段一起扁平输出；键名登记 keys.go（AGENTS.md 规则 4）。
+	// ExtraAttrs 事件专属扩展字段（B4/C2）：接入方按事件注入 app.* 键，
+	// 随公共字段一起扁平输出；领域键由接入方自建（example/mall），核心 keys.go 不登记。
 	ExtraAttrs []slog.Attr
 }
 
