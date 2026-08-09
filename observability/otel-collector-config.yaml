@@ -1,0 +1,63 @@
+﻿# OTel Collector（contrib）参考配置：接收 OTLP（4317/4318），批量后分发
+#   traces  -> Tempo（otlp_grpc）
+#   logs    -> Loki（otlp_http /otlp）
+#   metrics -> Mimir（prometheusremotewrite，对齐 A1：Prometheus 仅作格式/兼容面，Mimir 存储）
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  # 可选：零代码 docker 日志采集（filelog）。本组件默认 OTLP 直推，此块仅供参考。
+  # filelog:
+  #   include: ["/var/lib/docker/containers/*/*-json.log"]
+  #   start_at: beginning
+  #   operators:
+  #     - type: json_parser
+  #       parse_from: body
+  #       timestamp:
+  #         parse_from: attributes.time
+  #         layout_type: gotime
+  #         layout: "2006-01-02T15:04:05.999999999Z07:00"
+  #       severity:
+  #         parse_from: attributes.stream
+  #         preset: none
+  #         mapping:
+  #           info: [stdout, stderr]
+  #   resource:
+  #     service.name: go-observability-demo
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 256
+
+exporters:
+  otlp_grpc/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  otlp_http/loki:
+    endpoint: http://loki:3100/otlp
+  prometheusremotewrite/mimir:
+    endpoint: http://mimir:9009/api/v1/push
+    tls:
+      insecure: true
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_grpc/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheusremotewrite/mimir]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http/loki]

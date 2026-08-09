@@ -1,0 +1,80 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "type": "tempo",
+      "title": "最近 Trace（Tempo）",
+      "description": "按 service.name=go-observability 查询最近 trace；点击 span 可下钻并跳转关联日志（trace 到 log 联动）。",
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceql",
+          "query": "{ resource.service.name = \"go-observability\" }",
+          "limit": 30
+        }
+      ],
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "logs",
+      "title": "错误日志（error.type 非空）",
+      "description": "Loki 中带 error.type 的日志；日志行的 trace_id 已配置 derived field，点击即跳 Tempo（log 到 trace 联动）。",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=\"go-observability\"} | json | error.type =~ \".+\""
+        }
+      ],
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "请求错误率（Mimir）",
+      "description": "PromQL 示例（metric 名为 OTel semconv http.server.request.duration，B5 定稿后校准命名与直方图桶）；exemplar 已配置，数据点可跳 Tempo（metric 到 trace 联动）。",
+      "datasource": { "type": "prometheus", "uid": "mimir" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 1e-9)",
+          "legendFormat": "错误率"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit" },
+        "overrides": []
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 }
+    },
+    {
+      "id": 4,
+      "type": "logs",
+      "title": "访问日志（Loki）",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        { "refId": "A", "expr": "{service_name=\"go-observability\"}" }
+      ],
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["go-observability"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "go-observability 概览（Trace / Log / Metric 联动）",
+  "uid": "go-observability-overview",
+  "version": 1
+}

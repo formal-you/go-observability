@@ -1,0 +1,30 @@
+﻿# Mimir 单进程参考配置（all-in-one，本地文件存储；collector 以 prometheusremotewrite 写入）。
+multitenancy_enabled: false
+target: all
+activity_tracker:
+  filepath: /mimir/activity.log
+server:
+  http_listen_port: 9009
+distributor:
+  ring:
+    kvstore:
+      store: inmemory
+ingester:
+  ring:
+    replication_factor: 1
+    kvstore:
+      store: inmemory
+blocks_storage:
+  backend: filesystem
+  filesystem:
+    dir: /mimir/data
+compactor:
+  data_dir: /mimir/compactor
+  sharding_ring:
+    kvstore:
+      store: inmemory
+ruler:
+  rule_path: /mimir/rules
+  ring:
+    kvstore:
+      store: inmemory

@@ -1,0 +1,85 @@
+﻿# go-observability Observability 参考栈（LGTM：Tempo + Loki + Mimir + Grafana + OTel Collector）
+# 启动：docker compose -f observability/docker-compose.yml up -d
+# 说明：参考配置；本组件 Trace/Metric/Log 统一 OTLP 直推 collector（127.0.0.1:4317 / 4318）。
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.158.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    depends_on:
+      - tempo
+      - loki
+      - mimir
+    networks:
+      - go-observability-observability
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.9.4
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "127.0.0.1:3200:3200"
+    networks:
+      - go-observability-observability
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.6.15
+    command: ["-config.file=/etc/loki.yaml"]
+    volumes:
+      - ./loki.yaml:/etc/loki.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      - go-observability-observability
+    restart: unless-stopped
+
+  mimir:
+    image: grafana/mimir:3.1.4
+    command: ["-config.file=/etc/mimir.yaml"]
+    volumes:
+      - ./mimir.yaml:/etc/mimir.yaml:ro
+      - mimir-data:/mimir
+    ports:
+      - "127.0.0.1:9009:9009"
+    networks:
+      - go-observability-observability
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.0.6
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - tempo
+      - loki
+      - mimir
+    networks:
+      - go-observability-observability
+    restart: unless-stopped
+
+volumes:
+  tempo-data:
+  loki-data:
+  mimir-data:
+  grafana-data:
+
+networks:
+  go-observability-observability:
+    driver: bridge
