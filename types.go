@@ -28,8 +28,26 @@ type EventName string
 const (
 	// EventNameAccessHTTPRequest 访问事件：HTTP 请求完成（ginlog 中间件默认值）。
 	EventNameAccessHTTPRequest EventName = "access.http.request"
+	// EventNameBusinessOrderCreated 业务事件：订单创建。
+	EventNameBusinessOrderCreated EventName = "business.order.created"
 	// EventNameBusinessOrderPaid 业务事件：订单支付成功。
 	EventNameBusinessOrderPaid EventName = "business.order.paid"
+	// EventNameBusinessOrderCancelled 业务事件：订单取消（用户侧）。
+	EventNameBusinessOrderCancelled EventName = "business.order.cancelled"
+	// EventNameBusinessRefundCreated 业务事件：退款发起。
+	EventNameBusinessRefundCreated EventName = "business.refund.created"
+	// EventNameBusinessRefundSuccess 业务事件：退款成功。
+	EventNameBusinessRefundSuccess EventName = "business.refund.success"
+	// EventNameBusinessCartAdded 业务事件：加购。
+	EventNameBusinessCartAdded EventName = "business.cart.added"
+	// EventNameBusinessProductViewed 业务事件：浏览商品。
+	EventNameBusinessProductViewed EventName = "business.product.viewed"
+	// EventNameBusinessUserLogin 业务事件：用户登录。
+	EventNameBusinessUserLogin EventName = "business.user.login"
+	// EventNameBusinessUserRegistered 业务事件：用户注册。
+	EventNameBusinessUserRegistered EventName = "business.user.registered"
+	// EventNameBusinessCouponRedeemed 业务事件：优惠券核销。
+	EventNameBusinessCouponRedeemed EventName = "business.coupon.redeemed"
 	// EventNameErrorDBTimeout 错误事件：数据库超时。
 	EventNameErrorDBTimeout EventName = "error.db.timeout"
 	// EventNameErrorRuntimePanic 错误事件：运行时 panic（recover 中间件默认值）。

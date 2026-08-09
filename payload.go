@@ -40,6 +40,9 @@ type BusinessPayload struct {
 	BusinessMessage string
 	Source          Source // code.function.name / code.file.path / code.line.number
 	Result          Result
+	// ExtraAttrs 事件专属扩展字段（B4 定稿）：业务侧按事件注入 mall.* 键，
+	// 随公共字段一起扁平输出；键名登记 keys.go（AGENTS.md 规则 4）。
+	ExtraAttrs []slog.Attr
 }
 
 func (BusinessPayload) EventType() EventType { return EventBusiness }
@@ -57,6 +60,7 @@ func (e BusinessPayload) Attrs() []slog.Attr {
 	attrs = appendString(attrs, KeyCodeFunctionName, e.Source.Function)
 	attrs = appendString(attrs, KeyCodeFilePath, e.Source.Filepath)
 	attrs = appendInt(attrs, KeyCodeLineNumber, e.Source.Line)
+	attrs = append(attrs, e.ExtraAttrs...)
 	return appendString(attrs, KeyMallResult, string(e.Result))
 }
 

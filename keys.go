@@ -70,4 +70,21 @@ const (
 	KeyMallProbeType         Key = "mall.probe_type"
 	KeyMallErrorCode         Key = "mall.error_code"
 	KeyMallSource            Key = "mall.source"
+
+	// 业务事件专属字段（B4 定稿：mall.<snake_case>，随 ExtraAttrs 注入）
+	KeyMallOrderID         Key = "mall.order_id"
+	KeyMallAmount          Key = "mall.amount"
+	KeyMallItemCount       Key = "mall.item_count"
+	KeyMallChannel         Key = "mall.channel"
+	KeyMallPayChannel      Key = "mall.pay_channel"
+	KeyMallPaidAt          Key = "mall.paid_at"
+	KeyMallCancelledAt     Key = "mall.cancelled_at"
+	KeyMallRefundID        Key = "mall.refund_id"
+	KeyMallRefundedAt      Key = "mall.refunded_at"
+	KeyMallProductID       Key = "mall.product_id"
+	KeyMallQuantity        Key = "mall.quantity"
+	KeyMallCategoryID      Key = "mall.category_id"
+	KeyMallLoginMethod     Key = "mall.login_method"
+	KeyMallRegisterChannel Key = "mall.register_channel"
+	KeyMallCouponID        Key = "mall.coupon_id"
 )

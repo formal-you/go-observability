@@ -10,7 +10,7 @@
 
 - 核心包零外部依赖（仅标准库：log/slog、net、time、fmt、strings），属性键直接对齐 OTel semconv 1.41.0 + mall.* vendor 命名空间。
 - 三信号装配（internal/telemetry）：Trace / Metric / Log provider + OTLP gRPC 导出 + A3 采样/频率 + A7 资源属性；env 控制（OTEL_SDK_DISABLED / OTEL_EXPORTER_OTLP_ENDPOINT / GO_OBSERVABILITY_REGION / GO_OBSERVABILITY_INSTANCE）。
-- 六类事件：access / business / error / audit / security / probe，每类有具体事件结构体（领域构造、中间件类型断言）。
+- 六类事件：access / business / error / audit / security / probe，每类有具体事件结构体（领域构造、中间件类型断言）；BusinessPayload.ExtraAttrs 承载事件专属 mall.* 键（B4 定稿 10 个 business.* 事件）。
 - EventPayload + Logger/Writer 抽象：采样、脱敏、后端可注入替换。
 - Writer 实现：OTLP（otlploggrpc）、stdout（stdoutlog）、file（JSONL 落盘）。
 - Gin 中间件（middleware/ginlog）开箱即用，自动从 otelgin span 提取 trace_id/span_id；access 级别映射 2xx-3xx=INFO / 4xx=WARN / 503=WARN / 其余 5xx=ERROR（B3 定稿）。
