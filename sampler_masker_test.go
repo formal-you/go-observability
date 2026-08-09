@@ -6,6 +6,16 @@ import (
 	"testing"
 )
 
+type nestedLogValue struct{}
+
+func (nestedLogValue) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.Any("profile", map[string]any{
+			"credentials": Fields{"password": "from-log-valuer"},
+		}),
+	)
+}
+
 func TestResultKeepSamplerHighValue(t *testing.T) {
 	s := ResultKeepSampler{Ratio: 0}
 	for _, r := range []Result{ResultFailed, ResultError, ResultBlocked, ResultDenied} {
@@ -74,5 +84,54 @@ func TestFieldMasker(t *testing.T) {
 	}
 	if got["nested.token"] != "***" {
 		t.Errorf("group 内 token 未掩码: %v", got)
+	}
+}
+
+func TestFieldMaskerRecursivelyMasksStructuredValues(t *testing.T) {
+	m := FieldMasker{}
+	in := []slog.Attr{
+		slog.Any("fields", Fields{
+			"user": map[string]any{
+				"credentials": []any{
+					map[string]any{"authorization": "Bearer secret"},
+					Fields{"nested_token": "token-value"},
+				},
+			},
+			"roles": []string{"admin", "viewer"},
+		}),
+		slog.Any("valuer", nestedLogValue{}),
+	}
+
+	out := m.Mask(context.Background(), in)
+	fields := out[0].Value.Any().(Fields)
+	user := fields["user"].(map[string]any)
+	credentials := user["credentials"].([]any)
+	if got := credentials[0].(map[string]any)["authorization"]; got != "***" {
+		t.Errorf("map/[]any 内 authorization = %v, want ***", got)
+	}
+	if got := credentials[1].(Fields)["nested_token"]; got != "***" {
+		t.Errorf("Fields 内 nested_token = %v, want ***", got)
+	}
+	roles := fields["roles"].([]string)
+	if len(roles) != 2 || roles[0] != "admin" || roles[1] != "viewer" {
+		t.Errorf("[]string 非敏感值被改: %v", roles)
+	}
+
+	valuerGroup := out[1].Value.Group()
+	profile := valuerGroup[0].Value.Any().(map[string]any)
+	if got := profile["credentials"].(Fields)["password"]; got != "***" {
+		t.Errorf("LogValuer 内 password = %v, want ***", got)
+	}
+}
+
+func TestDefaultSensitiveKeysReturnsCopy(t *testing.T) {
+	keys := DefaultSensitiveKeys()
+	keys[0] = "not-sensitive"
+
+	out := (FieldMasker{}).Mask(context.Background(), []slog.Attr{
+		slog.String("password", "secret"),
+	})
+	if got := out[0].Value.String(); got != "***" {
+		t.Errorf("外部修改默认键副本后 password = %q, want ***", got)
 	}
 }

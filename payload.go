@@ -36,12 +36,13 @@ type BusinessPayload struct {
 	ErrorType       string // error.type：business.* / validation.failed（低基数失败类别）
 	Subject         Subject
 	Resource        Resource
-	BusinessCode    string // ErrCode：模块.场景.操作（格式校验随 B4 错误体系落地）
+	BusinessCode    string // ErrCode：模块.场景.操作。
 	BusinessMessage string
 	Source          Source // code.function.name / code.file.path / code.line.number
 	Result          Result
-	// ExtraAttrs 事件专属扩展字段（B4/C2）：接入方按事件注入 app.* 键，
+	// ExtraAttrs 是事件专属扩展字段：接入方按事件注入 app.* 键，
 	// 随公共字段一起扁平输出；领域键由接入方自建（example/mall），核心 keys.go 不登记。
+	// 与 BusinessPayload canonical 字段或公共保留字段重名的属性会被忽略。
 	ExtraAttrs []slog.Attr
 }
 
@@ -60,8 +61,38 @@ func (e BusinessPayload) Attrs() []slog.Attr {
 	attrs = appendString(attrs, KeyCodeFunctionName, e.Source.Function)
 	attrs = appendString(attrs, KeyCodeFilePath, e.Source.Filepath)
 	attrs = appendInt(attrs, KeyCodeLineNumber, e.Source.Line)
-	attrs = append(attrs, e.ExtraAttrs...)
+	for _, attr := range e.ExtraAttrs {
+		if isBusinessExtraAttrKeyAllowed(attr.Key) {
+			attrs = append(attrs, attr)
+		}
+	}
 	return appendString(attrs, KeyAppResult, string(e.Result))
+}
+
+var businessPayloadCanonicalKeys = map[string]struct{}{
+	string(KeyEventName):          {},
+	string(KeyErrorType):          {},
+	string(KeyAppUserID):          {},
+	string(KeyAppTenantID):        {},
+	string(KeyAppResourceType):    {},
+	string(KeyAppResourceID):      {},
+	string(KeyAppBusinessCode):    {},
+	string(KeyAppBusinessMessage): {},
+	string(KeyCodeFunctionName):   {},
+	string(KeyCodeFilePath):       {},
+	string(KeyCodeLineNumber):     {},
+	string(KeyAppResult):          {},
+}
+
+func isBusinessExtraAttrKeyAllowed(key string) bool {
+	if key == "" {
+		return false
+	}
+	if _, canonical := businessPayloadCanonicalKeys[key]; canonical {
+		return false
+	}
+	_, reserved := reservedKeys[key]
+	return !reserved
 }
 
 // ErrorPayload 记录系统错误、panic、依赖失败或重试上下文。

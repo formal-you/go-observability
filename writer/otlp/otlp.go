@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/formal-you/go-observability/internal/attrkv"
+	"github.com/formal-you/go-observability/internal/otlpendpoint"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	otelog "go.opentelemetry.io/otel/log"
@@ -33,13 +34,14 @@ type options struct {
 	provider *sdklog.LoggerProvider
 }
 
-// WithLoggerProvider 注入外部 LoggerProvider（如 internal/telemetry 装配的三信号 provider）。
+// WithLoggerProvider 注入外部 LoggerProvider（如 telemetry 装配的三信号 provider）。
 // 注入时 Writer 不拥有该 provider，Close 不会 Shutdown 它（由装配层统一关闭）。
 func WithLoggerProvider(provider *sdklog.LoggerProvider) Option {
 	return func(o *options) { o.provider = provider }
 }
 
-// WithEndpoint 设置 OTLP gRPC endpoint；默认 127.0.0.1:4317。
+// WithEndpoint 设置 OTLP gRPC endpoint：裸 host:port 使用明文连接，http(s) URL
+// 保留其 scheme；默认 127.0.0.1:4317。输入不合法时 New 返回错误。
 func WithEndpoint(endpoint string) Option {
 	return func(o *options) { o.endpoint = endpoint }
 }
@@ -55,14 +57,19 @@ func New(ctx context.Context, opts ...Option) (*Writer, error) {
 	for _, opt := range opts {
 		opt(&o)
 	}
+	endpoint, err := parseEndpoint(o.endpoint)
+	if err != nil {
+		return nil, err
+	}
 	if o.res == nil {
 		o.res = resource.NewWithAttributes(
 			"https://opentelemetry.io/schemas/1.41.0",
 			attribute.String("service.name", "go-observability"),
 		)
 	}
-	if o.provider == nil {
-		exporter, err := otlploggrpc.New(ctx, otlploggrpc.WithEndpointURL(o.endpoint))
+	ownsProvider := o.provider == nil
+	if ownsProvider {
+		exporter, err := otlploggrpc.New(ctx, otlploggrpc.WithEndpointURL(endpoint))
 		if err != nil {
 			return nil, fmt.Errorf("otlp: create log exporter: %w", err)
 		}
@@ -71,7 +78,17 @@ func New(ctx context.Context, opts ...Option) (*Writer, error) {
 			sdklog.WithResource(o.res),
 		)
 	}
-	return &Writer{logger: o.provider.Logger("go-observability"), provider: o.provider, ownsProvider: true}, nil
+	return &Writer{logger: o.provider.Logger("go-observability"), provider: o.provider, ownsProvider: ownsProvider}, nil
+}
+
+// parseEndpoint 校验 endpoint 并统一返回 URL：裸 host:port 映射为明文 http，
+// 显式 http(s) URL 保留 scheme，避免 exporter 对非法 URL 静默回退。
+func parseEndpoint(endpoint string) (string, error) {
+	normalized, err := otlpendpoint.Parse(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("otlp: %w", err)
+	}
+	return normalized, nil
 }
 
 // Close 关闭自建的 LoggerProvider，flush 待导出记录。

@@ -13,6 +13,15 @@ type captureWriter struct {
 	err       error
 }
 
+func TestNewLoggerRejectsNilWriter(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("NewLogger(nil) 应 panic")
+		}
+	}()
+	NewLogger(nil)
+}
+
 func (w *captureWriter) Write(_ context.Context, msg string, attrs ...slog.Attr) error {
 	w.msgs = append(w.msgs, msg)
 	w.attrsList = append(w.attrsList, attrs)

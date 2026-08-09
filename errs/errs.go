@@ -1,4 +1,4 @@
-// Package errs 定义商城系统的统一错误体系：错误分类（ErrorKind）、低基数失败类别
+// Package errs 定义服务端应用的统一错误体系：错误分类（ErrorKind）、低基数失败类别
 // （ErrorType）、业务错误码（ErrorCode）、代码位置（Source）与堆栈策略（StackPolicy）。
 //
 // 职责边界：本包只负责错误值的建模与构造，不负责记录日志、上报 OTel 或渲染响应；
@@ -35,6 +35,8 @@ const (
 type ErrorType string
 
 const (
+	// TypeUnknown 普通 error 无法归类时的稳定兜底类型。
+	TypeUnknown ErrorType = "error.unknown"
 	// TypeValidationFailed 参数/入参校验失败。
 	TypeValidationFailed ErrorType = "validation.failed"
 	// TypeDBConnectionError 数据库连接失败。
@@ -379,9 +381,11 @@ func CaptureStack() string {
 // IsRetryExhausted 判断错误是否重试耗尽（SystemError 且 exhausted；BizError/其他返回 false）。
 // 沿错误链使用 errors.As 查找，可识别被外层 %w 包裹的 SystemError。
 func IsRetryExhausted(err error) bool {
-	var se SystemError
-	if errors.As(err, &se) {
-		return se.exhausted
+	var exhausted interface {
+		RetriesExhausted() bool
+	}
+	if errors.As(err, &exhausted) {
+		return exhausted.RetriesExhausted()
 	}
 	return false
 }

@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"log/slog"
 	"testing"
 
@@ -283,6 +284,160 @@ func TestCallerLevelNotOverridden(t *testing.T) {
 		EventMetadata{Level: LevelError})
 	if got := eventLevel(sys); got != LevelError {
 		t.Errorf("system Level = %q, want ERROR（调用方已设）", got)
+	}
+}
+
+type wrappedAppError struct {
+	errs.AppError
+	cause error
+}
+
+func (e wrappedAppError) Error() string { return "wrapped: " + e.cause.Error() }
+func (e wrappedAppError) Unwrap() error { return e.cause }
+
+type typedNilErrorWrapper struct {
+	cause error
+}
+
+func (typedNilErrorWrapper) Error() string   { return "wrapped typed-nil error" }
+func (e typedNilErrorWrapper) Unwrap() error { return e.cause }
+
+// TestErrorProjectionConcreteForms 验证错误详情可从值、指针及错误链中提取。
+func TestErrorProjectionConcreteForms(t *testing.T) {
+	src := errs.Source{Function: "payment.Call", Filepath: "payment/client.go", Line: 19}
+	base := errs.NewSystem(
+		errs.TypeHTTPUpstreamTimeout,
+		"timeout",
+		errs.WithRetry(3, true),
+		errs.WithUpstream("payment"),
+		errs.WithStack("stack"),
+		errs.WithSource(src),
+	)
+	wrapper := wrappedAppError{AppError: base, cause: fmt.Errorf("context: %w", &base)}
+
+	for _, tc := range []struct {
+		name string
+		err  errs.AppError
+	}{
+		{name: "value", err: base},
+		{name: "pointer", err: &base},
+		{name: "wrapped pointer", err: wrapper},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ev := errorEventFromError(EventNameErrorDBTimeout, tc.err, EventMetadata{})
+			if !ev.Data.Retryable || ev.Data.RetryCount != 3 {
+				t.Errorf("retry = %v/%d, want true/3", ev.Data.Retryable, ev.Data.RetryCount)
+			}
+			if ev.Data.UpstreamService != "payment" || ev.Data.StackTrace != "stack" {
+				t.Errorf("upstream/stack = %q/%q, want payment/stack", ev.Data.UpstreamService, ev.Data.StackTrace)
+			}
+			if ev.Data.Source != (Source{Function: src.Function, Filepath: src.Filepath, Line: src.Line}) {
+				t.Errorf("Source = %+v, want %+v", ev.Data.Source, src)
+			}
+		})
+	}
+}
+
+// TestBusinessProjectionConcreteForms 验证 BizError 的值、指针及错误链均保留 source。
+func TestBusinessProjectionConcreteForms(t *testing.T) {
+	src := errs.Source{Function: "order.Validate", Filepath: "order/validate.go", Line: 8}
+	base := errs.NewBusiness("ORDER.INVALID", errs.ErrorType("business.invalid"), "invalid").WithSource(src)
+	wrapper := wrappedAppError{AppError: base, cause: fmt.Errorf("context: %w", &base)}
+
+	for _, tc := range []struct {
+		name string
+		err  errs.AppError
+	}{
+		{name: "value", err: base},
+		{name: "pointer", err: &base},
+		{name: "wrapped pointer", err: wrapper},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ev := businessEventFromError(EventName("business.order.paid"), tc.err, EventMetadata{})
+			if ev.Data.Source != (Source{Function: src.Function, Filepath: src.Filepath, Line: src.Line}) {
+				t.Errorf("Source = %+v, want %+v", ev.Data.Source, src)
+			}
+		})
+	}
+}
+
+// TestEventFromWrappedErrors 验证公开入口接受标准 %w 包装并提取内部错误详情。
+func TestEventFromWrappedErrors(t *testing.T) {
+	systemSource := errs.Source{Function: "payment.Call", Filepath: "payment/client.go", Line: 20}
+	system := errs.NewSystem(
+		errs.TypeHTTPUpstreamTimeout,
+		"timeout",
+		errs.WithRetry(4, true),
+		errs.WithUpstream("payment"),
+		errs.WithStack("wrapped stack"),
+		errs.WithSource(systemSource),
+	)
+	systemEvent, ok := EventFromError(
+		EventNameErrorDBTimeout,
+		fmt.Errorf("checkout failed: %w", &system),
+		EventMetadata{},
+	).(ErrorEvent)
+	if !ok {
+		t.Fatal("wrapped SystemError did not project to ErrorEvent")
+	}
+	if !systemEvent.Data.Retryable || systemEvent.Data.RetryCount != 4 || systemEvent.Data.UpstreamService != "payment" {
+		t.Errorf("wrapped system details = %+v", systemEvent.Data)
+	}
+	if systemEvent.Data.StackTrace != "wrapped stack" || systemEvent.Data.Source.Line != 20 {
+		t.Errorf("wrapped system stack/source = %+v", systemEvent.Data)
+	}
+	if got := LevelOf(fmt.Errorf("wrapped: %w", &system)); got != LevelError {
+		t.Errorf("LevelOf(wrapped exhausted) = %q, want ERROR", got)
+	}
+
+	businessSource := errs.Source{Function: "order.Validate", Filepath: "order/validate.go", Line: 9}
+	business := errs.NewBusiness("ORDER.INVALID", errs.ErrorType("business.invalid"), "invalid").WithSource(businessSource)
+	businessEvent, ok := EventFromError(
+		EventName("business.order.paid"),
+		fmt.Errorf("validation failed: %w", &business),
+		EventMetadata{},
+	).(BusinessEvent)
+	if !ok {
+		t.Fatal("wrapped BizError did not project to BusinessEvent")
+	}
+	if businessEvent.Data.Source.Line != 9 || businessEvent.Data.BusinessCode != "ORDER.INVALID" {
+		t.Errorf("wrapped business details = %+v", businessEvent.Data)
+	}
+}
+
+// TestEventFromPlainError 验证非 AppError 仍按系统错误安全投影。
+func TestEventFromPlainError(t *testing.T) {
+	ev, ok := EventFromError(EventNameErrorDBTimeout, fmt.Errorf("plain"), EventMetadata{}).(ErrorEvent)
+	if !ok {
+		t.Fatal("plain error did not project to ErrorEvent")
+	}
+	if ev.Data.ErrorType != string(errs.TypeUnknown) || ev.Data.ErrorMessage != "plain" || ev.Data.Result != ResultError || ev.Level != LevelError {
+		t.Errorf("plain error projection = %+v", ev)
+	}
+}
+
+func TestErrorProjectionTypedNilFallsBackSafely(t *testing.T) {
+	var systemErr *errs.SystemError
+	for _, tc := range []struct {
+		name        string
+		err         error
+		wantMessage string
+	}{
+		{name: "direct", err: systemErr},
+		{name: "wrapped", err: typedNilErrorWrapper{cause: systemErr}, wantMessage: "wrapped typed-nil error"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ev, ok := EventFromError(EventNameErrorDBTimeout, tc.err, EventMetadata{}).(ErrorEvent)
+			if !ok {
+				t.Fatalf("typed-nil error projected as %T, want ErrorEvent", ev)
+			}
+			if ev.Data.ErrorType != string(errs.TypeUnknown) || ev.Data.ErrorMessage != tc.wantMessage || ev.Level != LevelError {
+				t.Errorf("typed-nil projection = %+v, want unknown/%q/ERROR", ev, tc.wantMessage)
+			}
+			if got := LevelOf(tc.err); got != LevelError {
+				t.Errorf("LevelOf(typed-nil) = %q, want ERROR", got)
+			}
+		})
 	}
 }
 

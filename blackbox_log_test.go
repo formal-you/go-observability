@@ -1,6 +1,5 @@
 // Package log_test 是根 log 包的外部黑盒测试层（package log_test，非白盒）。
-// 期望值来自 observability-design/spec/acceptance.md 的验收契约（Oracle），
-// 不读取实现内部——防"同代理写实现+测试"的自证幻觉。用例引用 RULE/ACCEPT/CASE ID。
+// 期望值来自公开事件和错误语义，不读取实现内部。
 package log_test
 
 import (

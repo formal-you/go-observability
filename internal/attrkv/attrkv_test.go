@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	corelog "github.com/formal-you/go-observability"
 	otelog "go.opentelemetry.io/otel/log"
 )
 
@@ -58,6 +59,103 @@ func TestToKeyValuesTypes(t *testing.T) {
 	if kvs[4].Key != "app.audit" {
 		t.Errorf("group 键 = %q, want app.audit", kvs[4].Key)
 	}
+	if kvs[4].Value.Kind() != otelog.KindMap {
+		t.Fatalf("group kind = %v, want Map", kvs[4].Value.Kind())
+	}
+	group := kvs[4].Value.AsMap()
+	if len(group) != 1 || group[0].Key != "actor" || group[0].Value.AsString() != "admin" {
+		t.Errorf("group value = %v, want actor=admin", group)
+	}
+}
+
+type testLogValuer struct{}
+
+func (testLogValuer) LogValue() slog.Value {
+	return slog.GroupValue(slog.String("resolved", "yes"))
+}
+
+func TestToKeyValuesAnyRecursive(t *testing.T) {
+	kvs := ToKeyValues([]slog.Attr{slog.Any("payload", map[string]any{
+		"active": true,
+		"count":  3,
+		"labels": []string{"mall", "checkout"},
+		"items":  []any{"first", int64(2), map[string]any{"ok": false}},
+		"valuer": testLogValuer{},
+	})})
+	if len(kvs) != 1 || kvs[0].Value.Kind() != otelog.KindMap {
+		t.Fatalf("payload = %v, want one Map value", kvs)
+	}
+
+	payload := mapValues(kvs[0].Value.AsMap())
+	if payload["active"].Kind() != otelog.KindBool || !payload["active"].AsBool() {
+		t.Errorf("active = %v, want Bool(true)", payload["active"])
+	}
+	if payload["count"].Kind() != otelog.KindInt64 || payload["count"].AsInt64() != 3 {
+		t.Errorf("count = %v, want Int64(3)", payload["count"])
+	}
+	labels := payload["labels"]
+	if labels.Kind() != otelog.KindSlice || len(labels.AsSlice()) != 2 || labels.AsSlice()[1].AsString() != "checkout" {
+		t.Errorf("labels = %v, want [mall checkout]", labels)
+	}
+	items := payload["items"]
+	if items.Kind() != otelog.KindSlice || len(items.AsSlice()) != 3 {
+		t.Fatalf("items = %v, want three-item Slice", items)
+	}
+	if items.AsSlice()[2].Kind() != otelog.KindMap {
+		t.Fatalf("items[2] = %v, want Map", items.AsSlice()[2])
+	}
+	itemMap := mapValues(items.AsSlice()[2].AsMap())
+	if itemMap["ok"].Kind() != otelog.KindBool || itemMap["ok"].AsBool() {
+		t.Errorf("items[2] = %v, want Map(ok=false)", items.AsSlice()[2])
+	}
+	valuer := payload["valuer"]
+	if valuer.Kind() != otelog.KindMap || mapValues(valuer.AsMap())["resolved"].AsString() != "yes" {
+		t.Errorf("valuer = %v, want resolved Map", valuer)
+	}
+}
+
+func TestAuditEventFieldsRemainStructured(t *testing.T) {
+	ev := corelog.AuditEvent{
+		EventMetadata: corelog.EventMetadata{Level: corelog.LevelWarn},
+		Data: corelog.AuditPayload{
+			EventName: corelog.EventName("audit.user.role_changed"),
+			Before: corelog.Fields{
+				"role": "viewer",
+				"metadata": corelog.Fields{
+					"approved": false,
+				},
+			},
+			After:  corelog.Fields{"role": "admin"},
+			Result: corelog.ResultSuccess,
+		},
+	}
+
+	_, attrs := Record("audit", ev.Attrs())
+	values := mapValues(ToKeyValues(attrs))
+	before := values[string(corelog.KeyAppBefore)]
+	after := values[string(corelog.KeyAppAfter)]
+	if before.Kind() != otelog.KindMap || after.Kind() != otelog.KindMap {
+		t.Fatalf("before/after kind = %v/%v, want Map/Map", before.Kind(), after.Kind())
+	}
+	beforeValues := mapValues(before.AsMap())
+	if beforeValues["role"].AsString() != "viewer" {
+		t.Errorf("before.role = %v, want viewer", beforeValues["role"])
+	}
+	metadata := beforeValues["metadata"]
+	if metadata.Kind() != otelog.KindMap || mapValues(metadata.AsMap())["approved"].AsBool() {
+		t.Errorf("before.metadata = %v, want Map(approved=false)", metadata)
+	}
+	if mapValues(after.AsMap())["role"].AsString() != "admin" {
+		t.Errorf("after.role = %v, want admin", mapValues(after.AsMap())["role"])
+	}
+}
+
+func mapValues(kvs []otelog.KeyValue) map[string]otelog.Value {
+	values := make(map[string]otelog.Value, len(kvs))
+	for _, kv := range kvs {
+		values[kv.Key] = kv.Value
+	}
+	return values
 }
 
 // TestRecordFieldsExtraction 验证 timestamp/level 映射到顶层字段，保留键从 attrs 剥离。

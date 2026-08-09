@@ -8,11 +8,11 @@ import (
 // ResultKeepSampler 按 app.result 强制保留高价值结果，其余按 ratio 概率保留。
 // ratio 落在 (0,1]；<=0 时等价于只保留高价值；>1 按 1 处理。
 // 未设置 app.result 或值为 unknown 时按 ratio 采样（不强制丢弃）。
-// 并发安全：无状态（ratio 只读）。
+// 默认随机源并发安全；包内测试注入的随机源由注入方保证并发安全。
 type ResultKeepSampler struct {
 	// Ratio 非高价值事件的保留概率，默认 1（全量）。
 	Ratio float64
-	// randFloat 可注入 [0,1) 随机源；nil 时用默认伪随机（见 sampleRand）。
+	// randFloat 供包内测试注入 [0,1) 随机源；nil 时使用并发安全的默认随机源。
 	randFloat func() float64
 }
 

@@ -4,6 +4,8 @@ package attrkv
 import (
 	"fmt"
 	"log/slog"
+	"reflect"
+	"sort"
 	"time"
 
 	otelog "go.opentelemetry.io/otel/log"
@@ -85,30 +87,116 @@ func Record(msg string, attrs []slog.Attr) (otelog.Record, []slog.Attr) {
 }
 
 func toKeyValue(a slog.Attr) otelog.KeyValue {
-	v := a.Value
+	return otelog.KeyValue{Key: a.Key, Value: toValue(a.Value)}
+}
+
+func toValue(v slog.Value) otelog.Value {
+	v = v.Resolve()
 	switch v.Kind() {
 	case slog.KindString:
-		return otelog.String(a.Key, v.String())
+		return otelog.StringValue(v.String())
 	case slog.KindInt64:
-		return otelog.Int64(a.Key, v.Int64())
+		return otelog.Int64Value(v.Int64())
 	case slog.KindUint64:
-		return otelog.Int64(a.Key, int64(v.Uint64()))
+		return otelog.Int64Value(int64(v.Uint64()))
 	case slog.KindFloat64:
-		return otelog.Float64(a.Key, v.Float64())
+		return otelog.Float64Value(v.Float64())
 	case slog.KindBool:
-		return otelog.Bool(a.Key, v.Bool())
+		return otelog.BoolValue(v.Bool())
 	case slog.KindTime:
-		return otelog.String(a.Key, v.Time().Format(time.RFC3339Nano))
+		return otelog.StringValue(v.Time().Format(time.RFC3339Nano))
 	case slog.KindDuration:
-		return otelog.String(a.Key, v.Duration().String())
+		return otelog.StringValue(v.Duration().String())
 	case slog.KindGroup:
 		group := v.Group()
-		vals := make([]otelog.Value, 0, len(group))
+		kvs := make([]otelog.KeyValue, 0, len(group))
 		for _, ga := range group {
-			vals = append(vals, toKeyValue(ga).Value)
+			kvs = append(kvs, toKeyValue(ga))
 		}
-		return otelog.Slice(a.Key, vals...)
+		return otelog.MapValue(kvs...)
+	case slog.KindAny:
+		return anyValue(v.Any())
 	default:
-		return otelog.String(a.Key, fmt.Sprint(v.Any()))
+		return otelog.StringValue(fmt.Sprint(v.Any()))
 	}
+}
+
+func anyValue(value any) otelog.Value {
+	switch v := value.(type) {
+	case nil:
+		return otelog.Value{}
+	case string:
+		return otelog.StringValue(v)
+	case bool:
+		return otelog.BoolValue(v)
+	case int:
+		return otelog.IntValue(v)
+	case int8:
+		return otelog.Int64Value(int64(v))
+	case int16:
+		return otelog.Int64Value(int64(v))
+	case int32:
+		return otelog.Int64Value(int64(v))
+	case int64:
+		return otelog.Int64Value(v)
+	case uint:
+		return otelog.Int64Value(int64(v))
+	case uint8:
+		return otelog.Int64Value(int64(v))
+	case uint16:
+		return otelog.Int64Value(int64(v))
+	case uint32:
+		return otelog.Int64Value(int64(v))
+	case uint64:
+		return otelog.Int64Value(int64(v))
+	case float32:
+		return otelog.Float64Value(float64(v))
+	case float64:
+		return otelog.Float64Value(v)
+	case []byte:
+		return otelog.BytesValue(v)
+	case time.Time:
+		return otelog.StringValue(v.Format(time.RFC3339Nano))
+	case time.Duration:
+		return otelog.StringValue(v.String())
+	case map[string]any:
+		mapped, _ := stringKeyMapValue(v)
+		return mapped
+	case []any:
+		values := make([]otelog.Value, 0, len(v))
+		for _, item := range v {
+			values = append(values, anyValue(item))
+		}
+		return otelog.SliceValue(values...)
+	case []string:
+		values := make([]otelog.Value, 0, len(v))
+		for _, item := range v {
+			values = append(values, otelog.StringValue(item))
+		}
+		return otelog.SliceValue(values...)
+	case slog.LogValuer:
+		return toValue(slog.AnyValue(v))
+	default:
+		if mapped, ok := stringKeyMapValue(v); ok {
+			return mapped
+		}
+		return otelog.StringValue(fmt.Sprint(v))
+	}
+}
+
+// stringKeyMapValue 把命名或未命名的 string-key map 转为 OTel MapValue。
+// 反射路径用于支持 log.Fields 等公开命名 map，同时保持键排序稳定。
+func stringKeyMapValue(value any) (otelog.Value, bool) {
+	rv := reflect.ValueOf(value)
+	if !rv.IsValid() || rv.Kind() != reflect.Map || rv.Type().Key().Kind() != reflect.String {
+		return otelog.Value{}, false
+	}
+	keys := rv.MapKeys()
+	sort.Slice(keys, func(i, j int) bool { return keys[i].String() < keys[j].String() })
+	kvs := make([]otelog.KeyValue, 0, len(keys))
+	for _, key := range keys {
+		item := rv.MapIndex(key)
+		kvs = append(kvs, otelog.KeyValue{Key: key.String(), Value: anyValue(item.Interface())})
+	}
+	return otelog.MapValue(kvs...), true
 }

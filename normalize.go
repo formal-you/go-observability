@@ -11,7 +11,7 @@ type event[T EventPayload] struct {
 	Data      T
 }
 
-// requestIDPrefixLen 对外报障凭证取 trace_id 的前缀长度（A4：12 hex，48 bit，前缀匹配免映射表）。
+// requestIDPrefixLen 是从 trace_id 派生对外报障凭证的长度（12 hex，48 bit）。
 const requestIDPrefixLen = 12
 
 // requestIDFromTraceID 取 trace_id 前缀作为 request_id；trace_id 不足长度时原样返回。
@@ -47,7 +47,7 @@ func eventAttrs[T EventPayload](ev event[T]) []slog.Attr {
 	attrs = append(attrs, slog.String(string(KeyLevel), string(ev.Metadata.Level)))
 	attrs = appendString(attrs, KeyTraceID, ev.Metadata.TraceID)
 	attrs = appendString(attrs, KeySpanID, ev.Metadata.SpanID)
-	// request_id：显式值优先；为空且 trace_id 非空时派生 trace_id 前缀（A4 免映射表约定）。
+	// request_id：显式值优先；为空且 trace_id 非空时派生 trace_id 前缀。
 	requestID := ev.Metadata.RequestID
 	if requestID == "" && ev.Metadata.TraceID != "" {
 		requestID = requestIDFromTraceID(ev.Metadata.TraceID)

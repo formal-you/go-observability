@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"log/slog"
 	"net"
 	"testing"
@@ -104,6 +105,76 @@ func TestZeroValueOmission(t *testing.T) {
 		if _, ok := attrs[k]; ok {
 			t.Errorf("零值字段不应输出：%s", k)
 		}
+	}
+}
+
+func TestBusinessPayloadExtraAttrsCannotOverrideGovernanceKeys(t *testing.T) {
+	payload := BusinessPayload{
+		EventName:       EventName("business.order.paid"),
+		ErrorType:       "business.payment_failed",
+		Subject:         Subject{UserID: "user-canonical", TenantID: "tenant-canonical"},
+		Resource:        Resource{Type: "order", ID: "order-canonical"},
+		BusinessCode:    "ORDER.PAYMENT.FAILED",
+		BusinessMessage: "payment failed",
+		Source:          Source{Function: "checkout.Pay", Filepath: "checkout/pay.go", Line: 42},
+		Result:          ResultFailed,
+		ExtraAttrs: []slog.Attr{
+			slog.String(string(KeyEventName), "business.order.forged"),
+			slog.String(string(KeyErrorType), "forged.error"),
+			slog.String(string(KeyAppUserID), "user-forged"),
+			slog.String(string(KeyAppTenantID), "tenant-forged"),
+			slog.String(string(KeyAppResourceType), "forged-resource"),
+			slog.String(string(KeyAppResourceID), "resource-forged"),
+			slog.String(string(KeyAppBusinessCode), "FORGED"),
+			slog.String(string(KeyAppBusinessMessage), "forged"),
+			slog.String(string(KeyCodeFunctionName), "forged.Function"),
+			slog.String(string(KeyCodeFilePath), "forged.go"),
+			slog.Int(string(KeyCodeLineNumber), 999),
+			slog.String(string(KeyAppResult), string(ResultSuccess)),
+			slog.String(string(KeyTimestamp), "forged"),
+			slog.String("service.name", "forged"),
+			slog.String("app.order_id", "ORD-1"),
+		},
+	}
+
+	attrs := payload.Attrs()
+	counts := make(map[string]int)
+	values := make(map[string]string)
+	for _, attr := range attrs {
+		counts[attr.Key]++
+		values[attr.Key] = attr.Value.String()
+	}
+	wantCanonical := map[string]string{
+		string(KeyEventName):          string(payload.EventName),
+		string(KeyErrorType):          payload.ErrorType,
+		string(KeyAppUserID):          payload.Subject.UserID,
+		string(KeyAppTenantID):        payload.Subject.TenantID,
+		string(KeyAppResourceType):    payload.Resource.Type,
+		string(KeyAppResourceID):      payload.Resource.ID,
+		string(KeyAppBusinessCode):    payload.BusinessCode,
+		string(KeyAppBusinessMessage): payload.BusinessMessage,
+		string(KeyCodeFunctionName):   payload.Source.Function,
+		string(KeyCodeFilePath):       payload.Source.Filepath,
+		string(KeyCodeLineNumber):     "42",
+		string(KeyAppResult):          string(payload.Result),
+	}
+	for key, want := range wantCanonical {
+		if counts[key] != 1 || values[key] != want {
+			t.Errorf("%s 未保持唯一 canonical 值: count=%d value=%q want=%q", key, counts[key], values[key], want)
+		}
+	}
+	for _, key := range []string{string(KeyTimestamp), "service.name"} {
+		if counts[key] != 0 {
+			t.Errorf("ExtraAttrs 保留键 %s 未过滤", key)
+		}
+	}
+	if values["app.order_id"] != "ORD-1" {
+		t.Errorf("合法 ExtraAttrs 丢失: %v", values)
+	}
+
+	sampler := ResultKeepSampler{Ratio: 0}
+	if !sampler.Sample(context.Background(), attrs) {
+		t.Error("伪造 app.result 不应绕过 failed 强制保留规则")
 	}
 }
 

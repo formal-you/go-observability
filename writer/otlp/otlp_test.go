@@ -13,7 +13,8 @@ import (
 
 // captureProcessor 捕获 OnEmit 收到的 Record，用于断言 LogRecord 形状，不依赖真实 Collector。
 type captureProcessor struct {
-	records []sdklog.Record
+	records       []sdklog.Record
+	shutdownCalls int
 }
 
 func (p *captureProcessor) Enabled(context.Context, sdklog.EnabledParameters) bool { return true }
@@ -23,13 +24,94 @@ func (p *captureProcessor) OnEmit(_ context.Context, r *sdklog.Record) error {
 	return nil
 }
 
-func (p *captureProcessor) Shutdown(context.Context) error   { return nil }
+func (p *captureProcessor) Shutdown(context.Context) error {
+	p.shutdownCalls++
+	return nil
+}
 func (p *captureProcessor) ForceFlush(context.Context) error { return nil }
 
 // newCaptureWriter 构造使用 captureProcessor 的 Writer（测试专用，绕开真实 exporter）。
 func newCaptureWriter(p *captureProcessor) *Writer {
 	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(p))
-	return &Writer{logger: provider.Logger("test"), provider: provider}
+	return &Writer{logger: provider.Logger("test"), provider: provider, ownsProvider: true}
+}
+
+// TestInjectedProviderOwnership 验证注入的共享 provider 不归 Writer 所有，Close 不会关闭它。
+func TestInjectedProviderOwnership(t *testing.T) {
+	p := &captureProcessor{}
+	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(p))
+	w, err := New(context.Background(), WithLoggerProvider(provider))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.ownsProvider {
+		t.Fatal("ownsProvider = true, want false")
+	}
+	if err := w.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if p.shutdownCalls != 0 {
+		t.Fatalf("Shutdown calls = %d, want 0", p.shutdownCalls)
+	}
+	if err := provider.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if p.shutdownCalls != 1 {
+		t.Fatalf("provider Shutdown calls = %d, want 1", p.shutdownCalls)
+	}
+}
+
+// TestParseEndpoint 验证 host:port 与 http(s) URL 均可用，非法输入会显式报错。
+func TestParseEndpoint(t *testing.T) {
+	valid := map[string]string{
+		"collector:4317":                      "http://collector:4317",
+		"127.0.0.1:4317":                      "http://127.0.0.1:4317",
+		"[::1]:4317":                          "http://[::1]:4317",
+		"http://collector:4317":               "http://collector:4317",
+		"https://collector.example.com:4317/": "https://collector.example.com:4317/",
+	}
+	for endpoint, want := range valid {
+		t.Run("valid_"+endpoint, func(t *testing.T) {
+			got, err := parseEndpoint(endpoint)
+			if err != nil {
+				t.Fatalf("parseEndpoint(%q) error = %v", endpoint, err)
+			}
+			if got != want {
+				t.Fatalf("parseEndpoint(%q) = %q, want %q", endpoint, got, want)
+			}
+		})
+	}
+
+	invalid := []string{
+		"",
+		"collector",
+		"collector:",
+		":4317",
+		"collector:not-a-port",
+		"collector:70000",
+		"grpc://collector:4317",
+		"http://",
+		"https://collector:0",
+		"https://user@collector:4317",
+		"https://collector:4317/v1/logs",
+		"https://collector:4317?tenant=mall",
+	}
+	for _, endpoint := range invalid {
+		t.Run("invalid_"+endpoint, func(t *testing.T) {
+			if _, err := parseEndpoint(endpoint); err == nil {
+				t.Fatalf("parseEndpoint(%q) error = nil, want non-nil", endpoint)
+			}
+		})
+	}
+}
+
+// TestNewRejectsInvalidEndpoint 验证非法 endpoint 通过公开构造入口返回错误。
+func TestNewRejectsInvalidEndpoint(t *testing.T) {
+	provider := sdklog.NewLoggerProvider()
+	defer provider.Shutdown(context.Background())
+	if _, err := New(context.Background(), WithLoggerProvider(provider), WithEndpoint("collector")); err == nil {
+		t.Fatal("New with invalid endpoint error = nil, want non-nil")
+	}
 }
 
 // TestWriteRecordShape 验证 timestamp/level 映射到顶层字段，保留键不写入属性。

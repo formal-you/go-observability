@@ -293,6 +293,13 @@ func TestIsRetryExhausted(t *testing.T) {
 	if !errs.IsRetryExhausted(wrapped) {
 		t.Error("IsRetryExhausted(wrapped) = false, want true")
 	}
+	if !errs.IsRetryExhausted(&exhausted) {
+		t.Error("IsRetryExhausted(&exhausted) = false, want true")
+	}
+	wrappedPointer := fmt.Errorf("wrap pointer: %w", &exhausted)
+	if !errs.IsRetryExhausted(wrappedPointer) {
+		t.Error("IsRetryExhausted(wrapped pointer) = false, want true")
+	}
 }
 
 func TestCaptureSource(t *testing.T) {

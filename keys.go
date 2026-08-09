@@ -71,5 +71,5 @@ const (
 	KeyAppErrorCode         Key = "app.error_code"
 	KeyAppSource            Key = "app.source"
 	// 领域专属键（order_id/amount/…）不在核心登记：由接入方自建（example/mall）
-	// 经 BusinessPayload.ExtraAttrs 注入，前缀仍用 app.*（C1）。
+	// 经 BusinessPayload.ExtraAttrs 注入，前缀仍使用 app.*。
 )

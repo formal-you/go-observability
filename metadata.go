@@ -9,7 +9,7 @@ import (
 
 // EventMetadata 公共元数据。
 // service/version/env/instance 由 SDK Resource 提供，不在此出现。
-// 字段语义（A 全保留，2026-08-09 定稿）：
+// 字段语义：
 //
 //	TraceID   跨服务关联主键，日志↔trace 跳转靠它；
 //	SpanID    单服务内把日志钉到具体子 span（大单体一个请求多个 span）；
@@ -31,7 +31,7 @@ type EventMetadata struct {
 	SpanID string
 
 	// RequestID 对外暴露的报障凭证：显式值优先（如网关 X-Request-ID），为空且 TraceID 非空时
-	// 由归一化层派生 TraceID 前缀（12 hex，A4 免映射表约定，后端前缀匹配回查）。空值省略。
+	// 由归一化层派生 TraceID 前缀（12 hex，便于后端前缀匹配回查）。空值省略。
 	RequestID string
 
 	// LatencyMS 请求/操作耗时（毫秒）。日志侧独立承载延迟：trace 可能被头部采样丢弃，日志保留时

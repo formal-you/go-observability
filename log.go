@@ -109,6 +109,9 @@ type Logger struct {
 
 // NewLogger 创建 Logger。writer 必填。
 func NewLogger(writer Writer, opts ...Option) *Logger {
+	if writer == nil {
+		panic("log: Writer 不能为空")
+	}
 	l := &Logger{writer: writer}
 	for _, opt := range opts {
 		opt(&l.options)
