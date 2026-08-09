@@ -1,0 +1,87 @@
+# =============================================================================
+# OTel Collector（contrib）最小参考配置 — 字段注释版
+# 生产请复制后改 endpoint / 认证 / 保留策略；完整栈见 observability/otel-collector-config.yaml
+# 镜像建议: otel/opentelemetry-collector-contrib（需 prometheusremotewrite 等组件）
+# =============================================================================
+
+receivers:
+  # otlp: 应用 OTLP 入口（go-observability writer/otlp + telemetry exporters）
+  otlp:
+    protocols:
+      # grpc: 默认 4317；与 OTEL_EXPORTER_OTLP_ENDPOINT 对齐
+      grpc:
+        endpoint: 0.0.0.0:4317
+      # http: 默认 4318；浏览器/部分 SDK 用 HTTP
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # batch: 二次批量，降网络次数；与 App 侧 BSP/BLRP 叠加
+  batch:
+    # timeout: 等待批量的最长时间
+    timeout: 1s
+    # send_batch_size: 条数上限（span/log/metric 点，视信号而定）
+    send_batch_size: 512
+
+  # --- 可选：尾部采样（错误/慢请求必留）。默认注释；开启后 traces pipeline 加入本 processor ---
+  # tail_sampling:
+  #   decision_wait: 10s          # 等待 trace 完整的时间
+  #   num_traces: 50000           # 内存中 trace 上限
+  #   policies:
+  #     - name: status-error
+  #       type: status_code
+  #       status_code:
+  #         status_codes: [ERROR]
+  #     - name: probabilistic-rest
+  #       type: probabilistic
+  #       probabilistic:
+  #         sampling_percentage: 10
+
+  # --- 可选：日志二次脱敏（A6 Collector 兜底）---
+  # transform/logs_redact:
+  #   log_statements:
+  #     - context: log
+  #       statements:
+  #         - replace_pattern(attributes["http.request.header.authorization"], ".*", "***")
+
+exporters:
+  # otlp/tempo: Trace → Tempo（gRPC）
+  otlp/tempo:
+    # endpoint: Tempo OTLP 接收地址（compose 内常用 tempo:4317）
+    endpoint: tempo:4317
+    tls:
+      # insecure: 本地开发 true；生产应 false + 证书
+      insecure: true
+
+  # otlphttp/loki: Log → Loki 3.x OTLP 入口
+  otlphttp/loki:
+    # endpoint: 须含 /otlp 路径（Loki OTLP）
+    endpoint: http://loki:3100/otlp
+
+  # prometheusremotewrite/mimir: Metric → Mimir（Prometheus 兼容面，A1）
+  prometheusremotewrite/mimir:
+    endpoint: http://mimir:9009/api/v1/push
+    tls:
+      insecure: true
+    # resource_to_telemetry_conversion: 把 resource 属性打到 metric 标签
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  pipelines:
+    # traces: 应用 span →（可选 tail_sampling）→ batch → Tempo
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      # processors: [tail_sampling, batch]
+      exporters: [otlp/tempo]
+    # metrics: 应用 metric → batch → Mimir
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheusremotewrite/mimir]
+    # logs: 应用 log → batch → Loki
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/loki]

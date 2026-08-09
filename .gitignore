@@ -1,6 +1,22 @@
 # 构建产物
 *.exe
+*.test
+/bin/
+/dist/
 
-# 示例运行日志
+# 依赖 / IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# 示例运行日志与本地 env（保留 .env.example）
 example/logs/
+example/config/.env
 samber-out.jsonl
+*.jsonl
+!**/testdata/**/*.jsonl
+
+# 覆盖率
+coverage.out
+coverage.html

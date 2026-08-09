@@ -1,12 +1,20 @@
-# Error 告警规则模板（Prometheus / Mimir ruler 风格示例）
-# 对齐设计 A5：按 error.type 聚合；business.* / validation 不进系统告警。
-# 阈值、路由、通知渠道由接入方填写。库只保证日志/span 上有 error.type。
+# =============================================================================
+# Error 告警规则模板（Prometheus / Mimir ruler 风格）— 字段注释版
+# 对齐 A5：按 error.type 聚合；business.* / validation 不进系统告警
+# 下列 metric 名为示意，须换成接入方真实导出名称
+# =============================================================================
 
 groups:
+  # name: 规则组名（ruler 内唯一）
+  # interval: 评估周期
   - name: go-observability-errors
     interval: 1m
     rules:
-      # 示例：从日志指标或 span metrics 聚合；真实 metric 名由接入方导出方式决定。
+      # alert: 告警名称（通知里显示）
+      # expr: PromQL；>0 即出现 panic 类日志/指标
+      # for: 持续多久才 firing；0m = 立即
+      # labels.severity: 路由用
+      # annotations: 摘要与排障提示（可带 trace 链接模板）
       - alert: RuntimePanic
         expr: sum(rate(log_events_total{error_type="runtime.panic"}[5m])) > 0
         for: 0m
@@ -17,6 +25,7 @@ groups:
           description: "error.type=runtime.panic；带 trace_id 跳转排障。"
 
       - alert: InfraErrorRateHigh
+        # 基础设施错误率 > 1% 持续 5m（阈值自定）
         expr: |
           sum(rate(log_events_total{error_type=~"db\\..*|redis\\..*|mq\\..*"}[5m]))
           /

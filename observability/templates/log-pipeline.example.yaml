@@ -1,37 +1,49 @@
-# Log 管线模板（使用者自有）
-# 对齐 go-observability writer/otlp → Collector → Loki。
-# 应用侧：file/stdout/OTLP Writer；事件模型见根包 Access/Business/Error/Audit/Security/Probe。
+# =============================================================================
+# Log 管线模板（使用者自有）— 字段注释版
+# 对齐：go-observability writer/otlp → Collector → Loki
+# 复制后改：endpoint、batch、脱敏规则
+# =============================================================================
 
 receivers:
+  # otlp: 接收应用 OTLP Logs（otlploggrpc）
   otlp:
     protocols:
+      # grpc.endpoint: 监听地址；与应用 OTEL_EXPORTER_OTLP_ENDPOINT 端口一致
       grpc:
         endpoint: 0.0.0.0:4317
+      # http.endpoint: OTLP HTTP（可选）
       http:
         endpoint: 0.0.0.0:4318
 
 processors:
+  # batch.timeout: 最长等待时间后再发送
+  # batch.send_batch_size: 单批最大条数
   batch:
     timeout: 1s
     send_batch_size: 256
-  # 可选：Collector 二次脱敏（A6 兜底）。规则由接入方维护。
+  # 可选 A6 二次脱敏（示例，默认关闭）
   # transform/logs_redact:
   #   log_statements:
   #     - context: log
   #       statements:
-  #         - replace_pattern(attributes["user.agent.original"], "token=[^&]+", "token=***")
+  #         - replace_pattern(attributes["user_agent.original"], "token=[^&]+", "token=***")
 
 exporters:
-  otlp_http/loki:
+  # otlphttp/loki.endpoint: Loki 3.x OTLP 入口，路径必须含 /otlp
+  otlphttp/loki:
     endpoint: http://loki:3100/otlp
 
 service:
   pipelines:
+    # logs: 唯一日志管线
     logs:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp_http/loki]
+      exporters: [otlphttp/loki]
 
-# 常用查询键（库已写入属性 / LogRecord）：
-#   event.name, error.type, app.result, trace_id(via context),
-#   http.request.method, url.path, http.response.status_code
+# 常用查询键（库写入属性或 LogRecord 顶层）：
+#   event.name          — 事件细名（三段式）
+#   error.type          — 低基数失败类
+#   app.result          — success|failed|error|blocked|denied
+#   http.request.method / url.path / http.response.status_code
+#   trace 关联：OTLP 经 span context；JSONL 扁平列 trace_id/span_id

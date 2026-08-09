@@ -1,30 +1,35 @@
-# Metric 管线模板（使用者自有）
-# 复制后改：endpoint、job 标签、histogram 桶、保留策略。
-# go-observability 不强制任何业务指标名；应用用 OTel Meter 自建。
+# =============================================================================
+# Metric 管线模板（使用者自有）— 字段注释版
+# 库不强制业务指标名；应用用 Providers.Meter() 自建（B5）
+# =============================================================================
 
 receivers:
   otlp:
     protocols:
       grpc:
-        endpoint: 0.0.0.0:4317
+        endpoint: 0.0.0.0:4317   # 与 metric OTLP exporter 一致
       http:
         endpoint: 0.0.0.0:4318
 
 processors:
   batch:
-    timeout: 1s
-    send_batch_size: 512
-  # 可选：丢掉高基数标签（按接入方标签策略开启）
+    timeout: 1s                 # 批量等待
+    send_batch_size: 512        # 单批上限
+  # 可选：丢掉高基数标签（按接入方策略开启）
   # attributes/metric_drop:
   #   actions:
-  #     - key: http.route
+  #     - key: http.route       # 示例：若 route 未模板化则删除
   #       action: delete
 
 exporters:
+  # prometheusremotewrite: A1 规定 Prometheus 仅兼容面，存储用 Mimir 等
   prometheusremotewrite/mimir:
+    # endpoint: Mimir remote_write 推送 URL
     endpoint: http://mimir:9009/api/v1/push
     tls:
       insecure: true
+    # resource_to_telemetry_conversion.enabled:
+    #   true = service.name 等 resource 变成 metric 标签，便于 PromQL
     resource_to_telemetry_conversion:
       enabled: true
 
@@ -34,3 +39,7 @@ service:
       receivers: [otlp]
       processors: [batch]
       exporters: [prometheusremotewrite/mimir]
+
+# 应用侧：
+#   MetricExportInterval 默认 15s（telemetry.Config）
+# 命名惯例：metric-names.example.md（非库契约）

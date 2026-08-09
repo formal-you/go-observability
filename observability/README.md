@@ -4,6 +4,12 @@
 Tempo 存储 trace、Loki 存储 log、Mimir 存储 metric、Grafana 展示）与 A2（collector 用
 contrib 发行版）。本组件（根包 log 的 writer/otlp 等）统一走 OTLP 直推 collector。
 
+**应用侧配置（env / YAML，带字段注释）** → [`example/config/`](../example/config/)
+
+**配置语义说明** → [`docs/configuration.md`](../docs/configuration.md)
+
+**可复制管线模板（字段注释）** → [`templates/`](templates/)
+
 ## 组成
 
 - otel-collector（otel/opentelemetry-collector-contrib）— 接收 OTLP（4317/4318），批量后分发

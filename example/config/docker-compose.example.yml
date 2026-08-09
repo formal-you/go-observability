@@ -1,0 +1,30 @@
+# =============================================================================
+# 本地联调示意：本文件不启动 LGTM 全栈，只示范「应用如何挂 env」。
+# 先启动仓库 observability 栈，再跑 example：
+#
+#   docker compose -f observability/docker-compose.yml up -d
+#   # 然后：
+#   set -a && source example/config/.env.example && set +a   # 按需取消注释
+#   go run ./example
+#
+# 若要把应用也放进 compose，取消下面 app 服务注释并改 build 上下文。
+# =============================================================================
+
+# services:
+#   app:
+#     build: ../..
+#     environment:
+#       # 见 .env.example 字段说明
+#       OTEL_SDK_DISABLED: "false"
+#       OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
+#       GO_OBSERVABILITY_REGION: "local"
+#       GO_OBSERVABILITY_INSTANCE: "app-1"
+#     ports:
+#       - "8080:8080"
+#     depends_on:
+#       - otel-collector
+#     # network 需与 observability/docker-compose.yml 同一外部网络，或合并为单文件
+
+# 推荐：应用跑在宿主机，collector 映射 127.0.0.1:4317（见 observability/docker-compose.yml）
+version: "3.9"
+services: {}

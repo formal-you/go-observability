@@ -1,15 +1,26 @@
-﻿# OTel Collector（contrib）参考配置：接收 OTLP（4317/4318），批量后分发
-#   traces  -> Tempo（otlp_grpc）
-#   logs    -> Loki（otlp_http /otlp）
-#   metrics -> Mimir（prometheusremotewrite，对齐 A1：Prometheus 仅作格式/兼容面，Mimir 存储）
+﻿# =============================================================================
+# OTel Collector（contrib）— 本仓库 LGTM 参考栈使用的配置（字段注释）
+# 启动：docker compose -f observability/docker-compose.yml up -d
+# 应用：OTEL_EXPORTER_OTLP_ENDPOINT=127.0.0.1:4317
+# 更完整的「复制到生产」注释版见 example/config/collector.example.yaml
+# =============================================================================
+#
+# 数据流：
+#   traces  -> Tempo（otlp gRPC）
+#   logs    -> Loki（otlp HTTP /otlp）
+#   metrics -> Mimir（prometheusremotewrite；A1：Prometheus 仅兼容面）
+
 receivers:
+  # otlp: 唯一默认接收器；应用 writer/otlp + telemetry 三 exporter 打到此
   otlp:
     protocols:
+      # grpc.endpoint: 0.0.0.0 表示容器内全接口；compose 映射 127.0.0.1:4317
       grpc:
         endpoint: 0.0.0.0:4317
+      # http.endpoint: OTLP/HTTP，映射 4318
       http:
         endpoint: 0.0.0.0:4318
-  # 可选：零代码 docker 日志采集（filelog）。本组件默认 OTLP 直推，此块仅供参考。
+  # 可选：零代码 docker 日志（filelog）。本组件默认 OTLP 直推，此块仅供参考。
   # filelog:
   #   include: ["/var/lib/docker/containers/*/*-json.log"]
   #   start_at: beginning
@@ -29,17 +40,24 @@ receivers:
   #     service.name: go-observability-demo
 
 processors:
+  # batch.timeout: 等待凑批最长时间
+  # batch.send_batch_size: 单批最大条数
   batch:
     timeout: 1s
     send_batch_size: 256
 
 exporters:
+  # otlp_grpc/tempo.endpoint: compose 服务名 tempo，容器网络内 4317
+  # tls.insecure: 本地无 TLS
   otlp_grpc/tempo:
     endpoint: tempo:4317
     tls:
       insecure: true
+  # otlp_http/loki.endpoint: Loki 3 OTLP，必须带 /otlp
   otlp_http/loki:
     endpoint: http://loki:3100/otlp
+  # prometheusremotewrite/mimir.endpoint: Mimir 推送 API
+  # resource_to_telemetry_conversion: resource 属性 → metric 标签
   prometheusremotewrite/mimir:
     endpoint: http://mimir:9009/api/v1/push
     tls:
@@ -49,6 +67,7 @@ exporters:
 
 service:
   pipelines:
+    # traces / metrics / logs：三信号分管线，processors 仅 batch（可加 tail_sampling）
     traces:
       receivers: [otlp]
       processors: [batch]
