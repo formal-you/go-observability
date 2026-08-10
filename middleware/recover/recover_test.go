@@ -99,7 +99,7 @@ func TestMiddlewareCatchesPanicAndEmitsErrorEvent(t *testing.T) {
 // TestMiddlewareNilRecoverPassthrough 验证 recover() 返回 nil 时中间件直接放行：
 // handler 正常返回（无 panic）时 defer 中 recover() 为 nil，不写错误事件、不改响应。
 // 注意：Go 1.21+ 的 panic(nil) 会转为非 nil 的 *runtime.PanicNilError，
-// 因此本仓库 Go 1.25 下无法用 panic(nil) 触发 nil 分支，只能以正常返回路径覆盖。
+// 因此本仓库 Go 1.21+ 下无法用 panic(nil) 触发 nil 分支，只能以正常返回路径覆盖。
 func TestMiddlewareNilRecoverPassthrough(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}

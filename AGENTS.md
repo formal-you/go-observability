@@ -5,7 +5,7 @@
 
 ## 项目身份
 
-- 模块路径：`github.com/formal-you/go-observability`；Go 1.25。
+- 模块路径：`github.com/formal-you/go-observability`；Go 1.26。
 - 定位：基于 OpenTelemetry 语义约定的语义化日志组件，采用「方案2 源即规范」——属性键直接用 OTel semconv 1.41.0 名 + `app.*` vendor 命名空间。
 - 核心 log 包零外部依赖（仅标准库：log/slog、net、time、fmt、strings）；OTel 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`（gin/errresp/recover/nethttp 用 OTel trace 提取 span context）、`example/*`。
 - 批量导出分两层：SDK 侧由 telemetry.Config 的批量导出间隔控制，Collector 侧由 batch processor 二次凑批；核心层每次 Emit 同步写出，不做批处理/定时器。
@@ -15,7 +15,7 @@
 1. 事件名（EventName）须为经 `Validate` 的三段式常量，禁止在中间件/生产埋点里散落手写字符串。
    - **框架级**（access/error 中间件默认等）登记在核心 `types.go`（如 `EventNameAccessHTTPRequest`）。
    - **领域 business.*** 由接入方自建注册表（见 `example/mall`），可用 `NewEventName` 或包内 `const EventName = "business.…"`；不要把电商等领域名写进核心 `types.go`。
-2. semconv 键名以 1.41.0 为准（核对 `$GOMODCACHE/go.opentelemetry.io/otel@v1.44.0/semconv/v1.41.0` 常量）：
+2. semconv 键名以 1.41.0 为准（核对 `$GOMODCACHE/go.opentelemetry.io/otel@v1.45.0/semconv/v1.41.0` 常量）：
    - 路径用 `url.path`（不是 `http.request.path`）；
    - 代码位置用 `code.function.name` / `code.file.path` / `code.line.number`（不是 `code.function` / `code.filepath` / `code.lineno`）；
    - `event.name` 走 LogRecord 的 EventName 顶层字段，不写属性（属性名 `otel.event.name` 仅桥接场景用）。

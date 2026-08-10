@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	otelog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/trace"
@@ -196,8 +197,8 @@ func TestWriteSmoke(t *testing.T) {
 
 func recordKeys(rec *sdklog.Record) []string {
 	var keys []string
-	rec.WalkAttributes(func(kv otelog.KeyValue) bool {
-		keys = append(keys, kv.Key)
+	rec.WalkAttributes(func(kv attribute.KeyValue) bool {
+		keys = append(keys, string(kv.Key))
 		return true
 	})
 	return keys

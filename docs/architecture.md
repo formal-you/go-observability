@@ -107,7 +107,7 @@ go-observability/
 ├── AGENTS.md                    # 仓库开发守则（真源之一；防漂移硬规则）
 ├── README.md                    # 项目首页（真源之一）
 ├── CHANGELOG.md / LICENSE / SECURITY.md / SUPPORT.md / CONTRIBUTING.md / CODE_OF_CONDUCT.md
-├── go.mod / go.sum              # Go 1.25；OTel 依赖集中在装配层
+├── go.mod / go.sum              # Go 1.26；OTel 依赖集中在装配层
 └── 根测试文件                    # 与根包同目录的黑盒/单元测试（见上）
 ```
 
@@ -190,7 +190,7 @@ go-observability/
 | --- | --- | --- |
 | 核心零依赖 | 根包 `log` 的 import 是否仅标准库 | `go list -deps ./` 或 grep 根包 import |
 | 事件名规范性 | `types.go` 注册表、`Validate` 实现与测试 | `go test ./...` |
-| 键名 semconv | `keys.go` 与 `$GOMODCACHE/go.opentelemetry.io/otel@v1.44.0/semconv/v1.41.0` 对照 | 人工比对 |
+| 键名 semconv | `keys.go` 与 `$GOMODCACHE/go.opentelemetry.io/otel@v1.45.0/semconv/v1.41.0` 对照 | 人工比对 |
 | 归一化/保留键 | `normalize.go reservedKeys` 与 `attrkv.recordAttrKeys` 一致性 | `go test ./... -run Record` |
 | 双投影形状 | `writer/otlp`、`writer/file`、`writer/stdout` 的输出测试 | `go test ./writer/...` |
 | 错误投影 | `error_project.go`：Kind 分派、`LevelOf`、`StackRule`、值/指针/`%w` 链/nil | `go test ./... -run Error` |

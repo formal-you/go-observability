@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/formal-you/go-observability/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/formal-you/go-observability/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://go.dev/"><img alt="Go 1.25+" src="https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white"></a>
+  <a href="https://go.dev/"><img alt="Go 1.26+" src="https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go&logoColor=white"></a>
   <a href="https://opentelemetry.io/"><img alt="OpenTelemetry" src="https://img.shields.io/badge/OpenTelemetry-semconv%201.41.0-4f62ad"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
 </p>

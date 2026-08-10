@@ -6,6 +6,7 @@ import (
 	"time"
 
 	corelog "github.com/formal-you/go-observability"
+	"go.opentelemetry.io/otel/attribute"
 	otelog "go.opentelemetry.io/otel/log"
 )
 
@@ -59,8 +60,8 @@ func TestToKeyValuesTypes(t *testing.T) {
 	if kvs[4].Key != "app.audit" {
 		t.Errorf("group 键 = %q, want app.audit", kvs[4].Key)
 	}
-	if kvs[4].Value.Kind() != otelog.KindMap {
-		t.Fatalf("group kind = %v, want Map", kvs[4].Value.Kind())
+	if kvs[4].Value.Type() != attribute.MAP {
+		t.Fatalf("group kind = %v, want Map", kvs[4].Value.Type())
 	}
 	group := kvs[4].Value.AsMap()
 	if len(group) != 1 || group[0].Key != "actor" || group[0].Value.AsString() != "admin" {
@@ -82,34 +83,34 @@ func TestToKeyValuesAnyRecursive(t *testing.T) {
 		"items":  []any{"first", int64(2), map[string]any{"ok": false}},
 		"valuer": testLogValuer{},
 	})})
-	if len(kvs) != 1 || kvs[0].Value.Kind() != otelog.KindMap {
+	if len(kvs) != 1 || kvs[0].Value.Type() != attribute.MAP {
 		t.Fatalf("payload = %v, want one Map value", kvs)
 	}
 
 	payload := mapValues(kvs[0].Value.AsMap())
-	if payload["active"].Kind() != otelog.KindBool || !payload["active"].AsBool() {
+	if payload["active"].Type() != attribute.BOOL || !payload["active"].AsBool() {
 		t.Errorf("active = %v, want Bool(true)", payload["active"])
 	}
-	if payload["count"].Kind() != otelog.KindInt64 || payload["count"].AsInt64() != 3 {
+	if payload["count"].Type() != attribute.INT64 || payload["count"].AsInt64() != 3 {
 		t.Errorf("count = %v, want Int64(3)", payload["count"])
 	}
 	labels := payload["labels"]
-	if labels.Kind() != otelog.KindSlice || len(labels.AsSlice()) != 2 || labels.AsSlice()[1].AsString() != "checkout" {
+	if labels.Type() != attribute.SLICE || len(labels.AsSlice()) != 2 || labels.AsSlice()[1].AsString() != "checkout" {
 		t.Errorf("labels = %v, want [mall checkout]", labels)
 	}
 	items := payload["items"]
-	if items.Kind() != otelog.KindSlice || len(items.AsSlice()) != 3 {
+	if items.Type() != attribute.SLICE || len(items.AsSlice()) != 3 {
 		t.Fatalf("items = %v, want three-item Slice", items)
 	}
-	if items.AsSlice()[2].Kind() != otelog.KindMap {
+	if items.AsSlice()[2].Type() != attribute.MAP {
 		t.Fatalf("items[2] = %v, want Map", items.AsSlice()[2])
 	}
 	itemMap := mapValues(items.AsSlice()[2].AsMap())
-	if itemMap["ok"].Kind() != otelog.KindBool || itemMap["ok"].AsBool() {
+	if itemMap["ok"].Type() != attribute.BOOL || itemMap["ok"].AsBool() {
 		t.Errorf("items[2] = %v, want Map(ok=false)", items.AsSlice()[2])
 	}
 	valuer := payload["valuer"]
-	if valuer.Kind() != otelog.KindMap || mapValues(valuer.AsMap())["resolved"].AsString() != "yes" {
+	if valuer.Type() != attribute.MAP || mapValues(valuer.AsMap())["resolved"].AsString() != "yes" {
 		t.Errorf("valuer = %v, want resolved Map", valuer)
 	}
 }
@@ -134,15 +135,15 @@ func TestAuditEventFieldsRemainStructured(t *testing.T) {
 	values := mapValues(ToKeyValues(attrs))
 	before := values[string(corelog.KeyAppBefore)]
 	after := values[string(corelog.KeyAppAfter)]
-	if before.Kind() != otelog.KindMap || after.Kind() != otelog.KindMap {
-		t.Fatalf("before/after kind = %v/%v, want Map/Map", before.Kind(), after.Kind())
+	if before.Type() != attribute.MAP || after.Type() != attribute.MAP {
+		t.Fatalf("before/after kind = %v/%v, want Map/Map", before.Type(), after.Type())
 	}
 	beforeValues := mapValues(before.AsMap())
 	if beforeValues["role"].AsString() != "viewer" {
 		t.Errorf("before.role = %v, want viewer", beforeValues["role"])
 	}
 	metadata := beforeValues["metadata"]
-	if metadata.Kind() != otelog.KindMap || mapValues(metadata.AsMap())["approved"].AsBool() {
+	if metadata.Type() != attribute.MAP || mapValues(metadata.AsMap())["approved"].AsBool() {
 		t.Errorf("before.metadata = %v, want Map(approved=false)", metadata)
 	}
 	if mapValues(after.AsMap())["role"].AsString() != "admin" {
@@ -150,10 +151,10 @@ func TestAuditEventFieldsRemainStructured(t *testing.T) {
 	}
 }
 
-func mapValues(kvs []otelog.KeyValue) map[string]otelog.Value {
-	values := make(map[string]otelog.Value, len(kvs))
+func mapValues(kvs []attribute.KeyValue) map[string]attribute.Value {
+	values := make(map[string]attribute.Value, len(kvs))
 	for _, kv := range kvs {
-		values[kv.Key] = kv.Value
+		values[string(kv.Key)] = kv.Value
 	}
 	return values
 }
