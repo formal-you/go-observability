@@ -23,7 +23,7 @@
 | OTel 映射 | `internal/attrkv` | `slog.Attr` ↔ OTel 值转换 + LogRecord 顶层字段映射（唯一核心映射层） |
 | endpoint 校验 | `internal/otlpendpoint` | OTLP gRPC endpoint 统一校验与规范化（host:port / http(s) URL） |
 | 三信号装配 | `telemetry` | 创建并关闭 Trace / Metric / Log Provider，选择日志出口 |
-| HTTP 集成 | `middleware/ginlog`、`middleware/recover`、`middleware/errresp` | Gin access 日志、panic 收口与统一错误响应；net/http 见 `example/nethttp` |
+| HTTP/gRPC 集成 | `middleware/ginlog`、`middleware/recover`、`middleware/errresp`、`middleware/kratos` | Gin access 日志、panic 收口与统一错误响应；net/http 见 `example/nethttp`；kratos v3 见 `middleware/kratos`（HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter） |
 
 依赖方向：`errs` 与根包 `log` 互不依赖对方实现（根包经 `EventFromError` 消费 `errs.AppError` 接口，`errs` 不依赖根包）；`middleware` 依赖根包与 `errs`（ginlog 只依赖根包，errresp/recover 还依赖 `errs`）；`writer/*`、`telemetry` 依赖根包与 `internal/*`。
 
@@ -76,7 +76,8 @@ go-observability/
 ├── middleware/
 │   ├── ginlog/ginlog.go         # Gin access 事件中间件（status→level/result 映射、trace/request 提取）
 │   ├── errresp/errresp.go       # Gin 统一错误收口：读 c.Errors，按 errs.Kind 映射状态码/响应体并投影事件
-│   └── recover/recover.go       # Gin panic 收口（构造 SystemError → EventFromError → 统一 500）
+│   ├── recover/recover.go       # Gin panic 收口（构造 SystemError → EventFromError → 统一 500）
+│   └── kratos/kratos.go         # kratos v3 适配：HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter（errs/kratos 原生错误双识别）
 │
 ├── telemetry/
 │   └── telemetry.go             # 三信号 Provider 装配 + Shutdown + NewLogWriter 出口选择
@@ -139,7 +140,9 @@ go-observability/
   -> log.EventFromError(eventName, err, md) 沿错误链提取 AppError 并按 Kind 分派：
        ├─ KindValidation / KindBusiness → BusinessEvent（Result=failed，Level=WARN）
        ├─ KindSystem / 普通 error → ErrorEvent（Result=error，Level=LevelOf(err)）
-       └─ StackRule(err.ErrorType())==must 时补 StackTrace（runtime/db/redis/mq/http 前缀）
+       └─ StackMust 类别在 errs.NewSystem 构造点自动采集堆栈（runtime/db/redis/mq/http 前缀，
+           runtime.context_cancelled 降为 optional 不自动采集）；投影仅渲染已采集的 StackTrace；
+           默认策略可用 errs.SetStackPolicy 按 error.type 前缀覆盖（最长前缀优先，空=库默认）
   -> 进入 4.1 同一条 Emit 管线写出
 ```
 
