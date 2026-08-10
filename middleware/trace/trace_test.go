@@ -284,3 +284,23 @@ func TestInjectGRPCMetadata(t *testing.T) {
 		t.Fatalf("traceparent = %v, want 包含 %s", got, span.SpanContext().TraceID().String())
 	}
 }
+
+// TestNewTraceExtractor 验证适配器：有有效 span 时返回其 trace_id/span_id，无 span 时返回空。
+func TestNewTraceExtractor(t *testing.T) {
+	tracer, _ := newTestTracer(t)
+	ctx := context.Background()
+	_, span := tracer.Start(ctx, "parent")
+	spanCtx := trace.ContextWithSpan(ctx, span)
+
+	ext := NewTraceExtractor()
+	if tc := ext.ExtractTraceContext(ctx); tc.TraceID != "" || tc.SpanID != "" {
+		t.Fatalf("无 span 时 ExtractTraceContext = %+v, want 空", tc)
+	}
+	tc := ext.ExtractTraceContext(spanCtx)
+	if tc.TraceID != span.SpanContext().TraceID().String() {
+		t.Fatalf("traceID = %s, want %s", tc.TraceID, span.SpanContext().TraceID().String())
+	}
+	if tc.SpanID != span.SpanContext().SpanID().String() {
+		t.Fatalf("spanID = %s, want %s", tc.SpanID, span.SpanContext().SpanID().String())
+	}
+}

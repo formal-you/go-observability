@@ -6,7 +6,7 @@
 //     rpc.method / rpc.grpc.status_code。
 //
 // 默认使用 go.opentelemetry.io/otel 全局 MeterProvider（telemetry.Setup 已全局安装），
-// 也可经 Config.Meter 显式注入；采样/导出频率由 telemetry 的 PeriodicReader 控制。
+// 也可经 Config.Meter 显式注入；导出间隔由 telemetry 的 PeriodicReader 控制。
 package metrics
 
 import (

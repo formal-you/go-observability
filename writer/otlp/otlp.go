@@ -1,5 +1,6 @@
 // Package otlp 提供基于 OTLP Logs 的 Writer：把事件写到 OTel 日志后端（Collector/Loki）。
-// 采集频率由 opentelemetry-collector 的 batch processor 配置控制，本包只负责导出。
+// 批量导出由 SDK 的 log batch processor（telemetry.Config.LogBatchTimeout）与 Collector
+// 的 batch processor 共同控制，本包只负责导出。
 package otlp
 
 import (
@@ -102,7 +103,8 @@ func (w *Writer) Close(ctx context.Context) error {
 
 // Write 把事件写为一条 OTLP LogRecord。
 // timestamp/level 映射为 LogRecord 顶层字段；trace_id/span_id 由 ctx 的 span context 关联，
-// 不写入属性。采集频率由 opentelemetry-collector 的 batch processor 控制，本方法同步 Emit 即返回。
+// 不写入属性。批量导出由 SDK 的 log batch processor 控制（Collector 侧另有 batch 二次凑批），
+// 本方法同步 Emit 即返回。
 func (w *Writer) Write(ctx context.Context, msg string, attrs ...slog.Attr) error {
 	rec, rest := attrkv.Record(msg, attrs)
 	rec.AddAttributes(attrkv.ToKeyValues(rest)...)

@@ -6,8 +6,9 @@ import (
 )
 
 // Logger 与 Writer：写出已归一化的事件。
-// 采集频率不在此层控制：由 opentelemetry-collector 的 batch processor 配置决定
-//（如 timeout / send_batch_size）。本层每次 Emit 直接调用 Writer，不内置批处理或定时器。
+// 批量导出不在此层控制：SDK 侧由 telemetry.Config 的批量导出间隔决定
+//（trace 5s / metric 15s / log 1s），Collector 侧由 batch processor 的 timeout /
+// send_batch_size 二次凑批。本层每次 Emit 直接调用 Writer，不内置批处理或定时器。
 
 // Writer 接收已归一化并扁平化的语义日志事件。
 // msg 当前等于事件的 event_type；attrs 同时包含公共 metadata 与 payload 字段。
@@ -47,14 +48,20 @@ type MaskerFunc func(ctx context.Context, attrs []slog.Attr) []slog.Attr
 
 func (f MaskerFunc) Mask(ctx context.Context, attrs []slog.Attr) []slog.Attr { return f(ctx, attrs) }
 
+// TraceExtractorFunc 允许以函数实现 TraceExtractor。
+type TraceExtractorFunc func(ctx context.Context) TraceContext
+
+func (f TraceExtractorFunc) ExtractTraceContext(ctx context.Context) TraceContext { return f(ctx) }
+
 // TraceContext 表示可补充到日志事件中的链路标识。
 type TraceContext struct {
 	TraceID string
 	SpanID  string
 }
 
-// TraceExtractor 从 context.Context 中提取链路标识。
-// 当前核心写出流程尚未自动调用该接口；保留它作为后续 tracing adapter 的边界。
+// TraceExtractor 从 context.Context 中提取链路标识，供 Logger 在事件未显式携带
+// trace_id/span_id 时自动补全。适配器由集成层注入（如 middleware/trace.NewTraceExtractor），
+// 核心包保持零 OTel 依赖。
 type TraceExtractor interface {
 	ExtractTraceContext(ctx context.Context) TraceContext
 }
@@ -66,10 +73,11 @@ type TraceExtractor interface {
 type Option func(*loggerOptions)
 
 type loggerOptions struct {
-	errorHandler ErrorHandler
-	baseMetadata EventMetadata
-	sampler      Sampler
-	masker       Masker
+	errorHandler   ErrorHandler
+	baseMetadata   EventMetadata
+	sampler        Sampler
+	masker         Masker
+	traceExtractor TraceExtractor
 }
 
 // WithErrorHandler 配置 Writer 写入失败时的观察函数。
@@ -100,6 +108,14 @@ func WithMasker(masker Masker) Option {
 	}
 }
 
+// WithTraceExtractor 配置链路标识自动补全：事件未显式设置 trace_id/span_id 时，
+// 从 ctx 提取并补全（不覆盖已设置的值）。未配置时保持现状（不补全）。
+func WithTraceExtractor(extractor TraceExtractor) Option {
+	return func(options *loggerOptions) {
+		options.traceExtractor = extractor
+	}
+}
+
 // Logger 写出语义日志事件：归一化 attrs 已由事件自身完成，
 // 本层顺序执行 默认 metadata 补全 → 脱敏 → 采样 → Writer.Write → 错误观察。
 type Logger struct {
@@ -124,6 +140,9 @@ func NewLogger(writer Writer, opts ...Option) *Logger {
 func (l *Logger) Emit(ctx context.Context, ev EventPayload) {
 	msg := string(ev.EventType())
 	attrs := mergeBaseMetadata(ev.Attrs(), l.options.baseMetadata)
+	if l.options.traceExtractor != nil {
+		attrs = fillTraceContext(attrs, l.options.traceExtractor.ExtractTraceContext(ctx))
+	}
 	if l.options.masker != nil {
 		attrs = l.options.masker.Mask(ctx, attrs)
 	}
@@ -133,6 +152,21 @@ func (l *Logger) Emit(ctx context.Context, ev EventPayload) {
 	if err := l.writer.Write(ctx, msg, attrs...); err != nil && l.options.errorHandler != nil {
 		l.options.errorHandler(ctx, msg, attrs, err)
 	}
+}
+
+// fillTraceContext 仅补全缺失的 trace_id/span_id，不覆盖事件已设置的值。
+func fillTraceContext(attrs []slog.Attr, tc TraceContext) []slog.Attr {
+	have := make(map[string]bool, len(attrs))
+	for _, a := range attrs {
+		have[a.Key] = true
+	}
+	if tc.TraceID != "" && !have[string(KeyTraceID)] {
+		attrs = append(attrs, slog.String(string(KeyTraceID), tc.TraceID))
+	}
+	if tc.SpanID != "" && !have[string(KeySpanID)] {
+		attrs = append(attrs, slog.String(string(KeySpanID), tc.SpanID))
+	}
+	return attrs
 }
 
 // mergeBaseMetadata 仅补全 attrs 中缺失的公共字段，不覆盖事件已设置的值。

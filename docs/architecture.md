@@ -9,7 +9,7 @@
 
 - **方案2「源即规范」**：属性键直接使用 OTel semconv 1.41.0 名 + `app.*` vendor 命名空间，字段名可追踪、不发明私有键。
 - **核心零依赖**：根包 `log` 只依赖标准库（`log/slog`、`net`、`time`、`fmt`、`strings`）；OTel SDK 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`、`example/*`。
-- **采集频率归 Collector**：核心层每次 `Emit` 同步写出，不做批处理/定时器；批量导出由 opentelemetry-collector 的 batch processor 控制。
+- **批量导出分两层**：SDK 侧由 `telemetry.Config` 的批量导出间隔控制（trace 5s / metric 15s / log 1s），Collector 侧由 batch processor（timeout / send_batch_size）二次凑批；核心层每次 `Emit` 同步写出，不做批处理/定时器。
 - **出口可替换**：同一事件模型可投影到 JSONL / stdout / OTLP，业务埋点不因出口变化而重写。
 
 ## 2. 分层架构
@@ -46,7 +46,7 @@ go-observability/
 │   ├── events.go                # 六类事件结构体（EventMetadata + Data）
 │   ├── normalize.go             # 归一化：metadata+payload → 扁平 attrs；reservedKeys 过滤；零值省略
 │   ├── log.go                   # Logger / Writer / Sampler / Masker / ErrorHandler / Option
-│   ├── sampler.go               # ResultKeepSampler：failed/error/blocked/denied 强制保留
+│   ├── sampler.go               # ResultKeepSampler（高价值结果强制保留）+ EventKeepSampler（事件前缀全量）
 │   ├── sampler_rand.go          # 并发安全随机源（math/rand/v2）
 │   ├── masker.go                # FieldMasker：按键名递归脱敏（group/map/slice/LogValuer）
 │   ├── error_project.go         # EventFromError / LevelOf：errs.AppError → 事件投影
@@ -194,7 +194,7 @@ go-observability/
 | 归一化/保留键 | `normalize.go reservedKeys` 与 `attrkv.recordAttrKeys` 一致性 | `go test ./... -run Record` |
 | 双投影形状 | `writer/otlp`、`writer/file`、`writer/stdout` 的输出测试 | `go test ./writer/...` |
 | 错误投影 | `error_project.go`：Kind 分派、`LevelOf`、`StackRule`、值/指针/`%w` 链/nil | `go test ./... -run Error` |
-| 采样/脱敏 | `sampler.go` 高价值保留、`masker.go` 递归脱敏与并发契约 | `go test ./... -run 'Sample|Mask'` |
+| 采样/脱敏 | `sampler.go` 高价值保留/事件前缀全量、`masker.go` 递归脱敏与并发契约 | `go test ./... -run 'Sample|Mask'` |
 | 错误收口 | `errresp.go`：Kind→状态码映射、system 响应不泄露、`Abort(nil)` 兜底、与 recover 不双写 | `go test ./middleware/errresp/...` |
 | 并发安全 | Logger 构造后只读；Writer/ErrorHandler 多 goroutine 语义 | `go test -race ./...` |
 | 三信号装配 | `telemetry.go` Setup 失败回滚、Shutdown 顺序、出口选择固化 | `go test ./telemetry/...` |

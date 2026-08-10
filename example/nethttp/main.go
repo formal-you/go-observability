@@ -41,7 +41,12 @@ func main() {
 	}
 	defer closeWriter(ctx, w)
 	logger := log.NewLogger(w,
-		log.WithSampler(log.ResultKeepSampler{Ratio: 1}),
+		log.WithSampler(log.NewEventKeepSampler(
+			[]string{"business.", "error.", "security.", "audit.", "probe."},
+			// 演示保持全量以便输出可复现；生产建议 0.1（access 成功按比例采样）。
+			log.NewResultKeepSampler(1),
+		)),
+		log.WithTraceExtractor(tracemw.NewTraceExtractor()),
 		log.WithMasker(log.FieldMasker{}),
 	)
 
@@ -74,6 +79,11 @@ func main() {
 func accessLog(logger *log.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+			// 心跳/健康检查是确定性噪音：直接短路，不产生 access 事件（不靠概率采样）。
+			if r.URL.Path == "/healthz" {
+				next.ServeHTTP(rw, r)
+				return
+			}
 			start := time.Now()
 			recorder := &statusRecorder{ResponseWriter: rw}
 			next.ServeHTTP(recorder, r)
