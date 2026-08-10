@@ -1,11 +1,12 @@
 // Package kratosmw 提供 go-observability 错误体系与 go-kratos v3 传输层的适配：
-// 自定义 HTTP ErrorEncoder 把 errs.AppError / kratos 原生错误映射为 kratos 错误契约
-// （code/reason/message/metadata，error.type 写入 metadata），以及错误日志中间件把
-// handler 返回的错误经 log.EventFromError 投影为错误事件（event.name/error.type/level）。
+// 自定义 HTTP ErrorEncoder 与 gRPC 错误映射把 errs.AppError / kratos 原生错误映射为
+// kratos 错误契约（code/reason/message/metadata，error.type 写入 metadata），以及错误
+// 日志中间件把 handler 返回的错误经 log.EventFromError 投影为错误事件
+// （event.name/error.type/level）。
 //
-// 与 kratos 默认 ErrorEncoder 的差异：非 AppError、非 kratos 原生的普通错误按
-// go-observability 语义兜底为 500 + 固定文案（error.type=error.unknown），不透传内部
-// message；kratos 原生错误（*kerrors.Error）保持其 code/reason/message 契约原样透出。
+// 与 kratos 默认行为的差异：非 AppError、非 kratos 原生的普通错误按 go-observability
+// 语义兜底为 500/Internal + 固定文案（error.type=error.unknown），不透传内部 message；
+// kratos 原生错误（*kerrors.Error）保持其 code/reason/message 契约原样透出。
 package kratosmw
 
 import (
@@ -17,7 +18,10 @@ import (
 	kerrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/middleware"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
+	httpstatus "github.com/go-kratos/kratos/v3/transport/http/status"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/grpc/status"
 
 	"github.com/formal-you/go-observability"
 	"github.com/formal-you/go-observability/errs"
@@ -113,6 +117,45 @@ func ErrorLog(logger *log.Logger, opts ...Option) middleware.Middleware {
 	}
 }
 
+// GRPCErrorMapper 返回 kratos gRPC 中间件：把 handler 返回的 errs.AppError / 普通错误
+// 转换为 gRPC status error（code 由 errs.Kind 映射并经 kratos httpstatus 转 gRPC code，
+// reason 与 error.type 写入 errdetails.ErrorInfo），避免 grpc-go 默认把内部 message
+// 以 codes.Unknown 透传客户端。kratos 原生错误（*kerrors.Error，自带 GRPCStatus）
+// 原样放行。与 ErrorLog 组合时，ErrorLog 应放在本中间件外层，以记录转换前的原始错误。
+func GRPCErrorMapper(opts ...Option) middleware.Middleware {
+	o := defaultOptions()
+	for _, opt := range opts {
+		opt(&o)
+	}
+	statusForError := o.statusForErr
+	return func(next middleware.Handler) middleware.Handler {
+		return func(ctx context.Context, req any) (any, error) {
+			reply, err := next(ctx, req)
+			if err == nil {
+				return reply, nil
+			}
+			if asKratosError(err) != nil {
+				return reply, err
+			}
+			return reply, grpcStatusError(statusForError, err)
+		}
+	}
+}
+
+// grpcStatusError 把 errs.AppError / 普通错误转换为带 ErrorInfo detail 的 gRPC status error。
+func grpcStatusError(statusForError func(err error) int, err error) error {
+	code := httpstatus.ToGRPCCode(statusForError(err))
+	reason, message, metadata := classifyError(err)
+	st := status.New(code, message)
+	if reason != "" {
+		withDetail, detailErr := st.WithDetails(&errdetails.ErrorInfo{Reason: reason, Metadata: metadata})
+		if detailErr == nil {
+			st = withDetail
+		}
+	}
+	return st.Err()
+}
+
 // asKratosError 沿错误链提取 kratos 原生 *kerrors.Error；非 kratos 错误返回 nil。
 // 不能使用 kerrors.FromError 判断——它对任意非 kratos 错误都会合成 500 错误（永不为 nil）。
 func asKratosError(err error) *kerrors.Error {
@@ -137,25 +180,32 @@ func kratosErrorBody(se *kerrors.Error) map[string]any {
 	}
 }
 
-// appErrorBody 构造 errs.AppError（或普通错误）的 kratos 契约体：5xx 与普通错误固定
-// 文案，不透传内部细节；error.type 写入 metadata 供日志/告警使用。
-func appErrorBody(status int, err error) map[string]any {
+// classifyError 返回 errs.AppError / 普通错误的稳定 reason、安全 message 与 metadata
+// （error.type）：validation/business 透传业务描述（预期拒绝），system 与普通错误固定
+// 文案，不透传内部细节。HTTP 与 gRPC 两条出口共用。
+func classifyError(err error) (reason, message string, metadata map[string]string) {
 	appErr, ok := asAppError(err)
 	if !ok {
-		return kratosBody(status, "system_error", "internal server error", map[string]string{"error.type": string(errs.TypeUnknown)})
+		return "system_error", "internal server error", map[string]string{"error.type": string(errs.TypeUnknown)}
 	}
 	switch appErr.Kind() {
 	case errs.KindValidation:
-		return kratosBody(status, "validation_error", appErr.Error(), metadataOf(appErr))
+		return "validation_error", appErr.Error(), metadataOf(appErr)
 	case errs.KindBusiness:
 		reason := string(appErr.ErrCode())
 		if reason == "" {
 			reason = "business_error"
 		}
-		return kratosBody(status, reason, appErr.Error(), metadataOf(appErr))
+		return reason, appErr.Error(), metadataOf(appErr)
 	default:
-		return kratosBody(status, "system_error", "internal server error", metadataOf(appErr))
+		return "system_error", "internal server error", metadataOf(appErr)
 	}
+}
+
+// appErrorBody 构造 errs.AppError（或普通错误）的 kratos HTTP 契约体。
+func appErrorBody(status int, err error) map[string]any {
+	reason, message, metadata := classifyError(err)
+	return kratosBody(status, reason, message, metadata)
 }
 
 func kratosBody(code int, reason, message string, metadata map[string]string) map[string]any {

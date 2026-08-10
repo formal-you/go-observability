@@ -22,7 +22,7 @@
 - CI 检查与核心组件测试。
 - 中文 Issue 表单、PR 模板、Dependabot 与首次发布检查清单。
 
-- 新增 `middleware/kratos`：go-kratos v3 传输层适配——`ErrorEncoder`（kratos HTTP 错误编码，errs.AppError / kratos 原生错误双识别，error.type 写入 metadata）与 `ErrorLog`（错误事件日志 filter，复用 `log.EventFromError`）。
+- 新增 `middleware/kratos`：go-kratos v3 传输层适配——`ErrorEncoder`（HTTP 错误编码）与 `GRPCErrorMapper`（gRPC status 映射，reason/error.type 写入 `errdetails.ErrorInfo`），errs.AppError / kratos 原生错误双识别、system 与普通错误不透传内部细节；`ErrorLog` 错误事件日志 filter 复用 `log.EventFromError`。
 
 ### Changed
 
