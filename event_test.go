@@ -271,3 +271,33 @@ func TestRequestIDDerivedFromTraceID(t *testing.T) {
 		t.Errorf("无 trace 无显式值应省略, got %q", got)
 	}
 }
+
+func TestAccessPayloadRPCAttrs(t *testing.T) {
+	ev := AccessEvent{
+		EventMetadata: EventMetadata{Level: LevelInfo, LatencyMS: 7},
+		Data: AccessPayload{
+			EventName: EventNameAccessRPCRequest,
+			RPC: RPCInfo{
+				System:  "grpc",
+				Service: "mall.auth.v1.AuthService",
+				Method:  "Register",
+			},
+			Result: ResultSuccess,
+		},
+	}
+	attrs := attrMap(ev.Attrs())
+	for _, key := range []string{"event.name", "rpc.system", "rpc.service", "rpc.method", "app.result"} {
+		if _, ok := attrs[key]; !ok {
+			t.Errorf("attrs 缺少 %s: %v", key, ev.Attrs())
+		}
+	}
+	if got := attrs["event.name"].(slog.Value).String(); got != "access.rpc.request" {
+		t.Errorf("event.name = %v, want access.rpc.request", got)
+	}
+	if got := attrs["rpc.method"].(slog.Value).String(); got != "Register" {
+		t.Errorf("rpc.method = %v, want Register", got)
+	}
+	if _, ok := attrs["http.request.method"]; ok {
+		t.Error("RPC 访问事件不应输出 http.* 键")
+	}
+}

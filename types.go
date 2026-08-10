@@ -33,6 +33,12 @@ const (
 	EventNameErrorDBTimeout EventName = "error.db.timeout"
 	// EventNameErrorRuntimePanic 错误事件：运行时 panic（recover 中间件默认值）。
 	EventNameErrorRuntimePanic EventName = "error.runtime.panic"
+	// EventNameErrorHTTPRequest 错误事件：HTTP 请求处理失败（errresp 中间件默认值）。
+	EventNameErrorHTTPRequest EventName = "error.http.request"
+	// EventNameAccessRPCRequest 访问事件：gRPC 调用完成（RPC 访问日志）。
+	EventNameAccessRPCRequest EventName = "access.rpc.request"
+	// EventNameErrorRPCRequest 错误事件：gRPC 调用失败（RPC 错误收口）。
+	EventNameErrorRPCRequest EventName = "error.rpc.request"
 )
 
 // NewEventName 由三段（类别.模块.操作）构造 EventName 并做构造校验。

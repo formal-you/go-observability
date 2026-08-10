@@ -77,7 +77,7 @@ func TestStackRule(t *testing.T) {
 		want errs.StackPolicy
 	}{
 		{errs.TypeRuntimePanic, errs.StackMust},
-		{errs.TypeRuntimeContextCanceled, errs.StackMust},
+		{errs.TypeRuntimeContextCanceled, errs.StackOptional},
 		{errs.TypeRuntimeDeadlineExceeded, errs.StackMust},
 		{errs.TypeDBConnectionError, errs.StackMust},
 		{errs.TypeDBQueryTimeout, errs.StackMust},
@@ -188,8 +188,8 @@ func TestNewSystemDefaults(t *testing.T) {
 	if e.ErrCode() != "" {
 		t.Errorf("ErrCode() = %q, want empty", e.ErrCode())
 	}
-	if e.Stack() != "" {
-		t.Errorf("Stack() = %q, want empty", e.Stack())
+	if e.Stack() == "" {
+		t.Error("Stack() empty, want 构造点自动采集（db.* 为 StackMust）")
 	}
 	if e.Source() != (errs.Source{}) {
 		t.Errorf("Source() = %+v, want zero value", e.Source())
@@ -339,4 +339,93 @@ func TestCaptureStack(t *testing.T) {
 	if !strings.Contains(stack, "TestCaptureStack") {
 		t.Errorf("stack does not contain TestCaptureStack:\n%s", stack)
 	}
+}
+
+func TestNewSystemStackPolicy(t *testing.T) {
+	t.Run("must auto-captures at creation", func(t *testing.T) {
+		e := errs.NewSystem(errs.TypeDBQueryTimeout, "timeout")
+		if e.Stack() == "" {
+			t.Fatal("Stack() empty, want StackMust 类别构造点自动采集")
+		}
+		if !strings.Contains(e.Stack(), "TestNewSystemStackPolicy") {
+			t.Errorf("堆栈应包含创建点调用帧 TestNewSystemStackPolicy:\n%s", e.Stack())
+		}
+	})
+	t.Run("optional does not auto-capture", func(t *testing.T) {
+		e := errs.NewSystem(errs.TypeRuntimeContextCanceled, "canceled")
+		if e.Stack() != "" {
+			t.Errorf("Stack() = %q, want empty for StackOptional", e.Stack())
+		}
+	})
+	t.Run("none does not auto-capture", func(t *testing.T) {
+		e := errs.NewSystem(errs.ErrorType("business.auth.forbidden"), "denied")
+		if e.Stack() != "" {
+			t.Errorf("Stack() = %q, want empty for StackNone", e.Stack())
+		}
+	})
+	t.Run("explicit WithStack wins over auto-capture", func(t *testing.T) {
+		e := errs.NewSystem(errs.TypeDBConnectionError, "conn", errs.WithStack("custom"))
+		if e.Stack() != "custom" {
+			t.Errorf("Stack() = %q, want explicit custom", e.Stack())
+		}
+	})
+}
+
+func TestSetStackPolicy(t *testing.T) {
+	t.Cleanup(func() { errs.SetStackPolicy(nil) })
+
+	t.Run("default without overrides", func(t *testing.T) {
+		if got := errs.StackRule(errs.TypeDBQueryTimeout); got != errs.StackMust {
+			t.Fatalf("StackRule(db.query_timeout) = %q, want must", got)
+		}
+	})
+
+	t.Run("override db. to none disables auto capture", func(t *testing.T) {
+		errs.SetStackPolicy(map[string]errs.StackPolicy{"db.": errs.StackNone})
+		if got := errs.StackRule(errs.TypeDBQueryTimeout); got != errs.StackNone {
+			t.Fatalf("StackRule(db.query_timeout) = %q, want none", got)
+		}
+		if got := errs.StackRule(errs.TypeDBConnectionError); got != errs.StackNone {
+			t.Fatalf("StackRule(db.connection_error) = %q, want none", got)
+		}
+		e := errs.NewSystem(errs.TypeDBQueryTimeout, "timeout")
+		if e.Stack() != "" {
+			t.Fatalf("Stack() = %q, want empty（db. 覆盖为 none 不自动采集）", e.Stack())
+		}
+		if got := errs.StackRule(errs.TypeRedisTimeout); got != errs.StackMust {
+			t.Fatalf("StackRule(redis.timeout) = %q, want must（未覆盖仍走内置默认）", got)
+		}
+	})
+
+	t.Run("override exact type to must enables auto capture", func(t *testing.T) {
+		errs.SetStackPolicy(map[string]errs.StackPolicy{"runtime.context_cancelled": errs.StackMust})
+		if got := errs.StackRule(errs.TypeRuntimeContextCanceled); got != errs.StackMust {
+			t.Fatalf("StackRule(runtime.context_cancelled) = %q, want must", got)
+		}
+		e := errs.NewSystem(errs.TypeRuntimeContextCanceled, "canceled")
+		if e.Stack() == "" {
+			t.Fatal("Stack() empty, want 自动采集（覆盖为 must）")
+		}
+	})
+
+	t.Run("longest prefix wins", func(t *testing.T) {
+		errs.SetStackPolicy(map[string]errs.StackPolicy{
+			"db.":              errs.StackNone,
+			"db.query_timeout": errs.StackMust,
+		})
+		if got := errs.StackRule(errs.TypeDBQueryTimeout); got != errs.StackMust {
+			t.Fatalf("StackRule(db.query_timeout) = %q, want must（最长前缀优先）", got)
+		}
+		if got := errs.StackRule(errs.TypeDBConnectionError); got != errs.StackNone {
+			t.Fatalf("StackRule(db.connection_error) = %q, want none", got)
+		}
+	})
+
+	t.Run("reset restores default", func(t *testing.T) {
+		errs.SetStackPolicy(map[string]errs.StackPolicy{"db.": errs.StackNone})
+		errs.SetStackPolicy(nil)
+		if got := errs.StackRule(errs.TypeDBQueryTimeout); got != errs.StackMust {
+			t.Fatalf("StackRule(db.query_timeout) = %q, want must（重置后回默认）", got)
+		}
+	})
 }

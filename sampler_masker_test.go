@@ -135,3 +135,102 @@ func TestDefaultSensitiveKeysReturnsCopy(t *testing.T) {
 		t.Errorf("外部修改默认键副本后 password = %q, want ***", got)
 	}
 }
+
+// EventKeepSampler 单元测试。测试输入是采样判定数据，不是生产事件注册
+// （AGENTS.md 规则 1 约束生产埋点；此处仅为黑盒判定样例）。
+
+func TestEventKeepSamplerPrefixesAlwaysKeep(t *testing.T) {
+	s := EventKeepSampler{
+		KeepPrefixes: []string{"business.", "error.", "security.", "audit.", "probe."},
+		Fallback:     ResultKeepSampler{Ratio: 0},
+	}
+	for _, name := range []string{
+		"business.order.paid",
+		"error.runtime.panic",
+		"security.auth.denied",
+		"audit.config.changed",
+		"probe.health.check",
+	} {
+		attrs := []slog.Attr{
+			slog.String(string(KeyEventName), name),
+			slog.String(string(KeyAppResult), string(ResultSuccess)),
+		}
+		if !s.Sample(context.Background(), attrs) {
+			t.Errorf("event.name %s 命中前缀应恒保留", name)
+		}
+	}
+}
+
+func TestEventKeepSamplerFallbackDelegation(t *testing.T) {
+	s := EventKeepSampler{
+		KeepPrefixes: []string{"business.", "error.", "security.", "audit.", "probe."},
+		Fallback:     ResultKeepSampler{Ratio: 0},
+	}
+	access := func(result Result) []slog.Attr {
+		return []slog.Attr{
+			slog.String(string(KeyEventName), "access.http.request"),
+			slog.String(string(KeyAppResult), string(result)),
+		}
+	}
+	if s.Sample(context.Background(), access(ResultSuccess)) {
+		t.Error("access success 应委托 Fallback 且被丢弃（Ratio=0）")
+	}
+	if !s.Sample(context.Background(), access(ResultFailed)) {
+		t.Error("access failed 应委托 Fallback 且被强制保留")
+	}
+}
+
+func TestEventKeepSamplerNilFallback(t *testing.T) {
+	s := EventKeepSampler{KeepPrefixes: []string{"business."}}
+	attrs := []slog.Attr{
+		slog.String(string(KeyEventName), "access.http.request"),
+		slog.String(string(KeyAppResult), string(ResultSuccess)),
+	}
+	if !s.Sample(context.Background(), attrs) {
+		t.Error("Fallback=nil 时未命中事件应恒保留")
+	}
+}
+
+func TestEventKeepSamplerMissingEventName(t *testing.T) {
+	s := EventKeepSampler{
+		KeepPrefixes: []string{"business."},
+		Fallback:     ResultKeepSampler{Ratio: 0},
+	}
+	attrs := []slog.Attr{slog.String(string(KeyAppResult), string(ResultSuccess))}
+	if s.Sample(context.Background(), attrs) {
+		t.Error("event.name 缺失应走 Fallback（Ratio=0 → 丢弃）")
+	}
+}
+
+func TestNewResultKeepSampler(t *testing.T) {
+	if s := NewResultKeepSampler(1); s == nil || s.Ratio != 1 {
+		t.Errorf("NewResultKeepSampler(1) = %+v, want Ratio=1", s)
+	}
+	for _, ratio := range []float64{0, -0.5, 1.5} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("NewResultKeepSampler(%v) 应 panic", ratio)
+				}
+			}()
+			NewResultKeepSampler(ratio)
+		}()
+	}
+}
+
+func TestNewEventKeepSampler(t *testing.T) {
+	s := NewEventKeepSampler([]string{"business."}, ResultKeepSampler{Ratio: 0.5})
+	if s == nil || len(s.KeepPrefixes) != 1 || s.Fallback == nil {
+		t.Errorf("NewEventKeepSampler 返回异常: %+v", s)
+	}
+	for _, prefixes := range [][]string{nil, {}, {""}} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("NewEventKeepSampler(%v) 应 panic", prefixes)
+				}
+			}()
+			NewEventKeepSampler(prefixes, nil)
+		}()
+	}
+}

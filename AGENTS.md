@@ -1,14 +1,14 @@
 # AGENTS.md — go-observability 开发规则
 
 本文件是 go-observability 仓库的开发守则。任何 agent / 协作者改动本仓库前必须先读本文件。
-本文件与 README.md、`docs/architecture.md`、`docs/configuration.md` 共同构成仓库内项目真源；文档与代码不一致时以本文件和代码为准，并在同一提交中修正文档。
+本文件与 README.md、`CONTEXT.md`（术语表）、`docs/architecture.md`、`docs/configuration.md` 共同构成仓库内项目真源；文档与代码不一致时以本文件和代码为准，并在同一提交中修正文档。
 
 ## 项目身份
 
 - 模块路径：`github.com/formal-you/go-observability`；Go 1.25。
 - 定位：基于 OpenTelemetry 语义约定的语义化日志组件，采用「方案2 源即规范」——属性键直接用 OTel semconv 1.41.0 名 + `app.*` vendor 命名空间。
-- 核心 log 包零外部依赖（仅标准库：log/slog、net、time、fmt、strings）；OTel 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/ginlog`、`example/*`。
-- 采集频率归 opentelemetry-collector（batch processor）；核心层每次 Emit 同步写出，不做批处理/定时器。
+- 核心 log 包零外部依赖（仅标准库：log/slog、net、time、fmt、strings）；OTel 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`（gin/errresp/recover/nethttp 用 OTel trace 提取 span context）、`example/*`。
+- 批量导出分两层：SDK 侧由 telemetry.Config 的批量导出间隔控制，Collector 侧由 batch processor 二次凑批；核心层每次 Emit 同步写出，不做批处理/定时器。
 
 ## 防漂移硬规则（违反即视为实现漂移）
 
@@ -25,6 +25,7 @@
 6. schema / 键名 / 字段归属变更必须同步文档（README.md、detailed-design.md、方案2-直接符合规范.md），改代码与改文档应在同一提交内完成。
 7. 零值省略：字符串/数值零值省略；布尔不省略（false 对 retryable/result 语义明确）。
 8. samber 生态只允许出现在 `example/` 与 `docs/samber-comparison.md`，核心包保持零外部依赖。
+9. 能力归属：库承载所有通用可复用能力（错误分类/投影、HTTP/gRPC/Gin 收口中间件、三信号装配），并通过配置或注入点（如 `ResponseProjector`）允许接入方自定义契约；接入方不得在应用侧镜像库中间件，契约差异一律经库的注入点表达。
 
 ## 开发流程
 
@@ -47,7 +48,7 @@
 - 根包 log：`types.go`（枚举 + EventName 常量注册表）、`keys.go`（属性键常量）、`metadata.go`、`payload.go`（六类载荷）、`events.go`（六类事件结构体）、`normalize.go`（归一化 / 保留键）、`log.go`（Logger / Writer / 采样 / 脱敏接口）。
 - `internal/attrkv/`：slog.Attr ↔ OTel 转换 + Record 顶层字段映射（唯一核心映射层）。
 - `writer/{otlp,stdout,file}/`：后端 Writer（装配层，可替换）。
-- `middleware/ginlog/`、`middleware/recover/`：Gin 集成；net/http 见 example/nethttp。
+- `middleware/ginlog/`、`middleware/errresp/`、`middleware/recover/`：Gin 集成；`middleware/nethttp/`：net/http 错误收口；`middleware/metrics/`：HTTP/gRPC 服务器指标；`middleware/trace/`：HTTP/gRPC 服务器链路；net/http 示例见 example/nethttp。
 - `errs/`：错误体系，零外部依赖；`error_project.go` 投影。
 - `telemetry/`：对外公开的三信号装配与环境变量出口选择。
 - `ResultKeepSampler` / `FieldMasker`：可选采样与脱敏实现；NewLogger 不自动挂载。
@@ -57,5 +58,6 @@
 ## 常用真源
 
 - 用户入口与公共承诺：`README.md`、`docs/`
+- 术语表：`CONTEXT.md`（术语冲突时以它为准）
 - 开发与验证流程：`CONTRIBUTING.md`、`docs/workflow.md`
 - semconv 1.41.0 常量：`$GOMODCACHE/go.opentelemetry.io/otel@v1.44.0/semconv/v1.41.0`

@@ -152,3 +152,35 @@ func TestMiddlewareFillsTraceAndSpanFromContext(t *testing.T) {
 	attrString(t, attrs, "trace_id", "0123456789abcdef0123456789abcdef")
 	attrString(t, attrs, "span_id", "0123456789abcdef")
 }
+
+// TestResponseProjectorOverride 验证 recover 的 ResponseProjector 可注入自定义
+// panic 响应形状（状态码与响应体由投影决定），错误事件仍照常写出。
+func TestResponseProjectorOverride(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	engine := gin.New()
+	engine.Use(Middleware(Config{
+		Logger: logger,
+		ResponseProjector: func(_ error, _ string) (int, gin.H) {
+			return http.StatusInternalServerError, gin.H{"error": gin.H{"code": "internal_error", "message": "internal server error"}}
+		},
+	}))
+	engine.GET("/panic", func(c *gin.Context) { panic("boom") })
+	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	var body map[string]map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if body["error"]["code"] != "internal_error" {
+		t.Fatalf("body = %#v, want nested internal_error", body)
+	}
+	if len(w.msgs) != 1 || w.msgs[0] != "error" {
+		t.Fatalf("events = %v, want one error event", w.msgs)
+	}
+}

@@ -7,17 +7,31 @@
 ### Added
 
 - 六类类型化事件、`Logger` / `Writer` 接口，以及 JSONL、stdout、OTLP Writer。
-- `errs` 错误分类、错误事件投影、Gin access 与 recover 中间件。
+- `AccessPayload` 新增 `RPCInfo`（semconv `rpc.*`）与框架级事件名 `access.rpc.request` / `error.rpc.request`，支持 gRPC 传输层访问/错误事件。
+- `errresp` 与 `recover` 中间件新增 `ResponseProjector` 配置：响应体与状态码可注入（默认保持扁平 `{code,message,request_id?}`），接入方可按自身 HTTP 契约投影。
+- 新增 `middleware/nethttp`：net/http 版统一错误收口（`ErrorResponse`/`Recover`/`SetError`，支持 `ResponseProjector`；Logger 为 nil 时只渲染不写事件）。
+- 新增 `middleware/metrics`：HTTP（net/http/Gin）与 gRPC 服务器指标中间件（`http.server.request.duration` / `rpc.server.duration`，semconv 1.41.0，默认全局 Meter，可注入）。
+- 新增 `middleware/trace`：HTTP（net/http/Gin）与 gRPC 服务器链路中间件（server span 注入 request context，日志事件自动关联 trace_id/span_id，semconv 1.41.0，默认全局 Tracer，可注入）。
+- `middleware/trace` 补全链路能力：HTTP/Gin/gRPC 入口提取上游传播上下文（traceparent/tracestate，接续调用方链路），新增 `InjectHTTPHeaders` / `InjectGRPCMetadata` 出口注入 helper。
+- `errs` 错误分类、错误事件投影、Gin access、recover 与统一错误收口（`errresp`）中间件，以及框架级事件名 `error.http.request`。
 - 公开 `telemetry` 包，提供 Trace、Metric、Log Provider 装配、环境变量入口和统一关闭。
 - `ResultKeepSampler`、`FieldMasker` 与写入错误回调。
+- 新增 `EventKeepSampler`：按 `event.name` 前缀全量保留（business./error./security./audit./probe.），其余事件委托 Fallback（如 `ResultKeepSampler`）采样——落地"业务全量 + 访问采样"策略。
+- 新增 `CONTEXT.md` 项目术语表：统一「采样」「批量导出间隔」「事件模型」及 OTel Trace / Metric / Log / Error 专业术语，避免沟通误导。
+- `TraceExtractor` 接线：新增 `WithTraceExtractor` 与 `middleware/trace.NewTraceExtractor`，事件未显式携带 trace_id/span_id 时自动补全（不覆盖已设值）。
+- 新增采样器构造器 `NewResultKeepSampler` / `NewEventKeepSampler`：非法入参构造期 panic，消除零值陷阱。
+- 新增 `MultiWriter`（`NewMultiWriter`）：组合多个 Writer 多出口输出，错误聚合不阻断其余 Writer。
 - `net/http`、Gin、指标、领域事件和 samber 对照示例。
 - 本地 LGTM 参考栈、Collector 配置与分信号管线模板。
 - 中文配置、安全、架构、贡献和发布检查文档。
 - CI 检查与核心组件测试。
 - 中文 Issue 表单、PR 模板、Dependabot 与首次发布检查清单。
 
+- 新增 `middleware/kratos`：go-kratos v3 传输层适配——`ErrorEncoder`（HTTP 错误编码）与 `GRPCErrorMapper`（gRPC status 映射，reason/error.type 写入 `errdetails.ErrorInfo`），errs.AppError / kratos 原生错误双识别、system 与普通错误不透传内部细节；`ErrorLog` 错误事件日志 filter 复用 `log.EventFromError`。
+
 ### Changed
 
+- `errs` 堆栈策略可配置：新增 `errs.SetStackPolicy`，使用方可按 `error.type` 前缀覆盖默认策略（最长前缀优先，空 map = 库内置默认）；`NewSystem` 构造采集与 `error_project` 事件渲染均跟随同一策略。
 - 项目字段前缀统一为 `app.*`；电商等领域事件从核心包移至使用方示例。
 - OpenTelemetry 属性键对齐 Semantic Conventions 1.41.0。
 - file/stdout 与 OTLP 使用各自适合的字段投影，OTLP 顶层承载时间、严重级别、EventName 和 span context。

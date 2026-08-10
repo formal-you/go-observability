@@ -30,6 +30,22 @@ type Config struct {
 
 	// RequestID 从请求提取 request_id 写入响应体；可选，未提供则不输出该字段。
 	RequestID func(c *gin.Context) string
+
+	// ResponseProjector 自定义 panic 错误响应体与状态码；nil 使用默认
+	// （500 + 扁平 {code:SYS_ERROR,message,request_id?}）。接入方可用它注入自定义契约形状。
+	ResponseProjector func(err error, requestID string) (int, gin.H)
+}
+
+// defaultProjector 返回默认 panic 响应：500 + 扁平 SYS_ERROR（与 errresp 默认体同构）。
+func defaultProjector(_ error, requestID string) (int, gin.H) {
+	body := gin.H{
+		"code":    "SYS_ERROR",
+		"message": "系统繁忙，请稍后重试",
+	}
+	if requestID != "" {
+		body["request_id"] = requestID
+	}
+	return http.StatusInternalServerError, body
 }
 
 // Middleware 返回收口 Gin handler panic 的中间件。
@@ -77,14 +93,11 @@ func Middleware(cfg Config) gin.HandlerFunc {
 			ev := log.EventFromError(eventName, err, md)
 			cfg.Logger.Emit(c.Request.Context(), ev)
 
-			body := gin.H{
-				"code":    "SYS_ERROR",
-				"message": "系统繁忙，请稍后重试",
+			status, body := defaultProjector(err, reqID)
+			if cfg.ResponseProjector != nil {
+				status, body = cfg.ResponseProjector(err, reqID)
 			}
-			if reqID != "" {
-				body["request_id"] = reqID
-			}
-			c.AbortWithStatusJSON(http.StatusInternalServerError, body)
+			c.AbortWithStatusJSON(status, body)
 		}()
 		c.Next()
 	}

@@ -4,18 +4,27 @@ import "log/slog"
 
 // 六类载荷：实现 EventPayload，属性键已按 semconv / app.* 对齐。
 
-// AccessPayload 记录 HTTP 请求访问、状态、延迟与请求身份（每请求一条）。
+// RPCInfo 记录 RPC 调用的传输字段（semconv rpc）；gRPC 等 RPC 传输层使用，
+// 与 HTTPInfo 互斥（按事件只填其一，零值省略）。
+type RPCInfo struct {
+	System  string // rpc.system：如 grpc
+	Service string // rpc.service：如 mall.auth.v1.AuthService
+	Method  string // rpc.method：如 Register
+}
+
+// AccessPayload 记录 HTTP/RPC 请求访问、状态、延迟与请求身份（每请求一条）。
 type AccessPayload struct {
 	EventName EventName
 	Subject   Subject
 	HTTP      HTTPInfo
+	RPC       RPCInfo
 	Result    Result
 }
 
 func (AccessPayload) EventType() EventType { return EventAccess }
 
 func (e AccessPayload) Attrs() []slog.Attr {
-	attrs := make([]slog.Attr, 0, 11)
+	attrs := make([]slog.Attr, 0, 14)
 	attrs = append(attrs, slog.String(string(KeyEventName), string(e.EventName)))
 	attrs = appendString(attrs, KeyHTTPRequestMethod, e.HTTP.Method)
 	attrs = appendString(attrs, KeyURLPath, e.HTTP.URLPath)
@@ -25,6 +34,9 @@ func (e AccessPayload) Attrs() []slog.Attr {
 		attrs = appendString(attrs, KeyClientAddress, e.HTTP.ClientIP.String())
 	}
 	attrs = appendString(attrs, KeyUserAgentOriginal, e.HTTP.UserAgent)
+	attrs = appendString(attrs, KeyRPCSystem, e.RPC.System)
+	attrs = appendString(attrs, KeyRPCService, e.RPC.Service)
+	attrs = appendString(attrs, KeyRPCMethod, e.RPC.Method)
 	attrs = appendString(attrs, KeyAppUserID, e.Subject.UserID)
 	attrs = appendString(attrs, KeyAppTenantID, e.Subject.TenantID)
 	return appendString(attrs, KeyAppResult, string(e.Result))

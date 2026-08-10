@@ -1,6 +1,7 @@
 // Command metrics 演示使用方如何用 go-observability 的 MeterProvider 自建指标。
 //
-// 库不提供业务/RED 指标注册表；本文件是使用方代码模板。
+// 服务端 RED 中间件（自动记录 http.server.request.duration）见 middleware/metrics；
+// 本文件演示使用方自定义指标（业务 counter）模板。
 // 跑法：
 //
 //	OTEL_EXPORTER_OTLP_ENDPOINT=127.0.0.1:4317 go run ./example/metrics

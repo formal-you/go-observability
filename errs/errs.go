@@ -2,9 +2,10 @@
 // （ErrorType）、业务错误码（ErrorCode）、代码位置（Source）与堆栈策略（StackPolicy）。
 //
 // 职责边界：本包只负责错误值的建模与构造，不负责记录日志、上报 OTel 或渲染响应；
-// 收口层（middleware）通过 AppError 接口读取 Kind/ErrCode/ErrorType 做统一判定，
-// 并按 StackRule 决定是否补记堆栈。依赖方向：本包只依赖标准库（errors、runtime、
-// runtime/debug、strings），不依赖任何外部日志/观测库，可被任意层安全引用。
+// 收口层（middleware）通过 AppError 接口读取 Kind/ErrCode/ErrorType 做统一判定与
+// 渲染；StackMust 类别的堆栈在 NewSystem 构造点自动采集，收口层只渲染、不重复采集。
+// 依赖方向：本包只依赖标准库（errors、runtime、runtime/debug、strings），不依赖任何
+// 外部日志/观测库，可被任意层安全引用。
 package errs
 
 import (
@@ -12,6 +13,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"sync"
 )
 
 // ErrorKind 错误预期性分类：validation / business / system。
@@ -90,25 +92,62 @@ type Source struct {
 	Line     int    // code.line.number
 }
 
-// StackPolicy 堆栈策略：must=必记首层 / optional=按频率可选 / none=不记。
-// 由收口层（middleware）按 StackRule 判定后决定是否调用 CaptureStack 补记堆栈。
+// StackPolicy 堆栈策略：must=构造点必记 / optional=按需记录 / none=不记。
+// StackMust 由 NewSystem 构造时自动调用 CaptureStack；optional/none 不自动采集。
 type StackPolicy string
 
 const (
-	// StackMust 必记首层堆栈：跨进程/易失性失败（runtime/db/redis/mq/http）。
+	// StackMust 必记创建点堆栈：跨进程/易失性失败（runtime/db/redis/mq/http），
+	// 由 NewSystem 构造时自动采集。
 	StackMust StackPolicy = "must"
-	// StackOptional 按频率可选记录堆栈：低基数但可复现的失败（lock/idempotency/stock/data）。
+	// StackOptional 按需记录堆栈：低基数但可复现的失败（lock/idempotency/stock/data）
+	// 与高频的 runtime.context_cancelled；不自动采集，需要时由调用方 WithStack。
 	StackOptional StackPolicy = "optional"
 	// StackNone 不记录堆栈：预期内的业务/校验拒绝，堆栈无诊断价值。
 	StackNone StackPolicy = "none"
 )
 
-// StackRule 按 error.type 前缀返回堆栈策略（收口 middleware 判定）：
-// runtime.*/db.*/redis.*/mq.*/http.* -> must；lock.*/idempotency.*/stock.race/data.* -> optional；
+// stackOverrides 保存使用方注入的「error.type 前缀 → 堆栈策略」覆盖表；命中时优先于
+// 内置默认策略。由 SetStackPolicy 在进程启动期一次性写入，之后只读。
+var (
+	stackOverridesMu sync.RWMutex
+	stackOverrides   = map[string]StackPolicy{}
+)
+
+// SetStackPolicy 设置前缀→策略覆盖表（如 "db." -> StackNone、精确类型
+// "runtime.context_cancelled" -> StackMust）；空 map / nil 恢复为仅使用内置默认策略。
+// 必须在进程启动阶段、任何错误构造/事件写出前调用（与 log.SetFlags 同类）；
+// StackRule 对命中覆盖前缀的类型优先返回覆盖策略（最长前缀优先），未命中回落到内置默认。
+func SetStackPolicy(overrides map[string]StackPolicy) {
+	copied := make(map[string]StackPolicy, len(overrides))
+	for prefix, policy := range overrides {
+		if prefix == "" {
+			continue
+		}
+		copied[prefix] = policy
+	}
+	stackOverridesMu.Lock()
+	stackOverrides = copied
+	stackOverridesMu.Unlock()
+}
+
+// StackRule 按 error.type 返回堆栈策略（NewSystem 构造时据此决定是否自动补记创建点堆栈）：
+// 先查 SetStackPolicy 注入的覆盖表（最长前缀优先），未命中回落到内置默认——
+// db./redis./mq./http./runtime.（除 context_cancelled）-> must；
+// lock./idempotency./stock.race/data. 及 runtime.context_cancelled -> optional；
 // business.*/validation.* 及未知/空类型（默认兜底）-> none。
 func StackRule(t ErrorType) StackPolicy {
 	p := string(t)
+	stackOverridesMu.RLock()
+	policy, ok := stackPolicyForLocked(p)
+	stackOverridesMu.RUnlock()
+	if ok {
+		return policy
+	}
 	switch {
+	case p == "runtime.context_cancelled":
+		// 高频且多为客户端主动取消，逐次采集堆栈成本高、诊断价值低；需要时由调用方 WithStack。
+		return StackOptional
 	case hasAnyPrefix(p, "runtime.", "db.", "redis.", "mq.", "http."):
 		return StackMust
 	case hasAnyPrefix(p, "lock.", "idempotency.", "stock.race", "data."):
@@ -116,6 +155,21 @@ func StackRule(t ErrorType) StackPolicy {
 	default:
 		return StackNone
 	}
+}
+
+// stackPolicyForLocked 在覆盖表中查找 p 的最长匹配前缀；调用方须持有 stackOverridesMu 读锁。
+func stackPolicyForLocked(p string) (StackPolicy, bool) {
+	best := ""
+	var bestPolicy StackPolicy
+	found := false
+	for prefix, policy := range stackOverrides {
+		if len(prefix) > len(best) && strings.HasPrefix(p, prefix) {
+			best = prefix
+			bestPolicy = policy
+			found = true
+		}
+	}
+	return bestPolicy, found
 }
 
 // hasAnyPrefix 报告 s 是否以 prefixes 中任一前缀开头。
@@ -234,7 +288,8 @@ func (e BizError) WithSource(s Source) BizError {
 	return e
 }
 
-// SystemError 系统错误：error.type 必填；堆栈按 StackRule 由收口层补，可选重试上下文。
+// SystemError 系统错误：error.type 必填；StackMust 类别的堆栈在构造时自动补记
+// （创建点），可选重试上下文。
 // 非预期失败（DB/Redis/MQ/HTTP 上游/运行时）使用本类型，收口层据此告警并按类型映射。
 type SystemError struct {
 	appError
@@ -319,7 +374,7 @@ func WithCode(code ErrorCode) SystemOption {
 	}
 }
 
-// WithStack 设置堆栈（收口层按 StackRule 判定后填充）。
+// WithStack 设置堆栈；显式传入时优先于 StackMust 的自动采集。
 func WithStack(stack string) SystemOption {
 	return func(e *SystemError) {
 		e.stack = stack
@@ -335,6 +390,8 @@ func WithSource(s Source) SystemOption {
 
 // NewSystem 构造系统错误：typ 必填（低基数失败类别），message 为可读描述；
 // 可选选项按传入顺序生效（重试上下文、上游、关联码、堆栈、代码位置）。
+// StackMust 类别在构造点自动补记创建点堆栈（诊断价值高于收口点采集）；
+// 显式 WithStack 优先，避免覆盖调用方提供的堆栈。
 func NewSystem(typ ErrorType, message string, opts ...SystemOption) SystemError {
 	e := SystemError{
 		appError: appError{message: message},
@@ -342,6 +399,10 @@ func NewSystem(typ ErrorType, message string, opts ...SystemOption) SystemError 
 	}
 	for _, opt := range opts {
 		opt(&e)
+	}
+	// StackMust 类别构造时自动补记堆栈；StackOptional/StackNone 不自动采集。
+	if e.stack == "" && StackRule(e.typ) == StackMust {
+		e.stack = CaptureStack()
 	}
 	return e
 }
@@ -373,7 +434,8 @@ func CaptureSource(skip int) Source {
 }
 
 // CaptureStack 捕获当前 goroutine 完整堆栈（runtime/debug.Stack 的字符串形式，供 StackMust 场景）。
-// 收口层仅在 StackRule 返回 StackMust 时调用，避免对业务拒绝也采集堆栈。
+// NewSystem 对 StackMust 类别自动调用（构造点采集）；StackOptional/StackNone 不自动
+// 采集，需要时由调用方显式 WithStack。
 func CaptureStack() string {
 	return string(debug.Stack())
 }

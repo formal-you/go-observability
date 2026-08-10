@@ -1,4 +1,5 @@
-// Command example 演示 go-observability 的三信号装配（telemetry）+ Gin 中间件 + 日志写出。
+// Command example 演示 go-observability 的三信号装配（telemetry）+ Gin 全链路中间件
+// （trace / recover / ginlog / metrics / errresp）。
 // 默认把日志写入当前工作目录的 logs/events.jsonl；设置 OTEL_EXPORTER_OTLP_ENDPOINT 时改走 OTLP。
 // 设 OTEL_SDK_DISABLED=true 可离线运行（trace/metric/log provider 全部 noop）。
 package main
@@ -8,15 +9,16 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 
 	"github.com/formal-you/go-observability"
+	"github.com/formal-you/go-observability/errs"
+	"github.com/formal-you/go-observability/middleware/errresp"
 	"github.com/formal-you/go-observability/middleware/ginlog"
+	"github.com/formal-you/go-observability/middleware/metrics"
+	recovermw "github.com/formal-you/go-observability/middleware/recover"
+	tracemw "github.com/formal-you/go-observability/middleware/trace"
 	"github.com/formal-you/go-observability/telemetry"
 )
 
@@ -45,30 +47,23 @@ func main() {
 	defer closeWriter(ctx, w)
 	logger := log.NewLogger(w)
 
-	// metric 由使用方自建；完整 RED 和业务 counter 见 example/metrics。
-	httpDuration, err := providers.Meter("go-observability/example").Int64Histogram(
-		"http.server.request.duration",
-		metric.WithUnit("ms"),
-		metric.WithDescription("HTTP server request duration (consumer-defined)"),
-	)
-	if err != nil {
-		slog.Warn("init histogram", "err", err)
-	}
-
+	// 全链路中间件（注册顺序即执行顺序）：
+	// trace（server span，注入 ctx）→ recover（panic 收口）→ ginlog（access 事件）
+	// → metrics（http.server.request.duration）→ errresp（显式错误收口）。
 	r := gin.New()
-	r.Use(otelgin.Middleware("go-observability-demo"))
-	r.Use(ginlog.Middleware(ginlog.Config{Logger: logger}))
+	r.Use(
+		tracemw.NewGinMiddleware(tracemw.Config{}),
+		recovermw.Middleware(recovermw.Config{Logger: logger}),
+		ginlog.Middleware(ginlog.Config{Logger: logger}),
+		metrics.NewGinMiddleware(metrics.Config{}),
+		errresp.Middleware(errresp.Config{Logger: logger}),
+	)
 	r.GET("/api/v1/products/:id", func(c *gin.Context) {
-		start := time.Now()
 		c.JSON(200, gin.H{"id": c.Param("id")})
-		if httpDuration != nil {
-			httpDuration.Record(c.Request.Context(), time.Since(start).Milliseconds(),
-				metric.WithAttributes(
-					attribute.String("http.request.method", "GET"),
-					attribute.String("http.route", c.FullPath()),
-					attribute.Int("http.response.status_code", 200),
-				))
-		}
+	})
+	r.POST("/api/v1/orders", func(c *gin.Context) {
+		// 业务拒绝：errresp.Abort 挂载错误，收口中间件决定状态码/响应体并写错误事件。
+		errresp.Abort(c, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "business.order.stock_insufficient", "库存不足"))
 	})
 	if err := r.Run(":8080"); err != nil {
 		slog.Error("server exit", "err", err)

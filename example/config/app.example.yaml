@@ -28,7 +28,7 @@ observability:
     # jsonl_path: endpoint 为空或 disabled 时的日志落盘路径
     jsonl_path: "logs/events.jsonl"
 
-  # --- 采样与导出频率（库默认见 telemetry）---
+  # --- 采样率与导出间隔（库默认见 telemetry）---
   sampling:
     # trace_ratio: 头部采样率 (0,1]；演示 0.1，生产按 QPS 调
     trace_ratio: 0.1
@@ -43,11 +43,17 @@ observability:
   # --- 日志治理（NewLogger 选项，默认不自动挂载）---
   log:
     sampler:
-      # type: none | result_keep
-      type: result_keep
-      # ratio: 非高价值 app.result 的保留概率；1=全量
-      # 高价值 failed/error/blocked/denied 始终保留（ResultKeepSampler）
-      ratio: 1.0
+      # type: none | result_keep | event_keep
+      # event_keep（推荐）：按 event.name 前缀全量保留，其余委托 fallback 采样
+      type: event_keep
+      # keep_prefixes: 命中任一前缀的事件全量保留（业务/错误/安全/审计/探测）
+      keep_prefixes: ["business.", "error.", "security.", "audit.", "probe."]
+      # fallback_ratio: 未命中前缀（如 access.http.request）非高价值的保留概率；
+      # 高价值 failed/error/blocked/denied 恒保留；生产建议 0.1，演示可 1
+      fallback_ratio: 0.1
+      # 备选 result_keep：只按 app.result 采样，不区分事件类型
+      # type: result_keep
+      # ratio: 1.0   # 非高价值保留概率；1=全量
     masker:
       # enabled: 是否 WithMasker(FieldMasker)
       enabled: true
