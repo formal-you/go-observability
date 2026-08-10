@@ -46,16 +46,17 @@ defer func() {
 
 出口选择在 Setup 时固化；后续修改环境变量不会改变已有 `Providers` 的 endpoint 或日志出口，需要重新 Setup 后再切换。
 
-应用应检查构造错误，配置 `log.WithErrorHandler` 观察异步写入失败，并关闭实现了 `Close(context.Context)` 的 Writer。完整代码见 [README](../README.md) 和 [`example/main.go`](../example/main.go)。
+应用应检查构造错误，配置 `log.WithErrorHandler` 观察异步写入失败，并关闭实现了 `Close(context.Context)` 的 Writer。需要同时写多个出口（如 stdout + 文件 + OTLP）时，用 `log.NewMultiWriter(writers...)` 组合 Writer，任一失败不阻断其余。完整代码见 [README](../README.md) 和 [`example/main.go`](../example/main.go)。
 
 ## Logger 选项
 
 ```go
 logger := log.NewLogger(w,
-	log.WithSampler(log.EventKeepSampler{
-		KeepPrefixes: []string{"business.", "error.", "security.", "audit.", "probe."},
-		Fallback:     log.ResultKeepSampler{Ratio: 0.1},
-	}),
+	log.WithSampler(log.NewEventKeepSampler(
+		[]string{"business.", "error.", "security.", "audit.", "probe."},
+		log.NewResultKeepSampler(0.1), // access 成功按比例采样，失败恒保留
+	)),
+	log.WithTraceExtractor(tracemw.NewTraceExtractor()), // 事件未显式带 trace/span 时自动补全（middleware/trace）
 	log.WithMasker(log.FieldMasker{Keys: []string{"app.phone"}}),
 	log.WithBaseMetadata(log.EventMetadata{Level: log.LevelInfo}),
 	log.WithErrorHandler(func(ctx context.Context, msg string, attrs []slog.Attr, err error) {
@@ -66,7 +67,8 @@ logger := log.NewLogger(w,
 
 | 选项 | 默认行为 | 生产建议 |
 | --- | --- | --- |
-| Sampler | 全量日志事件 | 推荐 `EventKeepSampler`：业务/错误/安全/审计/探测全量，access 成功按比例采样、失败恒保留 |
+| Sampler | 全量日志事件 | 推荐 `NewEventKeepSampler`：业务/错误/安全/审计/探测全量，access 成功按比例采样、失败恒保留（非法入参构造期 panic） |
+| TraceExtractor | 不补全链路 | 配 `WithTraceExtractor`（如 `middleware/trace.NewTraceExtractor`），事件未显式带 trace/span 时自动补全 |
 | Masker | 不脱敏 | 维护业务 PII 键清单并在写出前脱敏 |
 | BaseMetadata | 不补全 | 注入服务内稳定的公共元数据 |
 | ErrorHandler | 写入错误不可见 | 接入独立、不会递归使用同一 Writer 的告警路径 |

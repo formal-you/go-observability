@@ -201,3 +201,36 @@ func TestEventKeepSamplerMissingEventName(t *testing.T) {
 		t.Error("event.name 缺失应走 Fallback（Ratio=0 → 丢弃）")
 	}
 }
+
+func TestNewResultKeepSampler(t *testing.T) {
+	if s := NewResultKeepSampler(1); s == nil || s.Ratio != 1 {
+		t.Errorf("NewResultKeepSampler(1) = %+v, want Ratio=1", s)
+	}
+	for _, ratio := range []float64{0, -0.5, 1.5} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("NewResultKeepSampler(%v) 应 panic", ratio)
+				}
+			}()
+			NewResultKeepSampler(ratio)
+		}()
+	}
+}
+
+func TestNewEventKeepSampler(t *testing.T) {
+	s := NewEventKeepSampler([]string{"business."}, ResultKeepSampler{Ratio: 0.5})
+	if s == nil || len(s.KeepPrefixes) != 1 || s.Fallback == nil {
+		t.Errorf("NewEventKeepSampler 返回异常: %+v", s)
+	}
+	for _, prefixes := range [][]string{nil, {}, {""}} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("NewEventKeepSampler(%v) 应 panic", prefixes)
+				}
+			}()
+			NewEventKeepSampler(prefixes, nil)
+		}()
+	}
+}

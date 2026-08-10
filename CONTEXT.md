@@ -188,6 +188,10 @@ _Avoid_: 日志打印（埋点是结构化信号产生）
 
 ### 遥测与装配
 
+**TraceExtractor**:
+从 ctx 提取当前 Span 链路标识的适配器（经 WithTraceExtractor 注入）；事件未显式携带 trace_id/span_id 时自动补全，不覆盖已设置值。
+_Avoid_: 传播（跨服务传递）——TraceExtractor 是进程内补全
+
 **层（SDK 侧 / Collector 侧）**:
 频率决策分两层：应用 SDK 决定采样率与批量导出间隔；Collector 只做接收端 batch 凑批与可选尾部采样，管不到 SDK 何时导出。
 _Avoid_: 用 Collector 配置描述 SDK 采样率或导出间隔

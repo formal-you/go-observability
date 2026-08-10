@@ -72,6 +72,27 @@ func (s EventKeepSampler) Sample(ctx context.Context, attrs []slog.Attr) bool {
 	return s.Fallback.Sample(ctx, attrs)
 }
 
+// NewResultKeepSampler 构造按 app.result 采样的 ResultKeepSampler。
+// ratio 必须落在 (0,1]：0 是零值陷阱（非高价值全丢），>1 是常见配置错误，均 panic。
+func NewResultKeepSampler(ratio float64) *ResultKeepSampler {
+	if ratio <= 0 || ratio > 1 {
+		panic("log: ResultKeepSampler ratio 必须落在 (0,1]")
+	}
+	return &ResultKeepSampler{Ratio: ratio}
+}
+
+// NewEventKeepSampler 构造按 event.name 前缀全量保留的 EventKeepSampler。
+// prefixes 必须至少含一个非空前缀（空列表会让所有事件走 Fallback，通常是配置错误）；
+// fallback 可为 nil（未命中事件恒保留）。
+func NewEventKeepSampler(prefixes []string, fallback Sampler) *EventKeepSampler {
+	for _, prefix := range prefixes {
+		if prefix != "" {
+			return &EventKeepSampler{KeepPrefixes: prefixes, Fallback: fallback}
+		}
+	}
+	panic("log: EventKeepSampler keep prefixes 至少需要一个非空前缀")
+}
+
 func attrString(attrs []slog.Attr, key string) string {
 	for _, a := range attrs {
 		if a.Key == key {

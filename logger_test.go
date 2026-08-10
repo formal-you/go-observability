@@ -100,3 +100,38 @@ func TestLoggerErrorHandler(t *testing.T) {
 		t.Error("writer 失败时 error handler 应被调用")
 	}
 }
+
+func TestLoggerTraceExtractorFillsMissing(t *testing.T) {
+	w := &captureWriter{}
+	l := NewLogger(w, WithTraceExtractor(TraceExtractorFunc(func(_ context.Context) TraceContext {
+		return TraceContext{TraceID: "abcdef0123456789abcdef0123456789", SpanID: "0123456789abcdef"}
+	})))
+	l.Emit(context.Background(), BusinessEvent{
+		Data: BusinessPayload{EventName: EventName("business.order.paid"), Result: ResultSuccess},
+	})
+	attrs := attrMap(w.attrsList[0])
+	if got := attrs["trace_id"].(slog.Value).String(); got != "abcdef0123456789abcdef0123456789" {
+		t.Errorf("trace_id 应由 extractor 补全，实际: %v", got)
+	}
+	if got := attrs["span_id"].(slog.Value).String(); got != "0123456789abcdef" {
+		t.Errorf("span_id 应由 extractor 补全，实际: %v", got)
+	}
+}
+
+func TestLoggerTraceExtractorDoesNotOverride(t *testing.T) {
+	w := &captureWriter{}
+	l := NewLogger(w, WithTraceExtractor(TraceExtractorFunc(func(_ context.Context) TraceContext {
+		return TraceContext{TraceID: "from-extractor", SpanID: "from-extractor"}
+	})))
+	l.Emit(context.Background(), BusinessEvent{
+		EventMetadata: EventMetadata{TraceID: "from-event", SpanID: "from-event"},
+		Data:          BusinessPayload{EventName: EventName("business.order.paid"), Result: ResultSuccess},
+	})
+	attrs := attrMap(w.attrsList[0])
+	if got := attrs["trace_id"].(slog.Value).String(); got != "from-event" {
+		t.Errorf("事件显式设置的 trace_id 不应被覆盖，实际: %v", got)
+	}
+	if got := attrs["span_id"].(slog.Value).String(); got != "from-event" {
+		t.Errorf("事件显式设置的 span_id 不应被覆盖，实际: %v", got)
+	}
+}
