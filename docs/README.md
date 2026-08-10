@@ -2,6 +2,7 @@
 
 | 文档 | 适合何时阅读 |
 | --- | --- |
+| [CONTEXT.md](../CONTEXT.md) | 统一项目术语，避免采样/批量导出间隔/事件模型等概念沟通误导 |
 | [onboarding.md](onboarding.md) | 首次克隆后快速运行与定位代码 |
 | [configuration.md](configuration.md) | 配置 telemetry、Logger 和部署侧 Collector |
 | [environment.md](environment.md) | 查询库实际读取的环境变量 |

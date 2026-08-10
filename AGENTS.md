@@ -1,14 +1,14 @@
 # AGENTS.md — go-observability 开发规则
 
 本文件是 go-observability 仓库的开发守则。任何 agent / 协作者改动本仓库前必须先读本文件。
-本文件与 README.md、`docs/architecture.md`、`docs/configuration.md` 共同构成仓库内项目真源；文档与代码不一致时以本文件和代码为准，并在同一提交中修正文档。
+本文件与 README.md、`CONTEXT.md`（术语表）、`docs/architecture.md`、`docs/configuration.md` 共同构成仓库内项目真源；文档与代码不一致时以本文件和代码为准，并在同一提交中修正文档。
 
 ## 项目身份
 
 - 模块路径：`github.com/formal-you/go-observability`；Go 1.25。
 - 定位：基于 OpenTelemetry 语义约定的语义化日志组件，采用「方案2 源即规范」——属性键直接用 OTel semconv 1.41.0 名 + `app.*` vendor 命名空间。
 - 核心 log 包零外部依赖（仅标准库：log/slog、net、time、fmt、strings）；OTel 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`（gin/errresp/recover/nethttp 用 OTel trace 提取 span context）、`example/*`。
-- 采集频率归 opentelemetry-collector（batch processor）；核心层每次 Emit 同步写出，不做批处理/定时器。
+- 批量导出分两层：SDK 侧由 telemetry.Config 的批量导出间隔控制，Collector 侧由 batch processor 二次凑批；核心层每次 Emit 同步写出，不做批处理/定时器。
 
 ## 防漂移硬规则（违反即视为实现漂移）
 
@@ -58,5 +58,6 @@
 ## 常用真源
 
 - 用户入口与公共承诺：`README.md`、`docs/`
+- 术语表：`CONTEXT.md`（术语冲突时以它为准）
 - 开发与验证流程：`CONTRIBUTING.md`、`docs/workflow.md`
 - semconv 1.41.0 常量：`$GOMODCACHE/go.opentelemetry.io/otel@v1.44.0/semconv/v1.41.0`

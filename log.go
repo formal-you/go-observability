@@ -6,8 +6,9 @@ import (
 )
 
 // Logger 与 Writer：写出已归一化的事件。
-// 采集频率不在此层控制：由 opentelemetry-collector 的 batch processor 配置决定
-//（如 timeout / send_batch_size）。本层每次 Emit 直接调用 Writer，不内置批处理或定时器。
+// 批量导出不在此层控制：SDK 侧由 telemetry.Config 的批量导出间隔决定
+//（trace 5s / metric 15s / log 1s），Collector 侧由 batch processor 的 timeout /
+// send_batch_size 二次凑批。本层每次 Emit 直接调用 Writer，不内置批处理或定时器。
 
 // Writer 接收已归一化并扁平化的语义日志事件。
 // msg 当前等于事件的 event_type；attrs 同时包含公共 metadata 与 payload 字段。

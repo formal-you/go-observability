@@ -9,7 +9,7 @@
 
 - **方案2「源即规范」**：属性键直接使用 OTel semconv 1.41.0 名 + `app.*` vendor 命名空间，字段名可追踪、不发明私有键。
 - **核心零依赖**：根包 `log` 只依赖标准库（`log/slog`、`net`、`time`、`fmt`、`strings`）；OTel SDK 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`、`example/*`。
-- **采集频率归 Collector**：核心层每次 `Emit` 同步写出，不做批处理/定时器；批量导出由 opentelemetry-collector 的 batch processor 控制。
+- **批量导出分两层**：SDK 侧由 `telemetry.Config` 的批量导出间隔控制（trace 5s / metric 15s / log 1s），Collector 侧由 batch processor（timeout / send_batch_size）二次凑批；核心层每次 `Emit` 同步写出，不做批处理/定时器。
 - **出口可替换**：同一事件模型可投影到 JSONL / stdout / OTLP，业务埋点不因出口变化而重写。
 
 ## 2. 分层架构

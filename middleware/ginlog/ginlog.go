@@ -1,5 +1,6 @@
 // Package ginlog 提供 Gin 中间件：为每个请求生成 AccessEvent 并交给 log.Logger 写出。
-// 采集频率仍由后端（otel-collector）控制；本中间件只负责事件组装与写出。
+// 每条请求同步 Emit；批量导出由 SDK 的 log batch processor 控制（Collector 侧另有 batch
+// 二次凑批），本中间件只负责事件组装与写出。
 package ginlog
 
 import (

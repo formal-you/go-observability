@@ -28,7 +28,7 @@ observability:
     # jsonl_path: endpoint 为空或 disabled 时的日志落盘路径
     jsonl_path: "logs/events.jsonl"
 
-  # --- 采样与导出频率（库默认见 telemetry）---
+  # --- 采样率与导出间隔（库默认见 telemetry）---
   sampling:
     # trace_ratio: 头部采样率 (0,1]；演示 0.1，生产按 QPS 调
     trace_ratio: 0.1

@@ -49,7 +49,8 @@ import (
 // 中 Collector 暴露的端口一致。
 const defaultEndpoint = "127.0.0.1:4317"
 
-// 采集/导出频率缺省值：trace 5s、metric 15s（建议 15-60s）、log 1s。
+// 导出/采样缺省值：批量导出间隔 trace 5s、metric 15s（建议 15-60s）、log 1s；
+// trace 头部采样率 0.1；单批上限 512。
 const (
 	defaultTraceBatchTimeout    = 5 * time.Second
 	defaultMetricExportInterval = 15 * time.Second
