@@ -1,4 +1,13 @@
 // Package trace 提供基于全局 TracerProvider 的 HTTP/gRPC 服务器链路中间件。
+//
+// 全链路（分布式）追踪三要素与本品覆盖范围：
+//  1. 入口提取：读取上游传播上下文（HTTP traceparent/tracestate 头、gRPC metadata），
+//     使本服务的 server span 接续调用方链路——本包已实现（HTTP/Gin/gRPC 中间件内）；
+//  2. 出口注入：调用下游前把 trace 上下文写入请求头/metadata——本包提供
+//     InjectHTTPHeaders / InjectGRPCMetadata helper；
+//  3. 客户端与中间件埋点：出站 HTTP/gRPC client、DB（pgx/redis）等插桩——由接入方
+//     使用 otelhttp.Transport / otelgrpc client 拦截器 / pgx-otel 等补齐（库不引入 contrib 依赖）。
+//
 // 每个请求创建一个 server span，span context 注入 request context：下游 handler 与
 // 日志事件（access/error）自动关联 trace_id/span_id。语义约定 1.41.0：
 //   - HTTP：span name = method + route（如 POST /api/v1/auth/register），属性
@@ -19,9 +28,11 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	grpccodes "google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -47,7 +58,9 @@ func NewHTTPMiddleware(cfg Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			recorder := &statusRecorder{ResponseWriter: w}
-			ctx, span := tracer.Start(r.Context(), httpSpanName(r.Method, r.URL.Path),
+			// 入口提取：读取上游 traceparent/tracestate，使本 span 接续调用方链路。
+			ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+			ctx, span := tracer.Start(ctx, httpSpanName(r.Method, r.URL.Path),
 				trace.WithSpanKind(trace.SpanKindServer))
 			defer finishSpan(span)
 			r = r.WithContext(ctx)
@@ -75,7 +88,9 @@ func NewGinMiddleware(cfg Config) gin.HandlerFunc {
 	tracer := defaultTracer(cfg)
 	return func(c *gin.Context) {
 		route := c.FullPath()
-		ctx, span := tracer.Start(c.Request.Context(), httpSpanName(c.Request.Method, route),
+		// 入口提取：读取上游 traceparent/tracestate，使本 span 接续调用方链路。
+		ctx := otel.GetTextMapPropagator().Extract(c.Request.Context(), propagation.HeaderCarrier(c.Request.Header))
+		ctx, span := tracer.Start(ctx, httpSpanName(c.Request.Method, route),
 			trace.WithSpanKind(trace.SpanKindServer))
 		defer finishSpan(span)
 		c.Request = c.Request.WithContext(ctx)
@@ -99,6 +114,8 @@ func NewGinMiddleware(cfg Config) gin.HandlerFunc {
 func NewGRPCUnaryInterceptor(cfg Config) grpc.UnaryServerInterceptor {
 	tracer := defaultTracer(cfg)
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+		// 入口提取：读取 gRPC metadata 的 traceparent/tracestate，使本 span 接续调用方链路。
+		ctx = otel.GetTextMapPropagator().Extract(ctx, incomingMetadata(ctx))
 		ctx, span := tracer.Start(ctx, info.FullMethod, trace.WithSpanKind(trace.SpanKindServer))
 		defer finishSpan(span)
 		resp, err = handler(ctx, req)
@@ -186,4 +203,10 @@ func rpcMethod(fullMethod string) string {
 		return parts[2]
 	}
 	return ""
+}
+
+// incomingMetadata 返回 ctx 中 gRPC 入站 metadata 的 TextMapCarrier 适配（无则空）。
+func incomingMetadata(ctx context.Context) metadataCarrier {
+	md, _ := metadata.FromIncomingContext(ctx)
+	return metadataCarrier(md)
 }

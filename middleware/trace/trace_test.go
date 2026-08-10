@@ -4,14 +4,18 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	grpccodes "google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -30,8 +34,14 @@ func (p *captureProcessor) ForceFlush(context.Context) error { return nil }
 func newTestTracer(t *testing.T) (trace.Tracer, *captureProcessor) {
 	t.Helper()
 	p := &captureProcessor{}
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(p))
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(p), sdktrace.WithSampler(sdktrace.AlwaysSample()))
 	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	// 全局 TextMapPropagator 默认 no-op；模拟生产（telemetry.Setup 安装 W3C TraceContext）。
+	prevProp := otel.GetTextMapPropagator()
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	t.Cleanup(func() { otel.SetTextMapPropagator(prevProp) })
+
 	return tp.Tracer("go-observability-test"), p
 }
 
@@ -187,5 +197,90 @@ func TestGRPCUnaryInterceptorMarksError(t *testing.T) {
 	}
 	if attrInt(t, p.spans[0], "rpc.grpc.status_code") != int64(grpccodes.InvalidArgument) {
 		t.Fatalf("status attr = %d", attrInt(t, p.spans[0], "rpc.grpc.status_code"))
+	}
+}
+
+const (
+	testTraceParent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+	testTraceID     = "4bf92f3577b34da6a3ce929d0e0e4736"
+)
+
+// TestHTTPMiddlewareExtractsPropagation 验证入口提取：带 traceparent 的请求，
+// 本服务的 server span 接续调用方链路（span parent 的 traceID 与上游一致）。
+func TestHTTPMiddlewareExtractsPropagation(t *testing.T) {
+	tracer, p := newTestTracer(t)
+	handler := NewHTTPMiddleware(Config{Tracer: tracer})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+	req.Header.Set("traceparent", testTraceParent)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	if len(p.spans) != 1 {
+		t.Fatalf("spans = %d, want 1", len(p.spans))
+	}
+	if got := p.spans[0].Parent().TraceID().String(); got != testTraceID {
+		t.Fatalf("span parent traceID = %s, want %s（应接续上游 trace）", got, testTraceID)
+	}
+}
+
+// TestHTTPMiddlewareWithoutPropagationStartsRoot 验证无上游传播时创建新的根 trace。
+func TestHTTPMiddlewareWithoutPropagationStartsRoot(t *testing.T) {
+	tracer, p := newTestTracer(t)
+	handler := NewHTTPMiddleware(Config{Tracer: tracer})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/ok", nil))
+	if len(p.spans) != 1 {
+		t.Fatalf("spans = %d, want 1", len(p.spans))
+	}
+	if p.spans[0].Parent().IsValid() {
+		t.Fatalf("span parent = %v, want 无效（新根 trace）", p.spans[0].Parent())
+	}
+}
+
+// TestGRPCUnaryInterceptorExtractsPropagation 验证 gRPC 入口提取：metadata 带
+// traceparent 时接续调用方链路。
+func TestGRPCUnaryInterceptorExtractsPropagation(t *testing.T) {
+	tracer, p := newTestTracer(t)
+	interceptor := NewGRPCUnaryInterceptor(Config{Tracer: tracer})
+	info := &grpc.UnaryServerInfo{FullMethod: "/mall.auth.v1.AuthService/Register"}
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("traceparent", testTraceParent))
+	_, err := interceptor(ctx, nil, info, func(ctx context.Context, req any) (any, error) {
+		return "ok", nil
+	})
+	if err != nil {
+		t.Fatalf("handler error = %v", err)
+	}
+	if len(p.spans) != 1 {
+		t.Fatalf("spans = %d, want 1", len(p.spans))
+	}
+	if got := p.spans[0].Parent().TraceID().String(); got != testTraceID {
+		t.Fatalf("span parent traceID = %s, want %s", got, testTraceID)
+	}
+}
+
+// TestInjectHTTPHeaders 验证出口注入：ctx 内 span 的 traceID 出现在 traceparent 头。
+func TestInjectHTTPHeaders(t *testing.T) {
+	tracer, _ := newTestTracer(t)
+	_, span := tracer.Start(context.Background(), "parent")
+	header := http.Header{}
+	InjectHTTPHeaders(trace.ContextWithSpan(context.Background(), span), header)
+	if got := header.Get("traceparent"); !strings.Contains(got, span.SpanContext().TraceID().String()) {
+		t.Fatalf("traceparent = %q, want 包含 %s", got, span.SpanContext().TraceID().String())
+	}
+}
+
+// TestInjectGRPCMetadata 验证 gRPC 出口注入：返回的 ctx 出站 metadata 含 traceparent。
+func TestInjectGRPCMetadata(t *testing.T) {
+	tracer, _ := newTestTracer(t)
+	_, span := tracer.Start(context.Background(), "parent")
+	ctx := InjectGRPCMetadata(trace.ContextWithSpan(context.Background(), span))
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		t.Fatal("出站 metadata 缺失")
+	}
+	if got := md.Get("traceparent"); len(got) != 1 || !strings.Contains(got[0], span.SpanContext().TraceID().String()) {
+		t.Fatalf("traceparent = %v, want 包含 %s", got, span.SpanContext().TraceID().String())
 	}
 }
