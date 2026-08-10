@@ -7,7 +7,7 @@
 
 - 模块路径：`github.com/formal-you/go-observability`；Go 1.25。
 - 定位：基于 OpenTelemetry 语义约定的语义化日志组件，采用「方案2 源即规范」——属性键直接用 OTel semconv 1.41.0 名 + `app.*` vendor 命名空间。
-- 核心 log 包零外部依赖（仅标准库：log/slog、net、time、fmt、strings）；OTel 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/ginlog`、`example/*`。
+- 核心 log 包零外部依赖（仅标准库：log/slog、net、time、fmt、strings）；OTel 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`（gin/errresp/recover/nethttp 用 OTel trace 提取 span context）、`example/*`。
 - 采集频率归 opentelemetry-collector（batch processor）；核心层每次 Emit 同步写出，不做批处理/定时器。
 
 ## 防漂移硬规则（违反即视为实现漂移）
@@ -47,7 +47,7 @@
 - 根包 log：`types.go`（枚举 + EventName 常量注册表）、`keys.go`（属性键常量）、`metadata.go`、`payload.go`（六类载荷）、`events.go`（六类事件结构体）、`normalize.go`（归一化 / 保留键）、`log.go`（Logger / Writer / 采样 / 脱敏接口）。
 - `internal/attrkv/`：slog.Attr ↔ OTel 转换 + Record 顶层字段映射（唯一核心映射层）。
 - `writer/{otlp,stdout,file}/`：后端 Writer（装配层，可替换）。
-- `middleware/ginlog/`、`middleware/recover/`：Gin 集成；net/http 见 example/nethttp。
+- `middleware/ginlog/`、`middleware/errresp/`、`middleware/recover/`：Gin 集成；`middleware/nethttp/`：net/http 错误收口；net/http 示例见 example/nethttp。
 - `errs/`：错误体系，零外部依赖；`error_project.go` 投影。
 - `telemetry/`：对外公开的三信号装配与环境变量出口选择。
 - `ResultKeepSampler` / `FieldMasker`：可选采样与脱敏实现；NewLogger 不自动挂载。
