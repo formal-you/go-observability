@@ -75,8 +75,8 @@ Trace 中的一个操作单元（如一次 HTTP 请求处理、一次 DB 调用�
 _Avoid_: 步骤、日志记录
 
 **SpanContext**:
-跨进程传递的链路标识：trace_id + span_id + trace flags + trace state，由 W3C Trace Context 承载。
-_Avoid_: Go 的 context.Context（那是进程内对象）
+跨进程传递的链路标识：trace_id + span_id + trace flags + trace state，由 W3C Trace Context 承载；进程内则由 Go context.Context 携带当前 Span（含 SpanContext）在中间件与调用层间流转，用于耗时排查与错误定位。
+_Avoid_: 把 SpanContext 当作完整 Span（进程内 context 携带的是当前 Span，SpanContext 只是其不可变标识）
 
 **TraceIDRatioBased**:
 按 trace_id 哈希做概率头部采样的采样器；TraceSampleRatio=0.1 表示保留约 10% 的 trace。
