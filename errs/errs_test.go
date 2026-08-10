@@ -77,7 +77,7 @@ func TestStackRule(t *testing.T) {
 		want errs.StackPolicy
 	}{
 		{errs.TypeRuntimePanic, errs.StackMust},
-		{errs.TypeRuntimeContextCanceled, errs.StackMust},
+		{errs.TypeRuntimeContextCanceled, errs.StackOptional},
 		{errs.TypeRuntimeDeadlineExceeded, errs.StackMust},
 		{errs.TypeDBConnectionError, errs.StackMust},
 		{errs.TypeDBQueryTimeout, errs.StackMust},
@@ -188,8 +188,8 @@ func TestNewSystemDefaults(t *testing.T) {
 	if e.ErrCode() != "" {
 		t.Errorf("ErrCode() = %q, want empty", e.ErrCode())
 	}
-	if e.Stack() != "" {
-		t.Errorf("Stack() = %q, want empty", e.Stack())
+	if e.Stack() == "" {
+		t.Error("Stack() empty, want 构造点自动采集（db.* 为 StackMust）")
 	}
 	if e.Source() != (errs.Source{}) {
 		t.Errorf("Source() = %+v, want zero value", e.Source())
@@ -339,4 +339,34 @@ func TestCaptureStack(t *testing.T) {
 	if !strings.Contains(stack, "TestCaptureStack") {
 		t.Errorf("stack does not contain TestCaptureStack:\n%s", stack)
 	}
+}
+
+func TestNewSystemStackPolicy(t *testing.T) {
+	t.Run("must auto-captures at creation", func(t *testing.T) {
+		e := errs.NewSystem(errs.TypeDBQueryTimeout, "timeout")
+		if e.Stack() == "" {
+			t.Fatal("Stack() empty, want StackMust 类别构造点自动采集")
+		}
+		if !strings.Contains(e.Stack(), "TestNewSystemStackPolicy") {
+			t.Errorf("堆栈应包含创建点调用帧 TestNewSystemStackPolicy:\n%s", e.Stack())
+		}
+	})
+	t.Run("optional does not auto-capture", func(t *testing.T) {
+		e := errs.NewSystem(errs.TypeRuntimeContextCanceled, "canceled")
+		if e.Stack() != "" {
+			t.Errorf("Stack() = %q, want empty for StackOptional", e.Stack())
+		}
+	})
+	t.Run("none does not auto-capture", func(t *testing.T) {
+		e := errs.NewSystem(errs.ErrorType("business.auth.forbidden"), "denied")
+		if e.Stack() != "" {
+			t.Errorf("Stack() = %q, want empty for StackNone", e.Stack())
+		}
+	})
+	t.Run("explicit WithStack wins over auto-capture", func(t *testing.T) {
+		e := errs.NewSystem(errs.TypeDBConnectionError, "conn", errs.WithStack("custom"))
+		if e.Stack() != "custom" {
+			t.Errorf("Stack() = %q, want explicit custom", e.Stack())
+		}
+	})
 }
