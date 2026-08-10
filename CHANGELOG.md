@@ -22,6 +22,8 @@
 - CI 检查与核心组件测试。
 - 中文 Issue 表单、PR 模板、Dependabot 与首次发布检查清单。
 
+- 新增 `middleware/kratos`：go-kratos v3 传输层适配——`ErrorEncoder`（kratos HTTP 错误编码，errs.AppError / kratos 原生错误双识别，error.type 写入 metadata）与 `ErrorLog`（错误事件日志 filter，复用 `log.EventFromError`）。
+
 ### Changed
 
 - `errs` 堆栈策略可配置：新增 `errs.SetStackPolicy`，使用方可按 `error.type` 前缀覆盖默认策略（最长前缀优先，空 map = 库内置默认）；`NewSystem` 构造采集与 `error_project` 事件渲染均跟随同一策略。
