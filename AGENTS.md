@@ -48,7 +48,7 @@
 - 根包 log：`types.go`（枚举 + EventName 常量注册表）、`keys.go`（属性键常量）、`metadata.go`、`payload.go`（六类载荷）、`events.go`（六类事件结构体）、`normalize.go`（归一化 / 保留键）、`log.go`（Logger / Writer / 采样 / 脱敏接口）。
 - `internal/attrkv/`：slog.Attr ↔ OTel 转换 + Record 顶层字段映射（唯一核心映射层）。
 - `writer/{otlp,stdout,file}/`：后端 Writer（装配层，可替换）。
-- `middleware/ginlog/`、`middleware/errresp/`、`middleware/recover/`：Gin 集成；`middleware/nethttp/`：net/http 错误收口；`middleware/metrics/`：HTTP/gRPC 服务器指标中间件；net/http 示例见 example/nethttp。
+- `middleware/ginlog/`、`middleware/errresp/`、`middleware/recover/`：Gin 集成；`middleware/nethttp/`：net/http 错误收口；`middleware/metrics/`：HTTP/gRPC 服务器指标；`middleware/trace/`：HTTP/gRPC 服务器链路；net/http 示例见 example/nethttp。
 - `errs/`：错误体系，零外部依赖；`error_project.go` 投影。
 - `telemetry/`：对外公开的三信号装配与环境变量出口选择。
 - `ResultKeepSampler` / `FieldMasker`：可选采样与脱敏实现；NewLogger 不自动挂载。
