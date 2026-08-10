@@ -25,6 +25,7 @@
 6. schema / 键名 / 字段归属变更必须同步文档（README.md、detailed-design.md、方案2-直接符合规范.md），改代码与改文档应在同一提交内完成。
 7. 零值省略：字符串/数值零值省略；布尔不省略（false 对 retryable/result 语义明确）。
 8. samber 生态只允许出现在 `example/` 与 `docs/samber-comparison.md`，核心包保持零外部依赖。
+9. 能力归属：库承载所有通用可复用能力（错误分类/投影、HTTP/gRPC/Gin 收口中间件、三信号装配），并通过配置或注入点（如 `ResponseProjector`）允许接入方自定义契约；接入方不得在应用侧镜像库中间件，契约差异一律经库的注入点表达。
 
 ## 开发流程
 
