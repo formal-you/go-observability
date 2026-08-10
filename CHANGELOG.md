@@ -24,6 +24,7 @@
 
 ### Changed
 
+- `errs` 堆栈策略可配置：新增 `errs.SetStackPolicy`，使用方可按 `error.type` 前缀覆盖默认策略（最长前缀优先，空 map = 库内置默认）；`NewSystem` 构造采集与 `error_project` 事件渲染均跟随同一策略。
 - 项目字段前缀统一为 `app.*`；电商等领域事件从核心包移至使用方示例。
 - OpenTelemetry 属性键对齐 Semantic Conventions 1.41.0。
 - file/stdout 与 OTLP 使用各自适合的字段投影，OTLP 顶层承载时间、严重级别、EventName 和 span context。

@@ -493,3 +493,15 @@ func (levelOfUnknownKind) Error() string             { return "unknown kind" }
 func (levelOfUnknownKind) ErrorType() errs.ErrorType { return errs.TypeRuntimePanic }
 func (levelOfUnknownKind) ErrCode() errs.ErrorCode   { return "" }
 func (levelOfUnknownKind) Unwrap() error             { return nil }
+
+func TestErrorEventStackRespectsStackPolicyOverride(t *testing.T) {
+	// 使用方把 db. 覆盖为 none：即使显式 WithStack，事件也不渲染 StackTrace。
+	errs.SetStackPolicy(map[string]errs.StackPolicy{"db.": errs.StackNone})
+	t.Cleanup(func() { errs.SetStackPolicy(nil) })
+
+	err := errs.NewSystem(errs.TypeDBQueryTimeout, "query timeout after 5s", errs.WithStack("不应投影的堆栈"))
+	ev := errorEventFromError(EventNameErrorDBTimeout, err, EventMetadata{})
+	if ev.Data.StackTrace != "" {
+		t.Errorf("StackTrace = %q, want empty（db. 覆盖为 none）", ev.Data.StackTrace)
+	}
+}

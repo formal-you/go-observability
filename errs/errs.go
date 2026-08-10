@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"sync"
 )
 
 // ErrorKind 错误预期性分类：validation / business / system。
@@ -106,12 +107,43 @@ const (
 	StackNone StackPolicy = "none"
 )
 
+// stackOverrides 保存使用方注入的「error.type 前缀 → 堆栈策略」覆盖表；命中时优先于
+// 内置默认策略。由 SetStackPolicy 在进程启动期一次性写入，之后只读。
+var (
+	stackOverridesMu sync.RWMutex
+	stackOverrides   = map[string]StackPolicy{}
+)
+
+// SetStackPolicy 设置前缀→策略覆盖表（如 "db." -> StackNone、精确类型
+// "runtime.context_cancelled" -> StackMust）；空 map / nil 恢复为仅使用内置默认策略。
+// 必须在进程启动阶段、任何错误构造/事件写出前调用（与 log.SetFlags 同类）；
+// StackRule 对命中覆盖前缀的类型优先返回覆盖策略（最长前缀优先），未命中回落到内置默认。
+func SetStackPolicy(overrides map[string]StackPolicy) {
+	copied := make(map[string]StackPolicy, len(overrides))
+	for prefix, policy := range overrides {
+		if prefix == "" {
+			continue
+		}
+		copied[prefix] = policy
+	}
+	stackOverridesMu.Lock()
+	stackOverrides = copied
+	stackOverridesMu.Unlock()
+}
+
 // StackRule 按 error.type 返回堆栈策略（NewSystem 构造时据此决定是否自动补记创建点堆栈）：
+// 先查 SetStackPolicy 注入的覆盖表（最长前缀优先），未命中回落到内置默认——
 // db./redis./mq./http./runtime.（除 context_cancelled）-> must；
 // lock./idempotency./stock.race/data. 及 runtime.context_cancelled -> optional；
 // business.*/validation.* 及未知/空类型（默认兜底）-> none。
 func StackRule(t ErrorType) StackPolicy {
 	p := string(t)
+	stackOverridesMu.RLock()
+	policy, ok := stackPolicyForLocked(p)
+	stackOverridesMu.RUnlock()
+	if ok {
+		return policy
+	}
 	switch {
 	case p == "runtime.context_cancelled":
 		// 高频且多为客户端主动取消，逐次采集堆栈成本高、诊断价值低；需要时由调用方 WithStack。
@@ -123,6 +155,21 @@ func StackRule(t ErrorType) StackPolicy {
 	default:
 		return StackNone
 	}
+}
+
+// stackPolicyForLocked 在覆盖表中查找 p 的最长匹配前缀；调用方须持有 stackOverridesMu 读锁。
+func stackPolicyForLocked(p string) (StackPolicy, bool) {
+	best := ""
+	var bestPolicy StackPolicy
+	found := false
+	for prefix, policy := range stackOverrides {
+		if len(prefix) > len(best) && strings.HasPrefix(p, prefix) {
+			best = prefix
+			bestPolicy = policy
+			found = true
+		}
+	}
+	return bestPolicy, found
 }
 
 // hasAnyPrefix 报告 s 是否以 prefixes 中任一前缀开头。
