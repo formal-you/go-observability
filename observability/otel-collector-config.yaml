@@ -16,9 +16,10 @@
 #   Collector 侧（本文件）：
 #     processors.batch.timeout=1s / send_batch_size=256 是接收端二次凑批，
 #     只影响发送延迟与批量大小，不决定 SDK 何时导出、采样多少
-# 日志条数由应用侧决定：默认每条（含 AccessEvent 每请求一条）都会写出；
-#   挂了 log.WithSampler(ResultKeepSampler{Ratio}) 后，success 类按 Ratio 概率保留，
-#   failed/error/blocked/denied 恒保留；SkipPaths 跳过的路径不产生事件。
+# 日志条数由应用侧决定（推荐策略 EventKeepSampler）：
+#   business./error./security./audit./probe. 全量保留（业务成功也全量）；
+#   access.* 委托 ResultKeepSampler{Ratio}：失败（>=400）恒保留，成功按比例采样；
+#   心跳/健康检查用 SkipPaths/短路在接入层排除，不进入概率采样。
 # 想用 tail_sampling：先把应用 TraceSampleRatio 设为 1.0 完整导出，再在
 #   traces pipeline 加 tail_sampling processor（模板见 collector.example.yaml）
 

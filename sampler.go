@@ -3,6 +3,7 @@ package log
 import (
 	"context"
 	"log/slog"
+	"strings"
 )
 
 // ResultKeepSampler 按 app.result 强制保留高价值结果，其余按 ratio 概率保留。
@@ -44,6 +45,31 @@ func (s ResultKeepSampler) Sample(_ context.Context, attrs []slog.Attr) bool {
 		rf = sampleRand
 	}
 	return rf() < r
+}
+
+// EventKeepSampler 按 event.name 前缀强制保留事件，其余事件委托 Fallback 判定。
+// 适合"业务全量 + 访问采样"策略：命中 KeepPrefixes 的事件（如 business./error./
+// security./audit./probe.）恒保留，未命中的高频事件（如 access.http.request）交给
+// Fallback 按结果/比例采样。event.name 缺失或为空时按未命中处理（安全降级）。
+type EventKeepSampler struct {
+	// KeepPrefixes 命中任一前缀的 event.name 恒保留；空列表时全部交给 Fallback。
+	KeepPrefixes []string
+	// Fallback 未命中前缀事件的采样判定；nil 时未命中事件恒保留。
+	Fallback Sampler
+}
+
+// Sample 实现 Sampler：event.name 命中 KeepPrefixes 任一前缀恒 true；否则委托 Fallback。
+func (s EventKeepSampler) Sample(ctx context.Context, attrs []slog.Attr) bool {
+	name := attrString(attrs, string(KeyEventName))
+	for _, prefix := range s.KeepPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	if s.Fallback == nil {
+		return true
+	}
+	return s.Fallback.Sample(ctx, attrs)
 }
 
 func attrString(attrs []slog.Attr, key string) string {

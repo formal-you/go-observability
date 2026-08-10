@@ -52,7 +52,10 @@ defer func() {
 
 ```go
 logger := log.NewLogger(w,
-	log.WithSampler(log.ResultKeepSampler{Ratio: 1}),
+	log.WithSampler(log.EventKeepSampler{
+		KeepPrefixes: []string{"business.", "error.", "security.", "audit.", "probe."},
+		Fallback:     log.ResultKeepSampler{Ratio: 0.1},
+	}),
 	log.WithMasker(log.FieldMasker{Keys: []string{"app.phone"}}),
 	log.WithBaseMetadata(log.EventMetadata{Level: log.LevelInfo}),
 	log.WithErrorHandler(func(ctx context.Context, msg string, attrs []slog.Attr, err error) {
@@ -63,7 +66,7 @@ logger := log.NewLogger(w,
 
 | 选项 | 默认行为 | 生产建议 |
 | --- | --- | --- |
-| Sampler | 全量日志事件 | 为低价值事件设置比例，高价值失败结果强制保留 |
+| Sampler | 全量日志事件 | 推荐 `EventKeepSampler`：业务/错误/安全/审计/探测全量，access 成功按比例采样、失败恒保留 |
 | Masker | 不脱敏 | 维护业务 PII 键清单并在写出前脱敏 |
 | BaseMetadata | 不补全 | 注入服务内稳定的公共元数据 |
 | ErrorHandler | 写入错误不可见 | 接入独立、不会递归使用同一 Writer 的告警路径 |

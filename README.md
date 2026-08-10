@@ -217,6 +217,21 @@ access.http.request
 
 `TraceSampleRatio` 是 SDK 头部采样。Collector 无法恢复 SDK 已丢弃的 trace；需要按错误或延迟执行 `tail_sampling` 时，应先让 SDK 完整导出，再由 Collector 决策。
 
+## 🎚️ 推荐日志采样策略
+
+日志条数由应用侧控制，默认每条都写。按运维最佳实践推荐：
+
+- **业务 / 错误 / 安全 / 审计 / 探测事件**：全量保留（业务成功也是交易记录，不能丢）。
+- **访问事件（access.\*）**：高频且心跳/轮询占大头，成功按比例采样、失败（`failed` 等）恒保留。
+- **心跳 / 健康检查**：确定性噪音，用 `SkipPaths`（ginlog）或接入层短路直接排除，不进入概率采样。
+
+```go
+log.WithSampler(log.EventKeepSampler{
+	KeepPrefixes: []string{"business.", "error.", "security.", "audit.", "probe."},
+	Fallback:     log.ResultKeepSampler{Ratio: 0.1},
+})
+```
+
 ---
 
 <a name="packages"></a>

@@ -16,6 +16,7 @@
 - `errs` 错误分类、错误事件投影、Gin access、recover 与统一错误收口（`errresp`）中间件，以及框架级事件名 `error.http.request`。
 - 公开 `telemetry` 包，提供 Trace、Metric、Log Provider 装配、环境变量入口和统一关闭。
 - `ResultKeepSampler`、`FieldMasker` 与写入错误回调。
+- 新增 `EventKeepSampler`：按 `event.name` 前缀全量保留（business./error./security./audit./probe.），其余事件委托 Fallback（如 `ResultKeepSampler`）采样——落地"业务全量 + 访问采样"策略。
 - `net/http`、Gin、指标、领域事件和 samber 对照示例。
 - 本地 LGTM 参考栈、Collector 配置与分信号管线模板。
 - 中文配置、安全、架构、贡献和发布检查文档。
