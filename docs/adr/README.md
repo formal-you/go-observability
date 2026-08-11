@@ -18,6 +18,7 @@
 | [0001](0001-errorcode-three-segment-format.md) | ErrorCode 采用三段式（服务/模块）.（场景/操作）.（结果/具体错误） | Accepted | 2026-08-11 |
 | [0002](0002-errortype-low-cardinality-domain-reason.md) | ErrorType 映射 OTel error.type，保持低基数，采用 domain.reason 格式 | Accepted | 2026-08-11 |
 | [0003](0003-move-root-log-package-to-log-subdir.md) | 核心 log 包迁移至 log/ 子目录，导入路径改为 .../go-observability/log | Accepted | 2026-08-11 |
+| [0004](0004-eventtype-as-logrecord-body.md) | msg/event_type 映射 OTel LogRecord.Body，事件字段进属性 | Accepted | 2026-08-11 |
 
 ## 模板
 
