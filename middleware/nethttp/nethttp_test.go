@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/formal-you/go-observability"
 	"github.com/formal-you/go-observability/errs"
+	"github.com/formal-you/go-observability/log"
 )
 
 // captureWriter 捕获 Logger 写出的 msg 与扁平 attrs，用于断言中间件发出的事件形状。

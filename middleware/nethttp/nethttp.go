@@ -14,8 +14,8 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/formal-you/go-observability"
 	"github.com/formal-you/go-observability/errs"
+	"github.com/formal-you/go-observability/log"
 )
 
 // Config 中间件配置。

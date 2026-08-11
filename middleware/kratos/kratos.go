@@ -23,8 +23,8 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/status"
 
-	"github.com/formal-you/go-observability"
 	"github.com/formal-you/go-observability/errs"
+	"github.com/formal-you/go-observability/log"
 )
 
 // Option 定制 kratos 适配层行为。

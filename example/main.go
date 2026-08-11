@@ -12,8 +12,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/formal-you/go-observability"
 	"github.com/formal-you/go-observability/errs"
+	"github.com/formal-you/go-observability/log"
 	"github.com/formal-you/go-observability/middleware/errresp"
 	"github.com/formal-you/go-observability/middleware/ginlog"
 	"github.com/formal-you/go-observability/middleware/metrics"

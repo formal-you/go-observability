@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"testing"
 
-	log "github.com/formal-you/go-observability"
 	"github.com/formal-you/go-observability/example/mall"
+	log "github.com/formal-you/go-observability/log"
 )
 
 // TestB4Registry 验收 CASE-B4-02/03：10 个业务名合法且不含 order.rejected。

@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/formal-you/go-observability"
+	"github.com/formal-you/go-observability/log"
 )
 
 type captureWriter struct {

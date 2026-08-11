@@ -15,8 +15,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/formal-you/go-observability"
 	"github.com/formal-you/go-observability/errs"
+	"github.com/formal-you/go-observability/log"
 )
 
 type captureWriter struct {

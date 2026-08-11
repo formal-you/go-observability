@@ -7,7 +7,7 @@
 | 类型化可观测事件 | 内置六类事件与字段规范 | 由应用自行定义 |
 | JSONL/stdout/OTLP | 提供独立 Writer | 可通过 slog handler 组合，OTLP 需其他桥接 |
 | fan-out、格式化、通用采样 | 基础接口，组合能力有限 | `slog-multi`、`slog-formatter`、`slog-sampling` 较成熟 |
-| 核心依赖 | 根包只依赖标准库 | 接入相应第三方模块 |
+| 核心依赖 | log 包只依赖标准库 | 接入相应第三方模块 |
 
 示例验证了 attrs 可以进入 slog 链，但使用时要注意：
 

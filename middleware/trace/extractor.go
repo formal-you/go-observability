@@ -5,7 +5,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
-	log "github.com/formal-you/go-observability"
+	log "github.com/formal-you/go-observability/log"
 )
 
 // NewTraceExtractor 返回从 ctx 提取当前 span 链路标识的 log.TraceExtractor 适配器。

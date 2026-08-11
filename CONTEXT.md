@@ -165,7 +165,7 @@ OTel 的三大数据类型：trace / metric / log。
 _Avoid_: 数据源、Writer
 
 **SDK 与 API**:
-OTel 分层：API 定义接口与类型，SDK 提供实现（Provider / Exporter / Reader）；本项目根包只依赖 slog 标准库，OTel SDK 集中在 telemetry / writer / middleware。
+OTel 分层：API 定义接口与类型，SDK 提供实现（Provider / Exporter / Reader）；本项目 log 包只依赖 slog 标准库，OTel SDK 集中在 telemetry / writer / middleware。
 _Avoid_: 混用两层的概念
 
 **OTLP**:
@@ -199,7 +199,7 @@ _Avoid_: 传播（跨服务传递）——TraceExtractor 是进程内补全
 _Avoid_: 用 Collector 配置描述 SDK 采样率或导出间隔
 
 **Exporter**:
-telemetry 侧的 OTel 导出器（otlptrace / otlpmetric / otlplog），与根包 Writer 不同层。
+telemetry 侧的 OTel 导出器（otlptrace / otlpmetric / otlplog），与 log 包 Writer 不同层。
 _Avoid_: Writer
 
 **Provider**:

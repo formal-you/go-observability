@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	corelog "github.com/formal-you/go-observability"
+	corelog "github.com/formal-you/go-observability/log"
 	"go.opentelemetry.io/otel/attribute"
 	otelog "go.opentelemetry.io/otel/log"
 )

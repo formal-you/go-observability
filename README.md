@@ -199,7 +199,7 @@ access.http.request
 
 ### 🧱 1. 核心事件模型不绑定 OTel SDK
 
-根包以标准库 `log/slog` 为属性载体。OTel 依赖集中在转换、Writer、telemetry 和集成层，业务代码不需要围绕 exporter 重写。
+log 包以标准库 `log/slog` 为属性载体。OTel 依赖集中在转换、Writer、telemetry 和集成层，业务代码不需要围绕 exporter 重写。
 
 ### 🪞 2. file/stdout 与 OTLP 不强行共用一种形状
 
@@ -240,7 +240,7 @@ log.WithSampler(log.EventKeepSampler{
 
 ```text
 go-observability/
-├── 🧩 根包 log                  # Event、Payload、Logger、Sampler、Masker
+├── 🧩 log/ 子包                # Event、Payload、Logger、Sampler、Masker
 ├── 🧨 errs/                    # 错误分类、堆栈策略与错误投影
 ├── 🚚 writer/
 │   ├── 📄 file/                # JSONL 文件 Writer

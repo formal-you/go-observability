@@ -39,8 +39,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/formal-you/go-observability"
 	"github.com/formal-you/go-observability/internal/otlpendpoint"
+	"github.com/formal-you/go-observability/log"
 	"github.com/formal-you/go-observability/writer/file"
 	"github.com/formal-you/go-observability/writer/otlp"
 )

@@ -5,7 +5,7 @@ package mall
 import (
 	"log/slog"
 
-	log "github.com/formal-you/go-observability"
+	log "github.com/formal-you/go-observability/log"
 )
 
 // 业务事件名（B4 核心 10；不埋 order.rejected）。

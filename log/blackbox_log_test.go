@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/formal-you/go-observability"
 	"github.com/formal-you/go-observability/errs"
+	"github.com/formal-you/go-observability/log"
 )
 
 // TestLevelOfBlackBox 按验收契约 CASE-B3-01..05 验证 LevelOf 规则表。

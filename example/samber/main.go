@@ -11,7 +11,7 @@ import (
 	"github.com/samber/slog-multi"
 	"github.com/samber/slog-sampling"
 
-	obs "github.com/formal-you/go-observability"
+	obs "github.com/formal-you/go-observability/log"
 )
 
 func main() {

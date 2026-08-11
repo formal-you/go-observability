@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"os"
 
-	log "github.com/formal-you/go-observability"
+	log "github.com/formal-you/go-observability/log"
 	"github.com/formal-you/go-observability/writer/file"
 )
 

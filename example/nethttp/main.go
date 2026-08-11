@@ -12,8 +12,8 @@ import (
 	"os"
 	"time"
 
-	log "github.com/formal-you/go-observability"
 	"github.com/formal-you/go-observability/errs"
+	log "github.com/formal-you/go-observability/log"
 	"github.com/formal-you/go-observability/middleware/metrics"
 	nethttpmw "github.com/formal-you/go-observability/middleware/nethttp"
 	tracemw "github.com/formal-you/go-observability/middleware/trace"

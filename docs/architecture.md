@@ -8,7 +8,7 @@
 一句话定位：**go-observability 是 `slog` 与 OpenTelemetry 之间的语义层**——事件类型稳定、字段来源明确、错误可投影、日志可治理，三信号统一装配。它不替代 `slog` 或 OTel，而是把团队最容易失控的约定固化成可测试的 Go API。
 
 - **方案2「源即规范」**：属性键直接使用 OTel semconv 1.41.0 名 + `app.*` vendor 命名空间，字段名可追踪、不发明私有键。
-- **核心零依赖**：根包 `log` 只依赖标准库（`log/slog`、`net`、`time`、`fmt`、`strings`）；OTel SDK 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`、`example/*`。
+- **核心零依赖**：`log/` 包只依赖标准库（`log/slog`、`net`、`time`、`fmt`、`strings`）；OTel SDK 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`、`example/*`。
 - **批量导出分两层**：SDK 侧由 `telemetry.Config` 的批量导出间隔控制（trace 5s / metric 15s / log 1s），Collector 侧由 batch processor（timeout / send_batch_size）二次凑批；核心层每次 `Emit` 同步写出，不做批处理/定时器。
 - **出口可替换**：同一事件模型可投影到 JSONL / stdout / OTLP，业务埋点不因出口变化而重写。
 - **决策记录（ADR）**：错误模型（ErrorType / ErrorCode）等关键决策记录在 [docs/adr/](adr/README.md)，Review 时对照 ADR 判断实现是否漂移。
@@ -17,16 +17,16 @@
 
 | 层 | 包 | 职责 |
 | --- | --- | --- |
-| 事件核心 | 根包 `log` | 事件类型、属性键、字段归一化、Logger、采样与脱敏接口 |
+| 事件核心 | `log/` | 事件类型、属性键、字段归一化、Logger、采样与脱敏接口 |
 | 错误模型 | `errs` | 错误分类（ErrorKind）、低基数失败类别（ErrorType）、堆栈策略（StackRule） |
-| 错误投影 | 根包 `error_project.go` | 把 `errs.AppError` 沿错误链投影为 Business/Error 事件 |
+| 错误投影 | `log/error_project.go` | 把 `errs.AppError` 沿错误链投影为 Business/Error 事件 |
 | 写出 | `writer/file`、`writer/stdout`、`writer/otlp` | 把归一化事件写到不同后端（装配层，可替换） |
 | OTel 映射 | `internal/attrkv` | `slog.Attr` ↔ OTel 值转换 + LogRecord 顶层字段映射（唯一核心映射层） |
 | endpoint 校验 | `internal/otlpendpoint` | OTLP gRPC endpoint 统一校验与规范化（host:port / http(s) URL） |
 | 三信号装配 | `telemetry` | 创建并关闭 Trace / Metric / Log Provider，选择日志出口 |
 | HTTP/gRPC 集成 | `middleware/ginlog`、`middleware/recover`、`middleware/errresp`、`middleware/kratos` | Gin access 日志、panic 收口与统一错误响应；net/http 见 `example/nethttp`；kratos v3 见 `middleware/kratos`（HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter） |
 
-依赖方向：`errs` 与根包 `log` 互不依赖对方实现（根包经 `EventFromError` 消费 `errs.AppError` 接口，`errs` 不依赖根包）；`middleware` 依赖根包与 `errs`（ginlog 只依赖根包，errresp/recover 还依赖 `errs`）；`writer/*`、`telemetry` 依赖根包与 `internal/*`。
+依赖方向：`errs` 与 `log/` 互不依赖对方实现（log 包经 `EventFromError` 消费 `errs.AppError` 接口，`errs` 不依赖 log 包）；`middleware` 依赖 log 包与 `errs`（ginlog 只依赖 log 包，errresp/recover 还依赖 `errs`）；`writer/*`、`telemetry` 依赖 log 包与 `internal/*`。
 
 ## 3. 文件树（代码导航图）
 
@@ -38,7 +38,7 @@ go-observability/
 │   ├── pull_request_template.md
 │   └── workflows/ci.yml         # 双平台门禁：Ubuntu(verify/gofmt/vet/test/race/vuln) + Windows(vet/test)
 │
-├── 根包 log（零 OTel 依赖，只依赖标准库）
+├── log/                        # 核心日志包（零 OTel 依赖，只依赖标准库）
 │   ├── doc.go                   # 包注释：核心包零外部依赖承诺
 │   ├── types.go                 # 类型化枚举：EventType / EventName(三段式+Validate) / Level / Result / EventPayload
 │   ├── keys.go                  # 属性键常量：semconv 1.41.0 + app.* vendor 命名空间
@@ -69,7 +69,7 @@ go-observability/
 │       ├── endpoint.go          # OTLP gRPC endpoint 校验与规范化
 │       └── endpoint_test.go
 │
-├── writer/                      # 写出后端（实现根包 log.Writer，可替换）
+├── writer/                      # 写出后端（实现 log 包 Writer，可替换）
 │   ├── file/file.go             # JSONL 文件 Writer（append，并发安全，含 Close）
 │   ├── stdout/stdout.go         # stdoutlog exporter 包装（本地演示）
 │   └── otlp/otlp.go             # OTLP gRPC Writer（BatchProcessor；可注入外部 LoggerProvider）
@@ -109,7 +109,7 @@ go-observability/
 ├── README.md                    # 项目首页（真源之一）
 ├── CHANGELOG.md / LICENSE / SECURITY.md / SUPPORT.md / CONTRIBUTING.md / CODE_OF_CONDUCT.md
 ├── go.mod / go.sum              # Go 1.26；OTel 依赖集中在装配层
-└── 根测试文件                    # 与根包同目录的黑盒/单元测试（见上）
+└── log/ 测试文件                # 与 log/ 包同目录的黑盒/单元测试（见上）
 ```
 
 > `logs/` 与 `example/logs/` 是示例运行产物（已被 `.gitignore` 忽略），不属于源码。
@@ -182,14 +182,14 @@ go-observability/
 
 1. 在业务自己的 observability 包中声明 `EventName` 常量（`NewEventName` 或经 `Validate`），并写测试校验格式。
 2. 使用 `BusinessPayload.ExtraAttrs` 注入领域属性（`app.*` 键），避免把领域字段加入核心注册表；canonical 键与保留键会被过滤。
-3. 新增写出后端：在 `writer/` 下新建包，实现根包 `log.Writer`（明确并发语义，提供 `Close`）。
+3. 新增写出后端：在 `writer/` 下新建包，实现 `log.Writer`（明确并发语义，提供 `Close`）。
 4. 公共 schema 或 API 改动必须同步 README、docs、示例与 CHANGELOG（改代码与改文档应在同一提交内完成）。
 
 ## 9. 代码 Review 检查点
 
 | Review 焦点 | 看什么 | 验证方式 |
 | --- | --- | --- |
-| 核心零依赖 | 根包 `log` 的 import 是否仅标准库 | `go list -deps ./` 或 grep 根包 import |
+| 核心零依赖 | `log/` 包的 import 是否仅标准库 | `go list -deps ./` 或 grep log 包 import |
 | 事件名规范性 | `types.go` 注册表、`Validate` 实现与测试 | `go test ./...` |
 | 键名 semconv | `keys.go` 与 `$GOMODCACHE/go.opentelemetry.io/otel@v1.45.0/semconv/v1.41.0` 对照 | 人工比对 |
 | 归一化/保留键 | `normalize.go reservedKeys` 与 `attrkv.recordAttrKeys` 一致性 | `go test ./... -run Record` |

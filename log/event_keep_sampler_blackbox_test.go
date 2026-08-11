@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/formal-you/go-observability"
+	"github.com/formal-you/go-observability/log"
 )
 
 // recordingWriter 记录通过采样判定并写出的事件类型（msg=event_type）。
