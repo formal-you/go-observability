@@ -20,32 +20,52 @@ const (
 	EventProbe    EventType = "probe"
 )
 
-// EventName 细名：固定段式 类别.模块.操作，如 access.http.request / error.runtime.panic。
-// 本文件只登记框架级事件（中间件/通用错误）；领域 business.* 由接入方自建注册表
+// EventName 事实名：固定三段式 领域.对象.事实，如 http.request.completed / runtime.panic.occurred。
+// EventType 已由 msg 承载，因此 EventName 禁止再以 access/business/error/security/audit/probe
+// 开头。本文件只登记框架级事件（中间件/通用错误）；领域事件由接入方自建注册表
 // （见 example/mall），用 NewEventName 或经 Validate 的常量，禁止散落手写字符串。
 // OTLP 路径由 attrkv 映射到 LogRecord 的 EventName 顶层字段；file/stdout 扁平投影保留 event.name 键。
 type EventName string
 
 const (
-	// EventNameAccessHTTPRequest 访问事件：HTTP 请求完成（ginlog 中间件默认值）。
-	EventNameAccessHTTPRequest EventName = "access.http.request"
-	// EventNameErrorDBTimeout 错误事件：数据库超时（示例/投影用框架级名）。
-	EventNameErrorDBTimeout EventName = "error.db.timeout"
-	// EventNameErrorRuntimePanic 错误事件：运行时 panic（recover 中间件默认值）。
-	EventNameErrorRuntimePanic EventName = "error.runtime.panic"
-	// EventNameErrorHTTPRequest 错误事件：HTTP 请求处理失败（errresp 中间件默认值）。
-	EventNameErrorHTTPRequest EventName = "error.http.request"
-	// EventNameAccessRPCRequest 访问事件：gRPC 调用完成（RPC 访问日志）。
-	EventNameAccessRPCRequest EventName = "access.rpc.request"
-	// EventNameErrorRPCRequest 错误事件：gRPC 调用失败（RPC 错误收口）。
-	EventNameErrorRPCRequest EventName = "error.rpc.request"
-	// EventNameSecurityInputAnomaly 安全事件：非法输入穿透校验触发系统错误（高风险输入异常，可直连 SIEM）。
-	EventNameSecurityInputAnomaly EventName = "security.input.anomaly"
-	// EventNameAuditInputAnomaly 审计事件：非法输入涉及高权限/敏感资源变更（可追责审计留痕）。
-	EventNameAuditInputAnomaly EventName = "audit.input.anomaly"
+	// EventNameHTTPRequestCompleted 表示 HTTP 请求生命周期完成。
+	EventNameHTTPRequestCompleted EventName = "http.request.completed"
+	// EventNameDatabaseQueryTimedOut 表示数据库查询发生超时。
+	EventNameDatabaseQueryTimedOut EventName = "database.query.timed_out"
+	// EventNameRuntimePanicOccurred 表示运行时 panic 已发生。
+	EventNameRuntimePanicOccurred EventName = "runtime.panic.occurred"
+	// EventNameHTTPRequestFailed 表示 HTTP 请求因系统或未知错误失败。
+	EventNameHTTPRequestFailed EventName = "http.request.failed"
+	// EventNameHTTPRequestRejected 表示 HTTP 请求因校验或业务规则被拒绝。
+	EventNameHTTPRequestRejected EventName = "http.request.rejected"
+	// EventNameRPCRequestCompleted 表示 RPC 请求生命周期完成。
+	EventNameRPCRequestCompleted EventName = "rpc.request.completed"
+	// EventNameRPCRequestFailed 表示 RPC 请求失败。
+	EventNameRPCRequestFailed EventName = "rpc.request.failed"
+	// EventNameInputThreatDetected 表示输入威胁已被安全检测发现。
+	EventNameInputThreatDetected EventName = "input.threat.detected"
+	// EventNameInputAnomalyRecorded 表示输入异常已进入审计记录。
+	EventNameInputAnomalyRecorded EventName = "input.anomaly.recorded"
+
+	// EventNameAccessHTTPRequest 已弃用：请使用 EventNameHTTPRequestCompleted。
+	EventNameAccessHTTPRequest = EventNameHTTPRequestCompleted
+	// EventNameErrorDBTimeout 已弃用：请使用 EventNameDatabaseQueryTimedOut。
+	EventNameErrorDBTimeout = EventNameDatabaseQueryTimedOut
+	// EventNameErrorRuntimePanic 已弃用：请使用 EventNameRuntimePanicOccurred。
+	EventNameErrorRuntimePanic = EventNameRuntimePanicOccurred
+	// EventNameErrorHTTPRequest 已弃用：请使用 EventNameHTTPRequestFailed 或 resolver。
+	EventNameErrorHTTPRequest = EventNameHTTPRequestFailed
+	// EventNameAccessRPCRequest 已弃用：请使用 EventNameRPCRequestCompleted。
+	EventNameAccessRPCRequest = EventNameRPCRequestCompleted
+	// EventNameErrorRPCRequest 已弃用：请使用 EventNameRPCRequestFailed。
+	EventNameErrorRPCRequest = EventNameRPCRequestFailed
+	// EventNameSecurityInputAnomaly 已弃用：请使用 EventNameInputThreatDetected。
+	EventNameSecurityInputAnomaly = EventNameInputThreatDetected
+	// EventNameAuditInputAnomaly 已弃用：请使用 EventNameInputAnomalyRecorded。
+	EventNameAuditInputAnomaly = EventNameInputAnomalyRecorded
 )
 
-// NewEventName 由三段（类别.模块.操作）构造 EventName 并做构造校验。
+// NewEventName 由三段（领域.对象.事实）构造 EventName 并做构造校验。
 // 段数不是 3 或段内含非法字符（仅小写字母/数字/下划线）时 panic：
 // 事件名是查询/告警依据，配置错误应尽早暴露。
 func NewEventName(segments ...string) EventName {
@@ -56,11 +76,12 @@ func NewEventName(segments ...string) EventName {
 	return name
 }
 
-// Validate 校验 EventName 是否符合 类别.模块.操作 三段式（每段仅小写字母/数字/下划线）。
+// Validate 校验 EventName 是否符合 领域.对象.事实 三段式（每段仅小写字母/数字/下划线），
+// 并拒绝以 EventType 粗分类作为首段，避免与 msg 重复表达类别。
 func (e EventName) Validate() error {
 	parts := strings.Split(string(e), ".")
 	if len(parts) != 3 {
-		return fmt.Errorf("event name %q 必须为 类别.模块.操作 三段式", string(e))
+		return fmt.Errorf("event name %q 必须为 领域.对象.事实 三段式", string(e))
 	}
 	for _, p := range parts {
 		if p == "" {
@@ -71,6 +92,10 @@ func (e EventName) Validate() error {
 				return fmt.Errorf("event name %q 段 %q 含非法字符（仅小写字母/数字/下划线）", string(e), p)
 			}
 		}
+	}
+	switch EventType(parts[0]) {
+	case EventAccess, EventBusiness, EventError, EventSecurity, EventAudit, EventProbe:
+		return fmt.Errorf("event name %q 不得重复 msg 粗分类 %q", string(e), parts[0])
 	}
 	return nil
 }

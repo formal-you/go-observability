@@ -17,7 +17,7 @@ type RecoverConfig struct {
 	// Logger 必填：写出 ErrorEvent 的 Logger；为空时 panic（配置错误应尽早暴露）。
 	Logger *log.Logger
 
-	// EventName 错误事件名；空值默认 log.EventNameErrorRuntimePanic。
+	// EventName 错误事实名；空值默认 log.EventNameRuntimePanicOccurred。
 	EventName log.EventName
 
 	// ErrorType 低基数失败类别；空值默认 errs.TypeRuntimePanic。
@@ -46,7 +46,7 @@ func Recover(cfg RecoverConfig) gin.HandlerFunc {
 	}
 	eventName := cfg.EventName
 	if eventName == "" {
-		eventName = log.EventNameErrorRuntimePanic
+		eventName = log.EventNameRuntimePanicOccurred
 	}
 	errorType := cfg.ErrorType
 	if errorType == "" {

@@ -17,7 +17,7 @@
   （EventType：access / business / error / security / audit / probe）。
 - OTLP 映射（`internal/attrkv.Record`）：
   - `msg` → `LogRecord.Body`（超低基数，6 个稳定值）；
-  - `event.name`（细名，如 business.order.paid）→ `LogRecord.EventName` 顶层字段；
+  - `event.name`（事实名，如 order.payment.succeeded）→ `LogRecord.EventName` 顶层字段；
   - 事件细节 → 属性（attrs）。
 - file/stdout 扁平投影保留 `msg`（=event_type）与 `event.name` 等键（双投影）。
 - 明确不把高基数可读消息塞进 Body（CONTEXT.md 已固化：Body 写入 event_type，_Avoid_ 完整事件内容）。

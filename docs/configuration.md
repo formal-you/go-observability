@@ -123,11 +123,13 @@ logger := log.NewLogger(w,
 高流量场景可显式启用以下策略：business/error/security/audit/probe 全量，access 失败恒保留、成功按比例保留。启用后，成功 BusinessEvent 不再保证一定存在对应 AccessEvent。
 
 ```go
-log.WithSampler(log.NewEventKeepSampler(
-	[]string{"business.", "error.", "security.", "audit.", "probe."},
+log.WithSampler(log.NewEventTypeKeepSampler(
+	[]log.EventType{log.EventBusiness, log.EventError, log.EventSecurity, log.EventAudit, log.EventProbe},
 	log.NewResultKeepSampler(0.1),
 ))
 ```
+
+`EventKeepSampler` 仍用于按 `order.`、`payment.` 等领域前缀保留事件；旧的类别前缀配置仅作兼容，不建议继续用于新代码。
 
 Gin 中间件应按 `Trace -> AccessLog -> Recover -> 其他链尾中间件` 注册。AccessLog 包在 Recover、ErrorResponse、SecurityLog、AuditLog 外层，才能在它们完成后读取最终响应状态；健康检查使用 `AccessConfig.SkipPaths` 排除。
 

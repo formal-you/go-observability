@@ -59,9 +59,9 @@ func TestErrorResponseBusinessErrorWritesEventAndResponse(t *testing.T) {
 		t.Fatalf("msgs = %v, want [business]", w.msgs)
 	}
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "event.name", "error.http.request")
+	attrString(t, attrs, "event.name", "http.request.rejected")
 	attrString(t, attrs, "error.type", "business.stock_insufficient")
-	attrString(t, attrs, "app.business_code", "ORDER.CREATE.STOCK_INSUFFICIENT")
+	attrString(t, attrs, "app.error_code", "ORDER.CREATE.STOCK_INSUFFICIENT")
 	attrString(t, attrs, "app.business_message", "stock insufficient")
 	attrString(t, attrs, "app.result", "failed")
 	attrString(t, attrs, "level", "WARN")
@@ -137,7 +137,7 @@ func TestErrorResponseSystemErrorHidesMessage(t *testing.T) {
 		t.Fatalf("msgs = %v, want [error]", w.msgs)
 	}
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "event.name", "error.http.request")
+	attrString(t, attrs, "event.name", "http.request.failed")
 	attrString(t, attrs, "error.type", "db.query_timeout")
 	attrString(t, attrs, "exception.message", "dial tcp 10.0.0.1:3306: timeout")
 	attrString(t, attrs, "app.result", "error")
@@ -232,7 +232,7 @@ func TestErrorResponseFillsTraceAndSpanFromContext(t *testing.T) {
 }
 
 // TestErrorResponseWithRecoverNoDoubleWrite 验证与 Recover 组合：panic 时只有
-// recover 写错误事件（error.runtime.panic），errresp 不双写。
+// recover 写错误事件（runtime.panic.occurred），errresp 不双写。
 func TestErrorResponseWithRecoverNoDoubleWrite(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
@@ -251,7 +251,7 @@ func TestErrorResponseWithRecoverNoDoubleWrite(t *testing.T) {
 		t.Fatalf("msgs = %v, want 仅 recover 写 1 条 [error]", w.msgs)
 	}
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "event.name", "error.runtime.panic")
+	attrString(t, attrs, "event.name", "runtime.panic.occurred")
 }
 
 // TestErrorResponseCustomStatusForError 验证 StatusForError 可整体覆盖状态码映射。
@@ -283,7 +283,7 @@ func TestErrorResponseCustomEventName(t *testing.T) {
 	r := gin.New()
 	r.Use(ErrorResponse(ErrorConfig{
 		Logger:    logger,
-		EventName: log.NewEventName("error", "http", "custom"),
+		EventName: log.NewEventName("checkout", "http", "custom"),
 	}))
 	r.GET("/orders/:id", func(c *gin.Context) {
 		Abort(c, errs.NewValidation("order id is required"))
@@ -295,7 +295,30 @@ func TestErrorResponseCustomEventName(t *testing.T) {
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "event.name", "error.http.custom")
+	attrString(t, attrs, "event.name", "checkout.http.custom")
+}
+
+func TestErrorResponseEventNameResolverTakesPrecedence(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	r := gin.New()
+	r.Use(ErrorResponse(ErrorConfig{
+		Logger:    logger,
+		EventName: log.NewEventName("checkout", "http", "fixed"),
+		EventNameResolver: func(error) log.EventName {
+			return log.NewEventName("order", "creation", "rejected")
+		},
+	}))
+	r.GET("/orders/:id", func(c *gin.Context) {
+		Abort(c, errs.NewValidation("order id is required"))
+	})
+
+	rec := doRequest(r, "/orders/1")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	attrString(t, attrMap(w.attrsList[0]), "event.name", "order.creation.rejected")
 }
 
 // TestErrorResponseProjectorOverride 验证 ResponseProjector 可注入自定义契约形状：
@@ -383,7 +406,7 @@ func TestErrorResponseInputGuardEmitsSecurityAuditEvents(t *testing.T) {
 	if len(w.msgs) != 3 || !reflect.DeepEqual(w.msgs, []string{"error", "security", "audit"}) {
 		t.Fatalf("msgs = %v, want [error security audit]", w.msgs)
 	}
-	for i, want := range []string{"error.http.request", "security.input.anomaly", "audit.input.anomaly"} {
+	for i, want := range []string{"http.request.failed", "input.threat.detected", "input.anomaly.recorded"} {
 		attrs := attrMap(w.attrsList[i])
 		attrString(t, attrs, "event.name", want)
 		attrString(t, attrs, "trace_id", "0123456789abcdef0123456789abcdef")
@@ -418,5 +441,5 @@ func TestRecoverInputGuardEmitsSecurityEvent(t *testing.T) {
 	if len(w.msgs) != 2 || !reflect.DeepEqual(w.msgs, []string{"error", "security"}) {
 		t.Fatalf("msgs = %v, want [error security]", w.msgs)
 	}
-	attrString(t, attrMap(w.attrsList[1]), "event.name", "security.input.anomaly")
+	attrString(t, attrMap(w.attrsList[1]), "event.name", "input.threat.detected")
 }

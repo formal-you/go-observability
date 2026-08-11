@@ -21,7 +21,7 @@ func TestWriterAppendsJSONLines(t *testing.T) {
 	if err := w.Write(context.Background(), "access", slog.String("http.request.method", "GET"), slog.String("app.result", "success")); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.Write(context.Background(), "business", slog.String("event.name", "business.order.paid")); err != nil {
+	if err := w.Write(context.Background(), "business", slog.String("event.name", "order.payment.succeeded")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -36,7 +36,7 @@ func TestWriterAppendsJSONLines(t *testing.T) {
 	if !strings.Contains(lines[0], `"http.request.method":"GET"`) || !strings.Contains(lines[0], `"msg":"access"`) {
 		t.Errorf("line0 = %s", lines[0])
 	}
-	if !strings.Contains(lines[1], `"event.name":"business.order.paid"`) {
+	if !strings.Contains(lines[1], `"event.name":"order.payment.succeeded"`) {
 		t.Errorf("line1 = %s", lines[1])
 	}
 }
@@ -59,7 +59,7 @@ func TestWriteCanonicalOrder(t *testing.T) {
 		slog.String("span_id", "bba473e9b3034af6"),
 		slog.String("request_id", "req-1001"),
 		slog.Int64("latency_ms", 12),
-		slog.String("event.name", "access.http.request"),
+		slog.String("event.name", "http.request.completed"),
 		slog.String("http.request.method", "GET"),
 		slog.String("url.path", "/api/v1/products/42"),
 		slog.Int("http.response.status_code", 200),
@@ -100,7 +100,7 @@ func TestWriterResourceMetadataProtectedAndPerLine(t *testing.T) {
 		slog.String("service.name", "forged"),
 		slog.String("deployment.environment.name", "forged"),
 	}
-	if err := w.Write(context.Background(), "business.order.paid", attrs...); err != nil {
+	if err := w.Write(context.Background(), "order.payment.succeeded", attrs...); err != nil {
 		t.Fatal(err)
 	}
 	if err := w.Write(context.Background(), "error.database.timeout"); err != nil {

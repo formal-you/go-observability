@@ -115,7 +115,7 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 				RequestID: requestID(c),
 			},
 			Data: log.BusinessPayload{
-				EventName: log.NewEventName("business", "order", "paid"),
+				EventName: log.NewEventName("order", "payment", "succeeded"),
 				Result:    log.ResultSuccess,
 				ExtraAttrs: []slog.Attr{
 					slog.String("app.order_id", c.Param("id")),
@@ -173,7 +173,7 @@ func blackboxInputGuard(ctx context.Context, req *http.Request, _ error, _ httpe
 		log.SecurityEvent{
 			EventMetadata: securityMetadata,
 			Data: log.SecurityPayload{
-				EventName:         log.EventNameSecurityInputAnomaly,
+				EventName:         log.EventNameInputThreatDetected,
 				Subject:           log.Subject{UserID: "u-1001"},
 				SecurityEventType: "input.bypass",
 				FailureReason:     "非法输入穿透校验触发系统错误",
@@ -185,7 +185,7 @@ func blackboxInputGuard(ctx context.Context, req *http.Request, _ error, _ httpe
 		log.AuditEvent{
 			EventMetadata: auditMetadata,
 			Data: log.AuditPayload{
-				EventName:      log.EventNameAuditInputAnomaly,
+				EventName:      log.EventNameInputAnomalyRecorded,
 				Action:         "user.role.update",
 				Actor:          log.Actor{UserID: "u-1001", Role: "operator"},
 				Resource:       log.Resource{Type: "user", ID: "u-2002"},
@@ -203,7 +203,7 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	mqCtx, mqSpan := tracer.Start(ctx, "background mq publish")
 	report.record("background-mq", mqSpan.SpanContext())
 	logger.Emit(mqCtx, log.EventFromError(
-		log.NewEventName("error", "mq", "publish"),
+		log.NewEventName("messaging", "publish", "failed"),
 		errs.NewSystem(errs.TypeMQPublishFailed,
 			"publish order.created: deadline exceeded",
 			errs.WithUpstream("kafka"),
@@ -215,7 +215,7 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	lockCtx, lockSpan := tracer.Start(ctx, "background lock conflict")
 	report.record("background-lock", lockSpan.SpanContext())
 	logger.Emit(lockCtx, log.EventFromError(
-		log.NewEventName("error", "lock", "conflict"),
+		log.NewEventName("lock", "acquire", "failed"),
 		errs.NewSystem(errs.TypeLockConflict, "acquire lock order:pay:42 conflict"),
 		log.EventMetadata{},
 	))

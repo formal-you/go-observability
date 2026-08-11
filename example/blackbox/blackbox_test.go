@@ -52,20 +52,37 @@ func TestBlackboxJSONL(t *testing.T) {
 		if _, err := time.Parse(time.RFC3339Nano, timestamp); err != nil {
 			t.Errorf("timestamp=%q 不是 RFC3339Nano: %v", timestamp, err)
 		}
+		for _, legacy := range []string{"app.business_code", "app.operation"} {
+			if _, ok := event[legacy]; ok {
+				t.Errorf("事件不应输出旧错误码键 %s: %v", legacy, event)
+			}
+		}
 	}
 
 	assertRequestScenario(t, events, report, requestBusinessSuccess,
-		[]string{"business", "access"}, []string{"business.order.paid", "access.http.request"})
+		[]string{"business", "access"}, []string{"order.payment.succeeded", "http.request.completed"})
 	assertRequestScenario(t, events, report, requestBusinessFailed,
-		[]string{"business", "access"}, []string{"error.http.request", "access.http.request"})
+		[]string{"business", "access"}, []string{"http.request.rejected", "http.request.completed"})
+	assertBusinessRejectionCode(t, events)
 	assertRequestScenario(t, events, report, requestSystemError,
 		[]string{"error", "security", "audit", "access"},
-		[]string{"error.http.request", "security.input.anomaly", "audit.input.anomaly", "access.http.request"})
+		[]string{"http.request.failed", "input.threat.detected", "input.anomaly.recorded", "http.request.completed"})
 	assertRequestScenario(t, events, report, requestPanic,
-		[]string{"error", "access"}, []string{"error.runtime.panic", "access.http.request"})
+		[]string{"error", "access"}, []string{"runtime.panic.occurred", "http.request.completed"})
 	assertBackgroundScenarios(t, events, report)
 	assertDistinctRequestTraces(t, report)
 	assertCanonicalOrder(t, lines)
+}
+
+func assertBusinessRejectionCode(t *testing.T, events []map[string]any) {
+	t.Helper()
+	for _, event := range eventsForRequest(events, requestBusinessFailed) {
+		if event["msg"] == "business" {
+			assertString(t, event, "app.error_code", "ORDER.CREATE.STOCK_INSUFFICIENT")
+			return
+		}
+	}
+	t.Fatal("business rejection 缺少 BusinessEvent")
 }
 
 func assertRequestScenario(
@@ -129,8 +146,8 @@ func assertBackgroundScenarios(t *testing.T, events []map[string]any, report *sc
 		eventName string
 		wantStack bool
 	}{
-		{"background-mq", "error.mq.publish", true},
-		{"background-lock", "error.lock.conflict", false},
+		{"background-mq", "messaging.publish.failed", true},
+		{"background-lock", "lock.acquire.failed", false},
 	} {
 		var found map[string]any
 		for _, event := range events {
@@ -351,8 +368,8 @@ func TestBlackboxOTLPSemantics(t *testing.T) {
 	if panicAccess == nil {
 		t.Fatal("缺少 panic 请求的 OTLP AccessEvent")
 	}
-	if panicAccess.Severity() != otelog.SeverityError || panicAccess.EventName() != "access.http.request" {
-		t.Errorf("panic access severity/event=%v/%q, want ERROR/access.http.request",
+	if panicAccess.Severity() != otelog.SeverityError || panicAccess.EventName() != "http.request.completed" {
+		t.Errorf("panic access severity/event=%v/%q, want ERROR/http.request.completed",
 			panicAccess.Severity(), panicAccess.EventName())
 	}
 }

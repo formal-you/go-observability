@@ -21,9 +21,13 @@ type ErrorConfig struct {
 	// Logger 必填：写出错误事件的 Logger；为空时 panic（配置错误应尽早暴露）。
 	Logger *log.Logger
 
-	// EventName 错误事件名；空值默认 log.EventNameErrorHTTPRequest。
-	// 业务拒绝（validation/business）与系统错误共用该事件名，按 app.result / error.type / level 区分。
+	// EventName 固定错误事实名；仅在 EventNameResolver 为空时使用。
+	// 两者都为空时按错误 Kind 默认解析为 http.request.rejected / http.request.failed。
 	EventName log.EventName
+
+	// EventNameResolver 按错误选择事实名；优先于 EventName。领域应用可返回
+	// order.payment.rejected 等更具体名称，nil 使用上述默认规则。
+	EventNameResolver httperr.EventNameResolver
 
 	// GetRequestID 从请求提取 request_id：写入响应体并补充到事件 metadata；
 	// 可选，未提供则不输出该字段。
@@ -49,9 +53,13 @@ func ErrorResponse(cfg ErrorConfig) gin.HandlerFunc {
 	if cfg.Logger == nil {
 		panic("ginmw: Logger 不能为空")
 	}
-	eventName := cfg.EventName
-	if eventName == "" {
-		eventName = log.EventNameErrorHTTPRequest
+	eventNameResolver := cfg.EventNameResolver
+	if eventNameResolver == nil {
+		if cfg.EventName != "" {
+			eventNameResolver = func(error) log.EventName { return cfg.EventName }
+		} else {
+			eventNameResolver = httperr.DefaultEventNameResolver
+		}
 	}
 	statusForError := cfg.StatusForError
 	if statusForError == nil {
@@ -81,7 +89,7 @@ func ErrorResponse(cfg ErrorConfig) gin.HandlerFunc {
 
 		// 统一走 log.EventFromError 投影，避免中间件重复维护字段映射；
 		// Level 由 EventFromError 按 Kind 推导，不在此覆盖。
-		ev := log.EventFromError(eventName, err, md)
+		ev := log.EventFromError(eventNameResolver(err), err, md)
 		cfg.Logger.Emit(c.Request.Context(), ev)
 		httperr.EmitGuardEvents(cfg.Logger, c.Request.Context(), c.Request, err, cfg.InputGuard)
 

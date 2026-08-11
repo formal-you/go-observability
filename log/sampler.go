@@ -48,15 +48,27 @@ func (s ResultKeepSampler) Sample(_ context.Context, attrs []slog.Attr) bool {
 }
 
 // EventKeepSampler 按 event.name 前缀强制保留事件，其余事件委托 Fallback 判定。
-// 适合显式选择的高流量"业务全量 + 访问采样"策略：命中 KeepPrefixes 的事件（如 business./error./
-// security./audit./probe.）恒保留，未命中的高频事件（如 access.http.request）交给
-// Fallback 按结果/比例采样。启用后成功业务事件不再保证有对应 AccessEvent；event.name
-// 缺失或为空时按未命中处理（安全降级）。
+// EventName 不再包含 EventType 粗分类后，新配置应优先使用 EventTypeKeepSampler；本类型
+// 继续适合按领域前缀保留事件，并兼容旧的 business./error./security./audit./probe. 配置。
+// 启用采样后，成功业务事件不再保证有对应 AccessEvent；event.name 缺失或为空时按未命中处理。
 type EventKeepSampler struct {
 	// KeepPrefixes 命中任一前缀的 event.name 恒保留；空列表时全部交给 Fallback。
 	KeepPrefixes []string
 	// Fallback 未命中前缀事件的采样判定；nil 时未命中事件恒保留。
 	Fallback Sampler
+}
+
+// SampleEvent 实现 EventTypeSampler。除正常 event.name 前缀外，它把旧配置中的
+// access./business./error./security./audit./probe. 识别为 EventType 前缀，保证
+// EventName 去除类别前缀后旧采样配置不会静默丢失高价值事件。
+func (s EventKeepSampler) SampleEvent(ctx context.Context, eventType EventType, attrs []slog.Attr) bool {
+	legacyTypePrefix := string(eventType) + "."
+	for _, prefix := range s.KeepPrefixes {
+		if prefix == legacyTypePrefix {
+			return true
+		}
+	}
+	return s.Sample(ctx, attrs)
 }
 
 // Sample 实现 Sampler：event.name 命中 KeepPrefixes 任一前缀恒 true；否则委托 Fallback。
@@ -67,6 +79,34 @@ func (s EventKeepSampler) Sample(ctx context.Context, attrs []slog.Attr) bool {
 			return true
 		}
 	}
+	if s.Fallback == nil {
+		return true
+	}
+	return s.Fallback.Sample(ctx, attrs)
+}
+
+// EventTypeKeepSampler 按 EventType 粗分类强制保留事件，其余委托 Fallback。
+// 推荐用它表达 business/error/security/audit/probe 全量、access 显式采样策略。
+type EventTypeKeepSampler struct {
+	KeepTypes []EventType
+	Fallback  Sampler
+}
+
+// SampleEvent 实现 EventTypeSampler。
+func (s EventTypeKeepSampler) SampleEvent(ctx context.Context, eventType EventType, attrs []slog.Attr) bool {
+	for _, keepType := range s.KeepTypes {
+		if eventType == keepType {
+			return true
+		}
+	}
+	if s.Fallback == nil {
+		return true
+	}
+	return s.Fallback.Sample(ctx, attrs)
+}
+
+// Sample 在缺少 EventType 的直接调用场景委托 Fallback；Logger 会优先调用 SampleEvent。
+func (s EventTypeKeepSampler) Sample(ctx context.Context, attrs []slog.Attr) bool {
 	if s.Fallback == nil {
 		return true
 	}
@@ -92,6 +132,22 @@ func NewEventKeepSampler(prefixes []string, fallback Sampler) *EventKeepSampler 
 		}
 	}
 	panic("log: EventKeepSampler keep prefixes 至少需要一个非空前缀")
+}
+
+// NewEventTypeKeepSampler 构造按 EventType 全量保留的采样器。
+// types 不能为空，且只能包含六类已登记 EventType；非法配置会 panic。
+func NewEventTypeKeepSampler(types []EventType, fallback Sampler) *EventTypeKeepSampler {
+	if len(types) == 0 {
+		panic("log: EventTypeKeepSampler keep types 不能为空")
+	}
+	for _, eventType := range types {
+		switch eventType {
+		case EventAccess, EventBusiness, EventError, EventSecurity, EventAudit, EventProbe:
+		default:
+			panic("log: EventTypeKeepSampler 包含非法 EventType")
+		}
+	}
+	return &EventTypeKeepSampler{KeepTypes: types, Fallback: fallback}
 }
 
 func attrString(attrs []slog.Attr, key string) string {

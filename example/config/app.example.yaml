@@ -65,5 +65,5 @@ observability:
   middleware:
     # ginlog: access 事件；需配合 otelgin 才能自动填 trace_id/span_id
     ginlog: true
-    # recover: panic → error.runtime.panic + 500
+    # recover: panic → runtime.panic.occurred + 500
     recover: true

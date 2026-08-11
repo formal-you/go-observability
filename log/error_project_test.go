@@ -31,20 +31,20 @@ func eventLevel(ev EventPayload) Level {
 }
 
 // TestBusinessEventFromValidationError 验证 validation 错误投影为 BusinessEvent：
-// error.type=validation.failed、BusinessCode 空、Source 映射、Result=failed、级别缺省 WARN。
+// error.type=validation.failed、ErrorCode 空、Source 映射、Result=failed、级别缺省 WARN。
 func TestBusinessEventFromValidationError(t *testing.T) {
 	src := errs.Source{Function: "orderService.Create", Filepath: "service/order.go", Line: 42}
 	err := errs.NewValidation("order.create: 数量必须为正整数").WithSource(src)
-	ev := businessEventFromError(EventName("business.order.paid"), err, EventMetadata{})
+	ev := businessEventFromError(EventName("order.creation.rejected"), err, EventMetadata{})
 
-	if ev.Data.EventName != EventName("business.order.paid") {
-		t.Errorf("EventName = %q, want %q", ev.Data.EventName, EventName("business.order.paid"))
+	if ev.Data.EventName != EventName("order.creation.rejected") {
+		t.Errorf("EventName = %q, want %q", ev.Data.EventName, EventName("order.creation.rejected"))
 	}
 	if ev.Data.ErrorType != "validation.failed" {
 		t.Errorf("ErrorType = %q, want validation.failed", ev.Data.ErrorType)
 	}
-	if ev.Data.BusinessCode != "" {
-		t.Errorf("BusinessCode = %q, want empty（validation 不记 ErrCode）", ev.Data.BusinessCode)
+	if ev.Data.ErrorCode != "" {
+		t.Errorf("ErrorCode = %q, want empty（validation 不记 ErrCode）", ev.Data.ErrorCode)
 	}
 	if ev.Data.BusinessMessage != "order.create: 数量必须为正整数" {
 		t.Errorf("BusinessMessage = %q, want 错误消息", ev.Data.BusinessMessage)
@@ -63,8 +63,8 @@ func TestBusinessEventFromValidationError(t *testing.T) {
 	if got := attrValue(t, attrs, "error.type").String(); got != "validation.failed" {
 		t.Errorf("error.type = %q, want validation.failed", got)
 	}
-	if _, ok := attrs["app.business_code"]; ok {
-		t.Error("app.business_code 不应输出（validation 无 ErrCode）")
+	if _, ok := attrs["app.error_code"]; ok {
+		t.Error("app.error_code 不应输出（validation 无 ErrCode）")
 	}
 	if got := attrValue(t, attrs, "code.function.name").String(); got != "orderService.Create" {
 		t.Errorf("code.function.name = %q, want orderService.Create", got)
@@ -81,17 +81,17 @@ func TestBusinessEventFromValidationError(t *testing.T) {
 }
 
 // TestBusinessEventFromBusinessError 验证 business 错误投影为 BusinessEvent：
-// BusinessCode 与 ErrorType（business.*）保留，调用方已设 Level 不被覆盖。
+// ErrorCode 与 ErrorType（business.*）保留，调用方已设 Level 不被覆盖。
 func TestBusinessEventFromBusinessError(t *testing.T) {
 	const code errs.ErrorCode = "ORDER.CREATE.STOCK_INSUFFICIENT"
 	err := errs.NewBusiness(code, errs.ErrorType("business.stock_insufficient"), "库存不足，当前仅剩 2 件")
-	ev := businessEventFromError(EventName("business.order.paid"), err, EventMetadata{Level: LevelInfo})
+	ev := businessEventFromError(EventName("order.creation.rejected"), err, EventMetadata{Level: LevelInfo})
 
 	if ev.Data.ErrorType != "business.stock_insufficient" {
 		t.Errorf("ErrorType = %q, want business.stock_insufficient", ev.Data.ErrorType)
 	}
-	if ev.Data.BusinessCode != string(code) {
-		t.Errorf("BusinessCode = %q, want %q", ev.Data.BusinessCode, code)
+	if ev.Data.ErrorCode != string(code) {
+		t.Errorf("ErrorCode = %q, want %q", ev.Data.ErrorCode, code)
 	}
 	if ev.Data.BusinessMessage != "库存不足，当前仅剩 2 件" {
 		t.Errorf("BusinessMessage = %q, want 错误消息", ev.Data.BusinessMessage)
@@ -104,12 +104,12 @@ func TestBusinessEventFromBusinessError(t *testing.T) {
 	if got := attrValue(t, attrs, "error.type").String(); got != "business.stock_insufficient" {
 		t.Errorf("error.type = %q, want business.stock_insufficient", got)
 	}
-	if got := attrValue(t, attrs, "app.business_code").String(); got != string(code) {
-		t.Errorf("app.business_code = %q, want %q", got, code)
+	if got := attrValue(t, attrs, "app.error_code").String(); got != string(code) {
+		t.Errorf("app.error_code = %q, want %q", got, code)
 	}
 }
 
-// TestErrorEventFromSystemError 验证 system 错误投影为 ErrorEvent：error.type、operation、
+// TestErrorEventFromSystemError 验证 system 错误投影为 ErrorEvent：error.type、error_code、
 // retryable/retry_count、source、result=error，且 db.* 属 StackMust 写入堆栈；
 // md 中的 TraceID/SpanID 原样透传，级别缺省 WARN（重试中未耗尽）。
 func TestErrorEventFromSystemError(t *testing.T) {
@@ -127,10 +127,10 @@ func TestErrorEventFromSystemError(t *testing.T) {
 		TraceID: "0123456789abcdef0123456789abcdef",
 		SpanID:  "0123456789abcdef",
 	}
-	ev := sysEventFromError(EventNameErrorDBTimeout, err, md)
+	ev := sysEventFromError(EventNameDatabaseQueryTimedOut, err, md)
 
-	if ev.Data.EventName != EventNameErrorDBTimeout {
-		t.Errorf("EventName = %q, want %q", ev.Data.EventName, EventNameErrorDBTimeout)
+	if ev.Data.EventName != EventNameDatabaseQueryTimedOut {
+		t.Errorf("EventName = %q, want %q", ev.Data.EventName, EventNameDatabaseQueryTimedOut)
 	}
 	if ev.Data.ErrorType != "db.query_timeout" {
 		t.Errorf("ErrorType = %q, want db.query_timeout", ev.Data.ErrorType)
@@ -138,8 +138,8 @@ func TestErrorEventFromSystemError(t *testing.T) {
 	if ev.Data.ErrorMessage != "mysql: context deadline exceeded" {
 		t.Errorf("ErrorMessage = %q, want 错误消息", ev.Data.ErrorMessage)
 	}
-	if ev.Data.Operation != "" {
-		t.Errorf("Operation = %q, want empty（未设置 ErrCode）", ev.Data.Operation)
+	if ev.Data.ErrorCode != "" {
+		t.Errorf("ErrorCode = %q, want empty（未设置 ErrCode）", ev.Data.ErrorCode)
 	}
 	if !ev.Data.Retryable {
 		t.Error("Retryable = false, want true")
@@ -176,25 +176,29 @@ func TestErrorEventFromSystemError(t *testing.T) {
 	if got := attrValue(t, attrs, "app.retry_count").Int64(); got != 2 {
 		t.Errorf("app.retry_count = %d, want 2", got)
 	}
-	if _, ok := attrs["app.operation"]; ok {
-		t.Error("app.operation 不应输出（未设置 ErrCode）")
+	if _, ok := attrs["app.error_code"]; ok {
+		t.Error("app.error_code 不应输出（未设置 ErrCode）")
 	}
 	if got := attrValue(t, attrs, "app.result").String(); got != "error" {
 		t.Errorf("app.result = %q, want error", got)
 	}
 }
 
-// TestErrorEventOperationFromErrCode 验证 SystemError 可选 ErrCode 定稿映射到
-// ErrorPayload.Operation（app.operation），而非 app.business_code。
-func TestErrorEventOperationFromErrCode(t *testing.T) {
+// TestErrorEventCodeFromErrCode 验证 SystemError 可选 ErrCode 映射到 app.error_code。
+func TestErrorEventCodeFromErrCode(t *testing.T) {
 	err := errs.NewSystem(errs.TypeHTTPUpstream5xx, "payment-gateway: 502", errs.WithCode("ORDER.PAY.UPSTREAM_5XX"))
-	ev := sysEventFromError(EventNameErrorDBTimeout, err, EventMetadata{})
-	if ev.Data.Operation != "ORDER.PAY.UPSTREAM_5XX" {
-		t.Errorf("Operation = %q, want ORDER.PAY.UPSTREAM_5XX", ev.Data.Operation)
+	ev := sysEventFromError(EventName("payment.gateway.failed"), err, EventMetadata{})
+	if ev.Data.ErrorCode != "ORDER.PAY.UPSTREAM_5XX" {
+		t.Errorf("ErrorCode = %q, want ORDER.PAY.UPSTREAM_5XX", ev.Data.ErrorCode)
 	}
 	attrs := attrMap(ev.Attrs())
-	if got := attrValue(t, attrs, "app.operation").String(); got != "ORDER.PAY.UPSTREAM_5XX" {
-		t.Errorf("app.operation = %q, want ORDER.PAY.UPSTREAM_5XX", got)
+	if got := attrValue(t, attrs, "app.error_code").String(); got != "ORDER.PAY.UPSTREAM_5XX" {
+		t.Errorf("app.error_code = %q, want ORDER.PAY.UPSTREAM_5XX", got)
+	}
+	for _, legacy := range []string{"app.operation", "app.business_code"} {
+		if _, ok := attrs[legacy]; ok {
+			t.Errorf("不应输出旧错误码键 %s", legacy)
+		}
 	}
 }
 
@@ -207,7 +211,7 @@ func TestErrorEventStackOnlyWhenMust(t *testing.T) {
 		errs.WithRetry(1, false),
 		errs.WithStack("不应投影的堆栈"),
 	)
-	ev := sysEventFromError(EventNameErrorDBTimeout, err, EventMetadata{})
+	ev := sysEventFromError(EventNameDatabaseQueryTimedOut, err, EventMetadata{})
 	if ev.Data.StackTrace != "" {
 		t.Errorf("StackTrace = %q, want empty（stock.race 非 StackMust）", ev.Data.StackTrace)
 	}
@@ -227,7 +231,7 @@ func TestEventFromErrorDispatchesByKind(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ev := EventFromError(EventName("business.order.paid"), tc.err, EventMetadata{})
+			ev := EventFromError(EventName("order.payment.failed"), tc.err, EventMetadata{})
 			if ev.EventType() != tc.want {
 				t.Errorf("EventType() = %q, want %q", ev.EventType(), tc.want)
 			}
@@ -261,7 +265,7 @@ func TestProjectedLevelDefaults(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ev := EventFromError(EventName("business.order.paid"), tc.err, EventMetadata{})
+			ev := EventFromError(EventName("order.payment.failed"), tc.err, EventMetadata{})
 			if got := eventLevel(ev); got != tc.want {
 				t.Errorf("Level = %q, want %q", got, tc.want)
 			}
@@ -272,14 +276,14 @@ func TestProjectedLevelDefaults(t *testing.T) {
 // TestCallerLevelNotOverridden 验证调用方已设置的 md.Level 不被投影覆盖：
 // business 与重试中的 system 在显式 LevelError 下保持 ERROR。
 func TestCallerLevelNotOverridden(t *testing.T) {
-	biz := EventFromError(EventName("business.order.paid"),
+	biz := EventFromError(EventName("order.payment.failed"),
 		errs.NewBusiness("C", errs.ErrorType("business.x"), "b"),
 		EventMetadata{Level: LevelError})
 	if got := eventLevel(biz); got != LevelError {
 		t.Errorf("business Level = %q, want ERROR（调用方已设）", got)
 	}
 
-	sys := EventFromError(EventNameErrorDBTimeout,
+	sys := EventFromError(EventNameDatabaseQueryTimedOut,
 		errs.NewSystem(errs.TypeDBQueryTimeout, "t", errs.WithRetry(1, false)),
 		EventMetadata{Level: LevelError})
 	if got := eventLevel(sys); got != LevelError {
@@ -324,7 +328,7 @@ func TestErrorProjectionConcreteForms(t *testing.T) {
 		{name: "wrapped pointer", err: wrapper},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ev := sysEventFromError(EventNameErrorDBTimeout, tc.err, EventMetadata{})
+			ev := sysEventFromError(EventNameDatabaseQueryTimedOut, tc.err, EventMetadata{})
 			if !ev.Data.Retryable || ev.Data.RetryCount != 3 {
 				t.Errorf("retry = %v/%d, want true/3", ev.Data.Retryable, ev.Data.RetryCount)
 			}
@@ -353,7 +357,7 @@ func TestBusinessProjectionConcreteForms(t *testing.T) {
 		{name: "wrapped pointer", err: wrapper},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ev := businessEventFromError(EventName("business.order.paid"), tc.err, EventMetadata{})
+			ev := businessEventFromError(EventName("order.payment.failed"), tc.err, EventMetadata{})
 			if ev.Data.Source != (Source{Function: src.Function, Filepath: src.Filepath, Line: src.Line}) {
 				t.Errorf("Source = %+v, want %+v", ev.Data.Source, src)
 			}
@@ -373,7 +377,7 @@ func TestEventFromWrappedErrors(t *testing.T) {
 		errs.WithSource(systemSource),
 	)
 	systemEvent, ok := EventFromError(
-		EventNameErrorDBTimeout,
+		EventNameDatabaseQueryTimedOut,
 		fmt.Errorf("checkout failed: %w", &system),
 		EventMetadata{},
 	).(ErrorEvent)
@@ -393,21 +397,21 @@ func TestEventFromWrappedErrors(t *testing.T) {
 	businessSource := errs.Source{Function: "order.Validate", Filepath: "order/validate.go", Line: 9}
 	business := errs.NewBusiness("ORDER.INVALID", errs.ErrorType("business.invalid"), "invalid").WithSource(businessSource)
 	businessEvent, ok := EventFromError(
-		EventName("business.order.paid"),
+		EventName("order.payment.failed"),
 		fmt.Errorf("validation failed: %w", &business),
 		EventMetadata{},
 	).(BusinessEvent)
 	if !ok {
 		t.Fatal("wrapped BizError did not project to BusinessEvent")
 	}
-	if businessEvent.Data.Source.Line != 9 || businessEvent.Data.BusinessCode != "ORDER.INVALID" {
+	if businessEvent.Data.Source.Line != 9 || businessEvent.Data.ErrorCode != "ORDER.INVALID" {
 		t.Errorf("wrapped business details = %+v", businessEvent.Data)
 	}
 }
 
 // TestEventFromPlainError 验证非 AppError 仍按系统错误安全投影。
 func TestEventFromPlainError(t *testing.T) {
-	ev, ok := EventFromError(EventNameErrorDBTimeout, fmt.Errorf("plain"), EventMetadata{}).(ErrorEvent)
+	ev, ok := EventFromError(EventNameDatabaseQueryTimedOut, fmt.Errorf("plain"), EventMetadata{}).(ErrorEvent)
 	if !ok {
 		t.Fatal("plain error did not project to ErrorEvent")
 	}
@@ -427,7 +431,7 @@ func TestErrorProjectionTypedNilFallsBackSafely(t *testing.T) {
 		{name: "wrapped", err: typedNilErrorWrapper{cause: systemErr}, wantMessage: "wrapped typed-nil error"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ev, ok := EventFromError(EventNameErrorDBTimeout, tc.err, EventMetadata{}).(ErrorEvent)
+			ev, ok := EventFromError(EventNameDatabaseQueryTimedOut, tc.err, EventMetadata{}).(ErrorEvent)
 			if !ok {
 				t.Fatalf("typed-nil error projected as %T, want ErrorEvent", ev)
 			}
@@ -447,7 +451,7 @@ func TestBusinessPayloadErrorFieldsOmittedWhenEmpty(t *testing.T) {
 	ev := BusinessEvent{
 		EventMetadata: EventMetadata{Level: LevelInfo},
 		Data: BusinessPayload{
-			EventName: EventName("business.order.paid"),
+			EventName: EventName("order.payment.succeeded"),
 			Result:    ResultSuccess,
 		},
 	}
@@ -500,7 +504,7 @@ func TestErrorEventStackRespectsStackPolicyOverride(t *testing.T) {
 	t.Cleanup(func() { errs.SetStackPolicy(nil) })
 
 	err := errs.NewSystem(errs.TypeDBQueryTimeout, "query timeout after 5s", errs.WithStack("不应投影的堆栈"))
-	ev := sysEventFromError(EventNameErrorDBTimeout, err, EventMetadata{})
+	ev := sysEventFromError(EventNameDatabaseQueryTimedOut, err, EventMetadata{})
 	if ev.Data.StackTrace != "" {
 		t.Errorf("StackTrace = %q, want empty（db. 覆盖为 none）", ev.Data.StackTrace)
 	}

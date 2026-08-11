@@ -98,7 +98,7 @@ func accessLog(logger *log.Logger) func(http.Handler) http.Handler {
 					LatencyMS: time.Since(start).Milliseconds(),
 				},
 				Data: log.AccessPayload{
-					EventName: log.EventNameAccessHTTPRequest,
+					EventName: log.EventNameHTTPRequestCompleted,
 					HTTP: log.HTTPInfo{
 						Method:     r.Method,
 						URLPath:    r.URL.Path,

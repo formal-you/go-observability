@@ -35,7 +35,7 @@ func TestAccessEventAttrsConform(t *testing.T) {
 			LatencyMS: 12,
 		},
 		Data: AccessPayload{
-			EventName: EventNameAccessHTTPRequest,
+			EventName: EventNameHTTPRequestCompleted,
 			Subject:   Subject{UserID: "u1"},
 			HTTP: HTTPInfo{
 				Method:     "POST",
@@ -72,7 +72,7 @@ func TestErrorEventKeepsFalseRetryable(t *testing.T) {
 	ev := ErrorEvent{
 		EventMetadata: EventMetadata{Level: LevelError},
 		Data: ErrorPayload{
-			EventName:    EventNameErrorDBTimeout,
+			EventName:    EventNameDatabaseQueryTimedOut,
 			ErrorType:    "db.timeout",
 			ErrorMessage: "dial tcp: connection refused",
 			Retryable:    false,
@@ -96,12 +96,12 @@ func TestZeroValueOmission(t *testing.T) {
 	ev := BusinessEvent{
 		EventMetadata: EventMetadata{Level: LevelInfo},
 		Data: BusinessPayload{
-			EventName: EventName("business.order.paid"),
+			EventName: EventName("order.payment.succeeded"),
 			Result:    ResultSuccess,
 		},
 	}
 	attrs := attrMap(ev.Attrs())
-	for _, k := range []string{"app.user_id", "app.business_code", "latency_ms"} {
+	for _, k := range []string{"app.user_id", "app.error_code", "latency_ms"} {
 		if _, ok := attrs[k]; ok {
 			t.Errorf("零值字段不应输出：%s", k)
 		}
@@ -110,22 +110,23 @@ func TestZeroValueOmission(t *testing.T) {
 
 func TestBusinessPayloadExtraAttrsCannotOverrideGovernanceKeys(t *testing.T) {
 	payload := BusinessPayload{
-		EventName:       EventName("business.order.paid"),
+		EventName:       EventName("order.payment.succeeded"),
 		ErrorType:       "business.payment_failed",
 		Subject:         Subject{UserID: "user-canonical", TenantID: "tenant-canonical"},
 		Resource:        Resource{Type: "order", ID: "order-canonical"},
-		BusinessCode:    "ORDER.PAYMENT.FAILED",
+		ErrorCode:       "ORDER.PAYMENT.FAILED",
 		BusinessMessage: "payment failed",
 		Source:          Source{Function: "checkout.Pay", Filepath: "checkout/pay.go", Line: 42},
 		Result:          ResultFailed,
 		ExtraAttrs: []slog.Attr{
-			slog.String(string(KeyEventName), "business.order.forged"),
+			slog.String(string(KeyEventName), "order.payment.forged"),
 			slog.String(string(KeyErrorType), "forged.error"),
 			slog.String(string(KeyAppUserID), "user-forged"),
 			slog.String(string(KeyAppTenantID), "tenant-forged"),
 			slog.String(string(KeyAppResourceType), "forged-resource"),
 			slog.String(string(KeyAppResourceID), "resource-forged"),
-			slog.String(string(KeyAppBusinessCode), "FORGED"),
+			slog.String(string(KeyAppErrorCode), "FORGED"),
+			slog.String(string(KeyAppBusinessCode), "FORGED_LEGACY"),
 			slog.String(string(KeyAppBusinessMessage), "forged"),
 			slog.String(string(KeyCodeFunctionName), "forged.Function"),
 			slog.String(string(KeyCodeFilePath), "forged.go"),
@@ -151,7 +152,7 @@ func TestBusinessPayloadExtraAttrsCannotOverrideGovernanceKeys(t *testing.T) {
 		string(KeyAppTenantID):        payload.Subject.TenantID,
 		string(KeyAppResourceType):    payload.Resource.Type,
 		string(KeyAppResourceID):      payload.Resource.ID,
-		string(KeyAppBusinessCode):    payload.BusinessCode,
+		string(KeyAppErrorCode):       payload.ErrorCode,
 		string(KeyAppBusinessMessage): payload.BusinessMessage,
 		string(KeyCodeFunctionName):   payload.Source.Function,
 		string(KeyCodeFilePath):       payload.Source.Filepath,
@@ -183,7 +184,7 @@ func TestMiddlewareTypeSwitch(t *testing.T) {
 	var ev EventPayload = AccessEvent{
 		EventMetadata: EventMetadata{Level: LevelInfo},
 		Data: AccessPayload{
-			EventName: EventNameAccessHTTPRequest,
+			EventName: EventNameHTTPRequestCompleted,
 			HTTP:      HTTPInfo{Method: "GET", StatusCode: 200},
 			Result:    ResultSuccess,
 		},
@@ -203,22 +204,22 @@ func TestMiddlewareTypeSwitch(t *testing.T) {
 	}
 }
 
-// TestEventNameConventions 验证 EventName 注册表符合 类别.模块.操作 三段式，且构造校验生效。
+// TestEventNameConventions 验证 EventName 注册表符合 领域.对象.事实 三段式，且不重复 EventType。
 func TestEventNameConventions(t *testing.T) {
 	names := []EventName{
-		EventNameAccessHTTPRequest,
-		EventName("business.order.paid"),
-		EventNameErrorDBTimeout,
-		EventNameSecurityInputAnomaly,
-		EventNameAuditInputAnomaly,
+		EventNameHTTPRequestCompleted,
+		EventName("order.payment.succeeded"),
+		EventNameDatabaseQueryTimedOut,
+		EventNameInputThreatDetected,
+		EventNameInputAnomalyRecorded,
 	}
 	for _, n := range names {
 		if err := n.Validate(); err != nil {
 			t.Errorf("%s 不符合段式: %v", n, err)
 		}
 	}
-	if got := NewEventName("access", "http", "request"); got != EventNameAccessHTTPRequest {
-		t.Errorf("NewEventName = %q, want %q", got, EventNameAccessHTTPRequest)
+	if got := NewEventName("http", "request", "completed"); got != EventNameHTTPRequestCompleted {
+		t.Errorf("NewEventName = %q, want %q", got, EventNameHTTPRequestCompleted)
 	}
 
 	assertPanics := func(name string, f func()) {
@@ -230,10 +231,11 @@ func TestEventNameConventions(t *testing.T) {
 		}()
 		f()
 	}
-	assertPanics("2 段", func() { NewEventName("access", "http") })
-	assertPanics("4 段", func() { NewEventName("access", "http", "a", "b") })
-	assertPanics("大写", func() { NewEventName("Access", "http", "request") })
-	if err := EventName("error.system.db.timeout").Validate(); err == nil {
+	assertPanics("2 段", func() { NewEventName("http", "request") })
+	assertPanics("4 段", func() { NewEventName("http", "server", "request", "completed") })
+	assertPanics("大写", func() { NewEventName("HTTP", "request", "completed") })
+	assertPanics("重复粗分类", func() { NewEventName("access", "http", "request") })
+	if err := EventName("database.query.operation.timed_out").Validate(); err == nil {
 		t.Error("4 段事件名应校验失败")
 	}
 }
@@ -247,7 +249,7 @@ func TestRequestIDDerivedFromTraceID(t *testing.T) {
 		ev := AccessEvent{
 			EventMetadata: md,
 			Data: AccessPayload{
-				EventName: EventNameAccessHTTPRequest,
+				EventName: EventNameHTTPRequestCompleted,
 				HTTP:      HTTPInfo{Method: "GET", StatusCode: 200},
 				Result:    ResultSuccess,
 			},
@@ -293,8 +295,8 @@ func TestAccessPayloadRPCAttrs(t *testing.T) {
 			t.Errorf("attrs 缺少 %s: %v", key, ev.Attrs())
 		}
 	}
-	if got := attrs["event.name"].(slog.Value).String(); got != "access.rpc.request" {
-		t.Errorf("event.name = %v, want access.rpc.request", got)
+	if got := attrs["event.name"].(slog.Value).String(); got != "rpc.request.completed" {
+		t.Errorf("event.name = %v, want rpc.request.completed", got)
 	}
 	if got := attrs["rpc.method"].(slog.Value).String(); got != "Register" {
 		t.Errorf("rpc.method = %v, want Register", got)

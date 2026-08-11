@@ -15,8 +15,12 @@ _Avoid_: 日志行、log message（指结构化事件时）
 _Avoid_: 日志级别（Level 是另一维度）、EventName
 
 **EventName**:
-事件的细名，三段式「类别.模块.操作」（如 access.http.request、business.order.paid），写入 event.name，三段式必须经 Validate。
-_Avoid_: 随意字符串、message、EventType
+事件的稳定事实名，三段式「领域.对象.事实」（如 http.request.completed、order.payment.succeeded），写入 event.name；粗分类已由 msg/EventType 承载，事实名不得重复六类前缀。
+_Avoid_: 类别.模块.操作、随意字符串、message、EventType 前缀
+
+**ErrorCode**:
+可选的稳定具体错误码(业务错误码：（服务/模块）.（场景/操作）.（结果/具体错误）)，用于客服、业务查询和精确聚合，统一写入 app.error_code；它不决定 EventName，也不替代低基数 error.type。
+_Avoid_: app.business_code、app.operation、从错误码自动生成 EventName
 
 **Level**:
 语义化级别 DEBUG / INFO / WARN / ERROR，映射 slog.Level 与 OTel SeverityNumber。
@@ -59,7 +63,7 @@ Collector 侧等 trace 完整到达后按错误 / 概率 / 属性策略决定保
 _Avoid_: 后端采样（模糊）
 
 **Sampler**:
-采样判定器，返回保留或丢弃；ResultKeepSampler 按 Result 判定，EventKeepSampler 按 event.name 前缀 + Fallback 判定。
+采样判定器，返回保留或丢弃；ResultKeepSampler 按 Result 判定，EventTypeKeepSampler 按 msg/EventType 粗分类判定，EventKeepSampler 按 event.name 领域前缀判定。
 _Avoid_: 采样频率、过滤器
 
 **Masker（脱敏）**:

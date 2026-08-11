@@ -33,6 +33,12 @@ type Sampler interface {
 	Sample(ctx context.Context, attrs []slog.Attr) bool
 }
 
+// EventTypeSampler 是可选的类型感知采样扩展。Logger 优先调用 SampleEvent，
+// 使采样策略不依赖 EventName 重复携带 access/business/error 等粗分类。
+type EventTypeSampler interface {
+	SampleEvent(ctx context.Context, eventType EventType, attrs []slog.Attr) bool
+}
+
 // SamplerFunc 允许以函数实现 Sampler。
 type SamplerFunc func(ctx context.Context, attrs []slog.Attr) bool
 
@@ -164,8 +170,16 @@ func (l *Logger) Emit(ctx context.Context, ev EventPayload) {
 	if l.options.masker != nil {
 		attrs = l.options.masker.Mask(ctx, attrs)
 	}
-	if l.options.sampler != nil && !l.options.sampler.Sample(ctx, attrs) {
-		return
+	if l.options.sampler != nil {
+		keep := false
+		if typed, ok := l.options.sampler.(EventTypeSampler); ok {
+			keep = typed.SampleEvent(ctx, ev.EventType(), attrs)
+		} else {
+			keep = l.options.sampler.Sample(ctx, attrs)
+		}
+		if !keep {
+			return
+		}
 	}
 	if err := l.writer.Write(ctx, msg, attrs...); err != nil && l.options.errorHandler != nil {
 		l.options.errorHandler(ctx, msg, attrs, err)

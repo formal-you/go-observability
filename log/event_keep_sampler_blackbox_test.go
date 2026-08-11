@@ -36,7 +36,7 @@ func TestEventKeepSamplerPolicyBlackBox(t *testing.T) {
 	logger.Emit(ctx, log.BusinessEvent{
 		EventMetadata: log.EventMetadata{Level: log.LevelInfo},
 		Data: log.BusinessPayload{
-			EventName: "business.order.paid",
+			EventName: "order.payment.succeeded",
 			Result:    log.ResultSuccess,
 		},
 	})

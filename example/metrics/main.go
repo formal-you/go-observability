@@ -51,7 +51,7 @@ func main() {
 
 	// 业务 counter：订单支付成功次数（示例语义，非库契约）。
 	ordersPaid, err := meter.Int64Counter(
-		"business.order.paid",
+		"order.payment.succeeded",
 		metric.WithDescription("orders paid successfully (consumer-defined)"),
 	)
 	if err != nil {

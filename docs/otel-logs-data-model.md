@@ -55,7 +55,7 @@ API 层 Record 之外，SDK 在导出前附加：
 | `timestamp` / `observedTimestamp` | `attrkv.Record` 内 `time.Now()` |
 | `severity` / `severityText` | `level` 属性（DEBUG/INFO/WARN/ERROR）映射 |
 | `body` | **`msg` = event_type 粗分类**（access/business/error/security/audit/probe，见 ADR-0004） |
-| `eventName` | `event.name` 属性（三段式细名，如 business.order.paid） |
+| `eventName` | `event.name` 属性（三段式事实名，如 order.payment.succeeded） |
 | attributes | 其余扁平字段（剥离 timestamp/level/event.name/trace_id/span_id 后） |
 | `trace_id` / `span_id` / `traceFlags` | 由 sdk/log 从 ctx 的 span context 自动关联（不写属性） |
 | `resource` / `scope` | `telemetry` 装配的 Provider / Logger 提供 |
@@ -63,7 +63,7 @@ API 层 Record 之外，SDK 在导出前附加：
 
 ## 5. 注意点
 
-- **EventName 语义**：OTel 明确「非空 event_name 的记录被解释为事件记录」，且事件名应唯一标识事件的属性/正文结构——这正是本仓库三段式 `EventName` 注册表（`Validate`）存在的依据。
+- **EventName 语义**：OTel 明确「非空 event_name 的记录被解释为事件记录」，且事件名应唯一标识事件的属性/正文结构。本仓库用「领域.对象.事实」三段式注册表（`Validate`）表达事实，`msg` 单独承载 access/business/error/security/audit/probe 粗分类。
 - **Body 低基数**：Body 不放高基数自由文本，放 event_type 粗分类（决策见 ADR-0004）。
 - **trace/span 不走属性**：trace_id/span_id 由 ctx 自动关联，双投影规则见 AGENTS.md 规则 5。
 - **版本差异**：`event_name` 是较新的数据模型字段；早期 Collector/后端不支持时，Body 仍保留 event_type 作为兜底分组键。

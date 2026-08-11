@@ -127,7 +127,7 @@ func AccessLog(cfg AccessConfig) gin.HandlerFunc {
 				LatencyMS: time.Since(start).Milliseconds(),
 			},
 			Data: log.AccessPayload{
-				EventName: log.EventNameAccessHTTPRequest,
+				EventName: log.EventNameHTTPRequestCompleted,
 				Subject:   log.Subject{UserID: getUserID(c)},
 				HTTP: log.HTTPInfo{
 					Method:     c.Request.Method,

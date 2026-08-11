@@ -33,7 +33,7 @@ Trace 父子关系，并使用了部分过时或非规范字段名。
 
 - 只有 5/12 条 file 事件包含 `timestamp`；
 - file 投影没有服务身份，无法仅凭文件查询服务、版本、实例和环境；
-- 业务拒绝是 `msg=business`，但默认 `event.name=error.http.request`，粗分类和细名不一致。
+- 业务拒绝是 `msg=business`，默认 `event.name=http.request.rejected`；旧的 `error.http.request` 同时混淆粗分类与失败事实。
 
 `sample.json` 不是 OTLP 完整视图。当前 telemetry 已把服务信息放在 OTel Resource，因此“样例没有
 service 字段”等于“file 投影不可见”，不等于“OTLP 没有 Service Metadata”。
@@ -70,7 +70,7 @@ service 字段”等于“file 投影不可见”，不等于“OTLP 没有 Serv
 | --- | --- | --- |
 | TERM-LOG-001 | Service Resource | 进程/服务级身份，OTLP 中属于 Resource，不是每条 LogRecord 的业务属性 |
 | TERM-LOG-002 | EventType | 六类粗分类，file 的 `msg`、OTLP 的 Body |
-| TERM-LOG-003 | EventName | 三段式具体事件名，首段必须与 EventType 一致 |
+| TERM-LOG-003 | EventName | 三段式事实名「领域.对象.事实」，首段不得重复 EventType |
 | TERM-LOG-004 | ErrorType | `error.type`，可预测、低基数的失败类别，用于聚合和告警 |
 | TERM-LOG-005 | ErrorCode | 具体、可能高基数的稳定错误码，不作为 Metric 维度 |
 | TERM-LOG-006 | RequestID | 面向用户、客服和单次入口请求的报障凭证 |
@@ -107,11 +107,12 @@ Trace storage
 - file 运营投影把上述选定字段展开为扁平顶层键，支持 OpenSearch/Loki 直接查询；
 - 库不猜测生产实例 ID，实例值由部署配置、主机名或 Pod UID 明确注入。
 
-### RULE-P0-003：EventName 与 EventType 一致
+### RULE-P0-003：EventName 与 EventType 分工
 
-- `EventName` 首段必须等于 EventType；
-- 业务拒绝默认使用 `business.http.rejected`，系统错误使用 `error.http.request`；
-- 领域应用可通过库提供的 resolver 注入更具体的 `business.order.rejected`；
+- `msg` / `EventType` 负责 access/business/error/security/audit/probe 六类粗分类；
+- `EventName` 使用「领域.对象.事实」三段式，禁止首段重复 EventType；
+- 业务拒绝默认使用 `http.request.rejected`，系统错误使用 `http.request.failed`，panic 使用 `runtime.panic.occurred`；
+- 领域应用可通过库提供的 resolver 注入更具体的 `order.creation.rejected`；
 - 框架中间件不得根据 error message 猜测领域事件名。
 
 ### RULE-P0-004：错误字段各司其职
@@ -121,7 +122,7 @@ Trace storage
 ```json
 {
   "msg": "business",
-  "event.name": "business.order.rejected",
+  "event.name": "http.request.rejected",
   "error.type": "business.stock_insufficient",
   "app.error_code": "ORDER.CREATE.STOCK_INSUFFICIENT",
   "app.business_message": "商品库存不足",
@@ -134,7 +135,7 @@ Trace storage
 - `app.error_code` 描述具体稳定错误码；OTel 1.41.0 没有本项目可直接采用的通用 `error.code`；
 - 业务拒绝使用 `app.business_message`，系统异常使用 `exception.message`；
 - `exception.type` 只在能稳定提取实际异常类型时输出，不用它替代 `error.type`；
-- 现有 `app.business_code` 和 SystemError→`app.operation` 的迁移必须单独写兼容说明。
+- 现有 `app.business_code` 和 SystemError→`app.operation` 统一迁移为 `app.error_code`；旧 Go 字段仅作为源码兼容输入，不再输出旧键。
 
 ### RULE-P0-005：ID 关联契约
 
@@ -185,7 +186,7 @@ Trace storage
 | ACCEPT-P0-001 | 黑盒 12/12 条 file 事件都有 timestamp | blackbox |
 | ACCEPT-P0-002 | file 每条事件可按 service/version/instance/environment 查询 | blackbox |
 | ACCEPT-P0-003 | OTLP Service Metadata 只存在于 Resource，键符合 semconv 1.41.0 | in-memory OTLP |
-| ACCEPT-P0-004 | EventName 首段与 Body/EventType 一致，业务拒绝不再出现 `business + error.*` | unit + blackbox |
+| ACCEPT-P0-004 | EventName 使用事实名且不重复 Body/EventType，业务拒绝不再出现 `business + error.*` | unit + blackbox |
 | ACCEPT-P0-005 | error.type 低基数、app.error_code 精确，二者不互换 | unit + blackbox |
 | ACCEPT-P0-006 | 每个未跳过 HTTP 请求恰好一个 AccessEvent，覆盖 2xx/4xx/5xx/panic | blackbox |
 | ACCEPT-P0-007 | 同请求事件共享 trace/request；子 Span 可不同；后台事件无伪 request_id | blackbox |
@@ -222,8 +223,8 @@ service.version="1.2.3" AND error.type=*
 ## 10. 待确认问题
 
 - SPEC-LOG-001：file 投影是否要求 `service.version` / `service.instance.id` 在开发环境也必填，还是仅 production profile 必填？
-- SPEC-LOG-002：`app.business_code` 是否在 v0.x 直接迁移为 `app.error_code`，还是保留一个发布周期的双写兼容？
-- SPEC-LOG-003：业务拒绝的中间件默认名采用 `business.http.rejected`，是否符合期望？
+- SPEC-LOG-002：`app.business_code` 与 SystemError 的 `app.operation` 已统一迁移为 `app.error_code`；后续只需决定何时移除旧 Go 字段别名。
+- SPEC-LOG-003：业务拒绝的中间件默认名采用 `http.request.rejected`，系统错误采用 `http.request.failed`。
 - SPEC-LOG-004：生产环境 panic stack 是保留并截断，还是必须接入外部 Error Storage 后才允许移除？
 - SPEC-LOG-005：异步 file Writer 的满队列策略选择阻塞、丢最新、丢最旧还是降级同步？
 - SPEC-LOG-006：性能门槛的目标 QPS、平均事件大小与最大内存预算是多少？

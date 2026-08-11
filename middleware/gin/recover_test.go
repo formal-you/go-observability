@@ -47,7 +47,7 @@ func TestRecoverCatchesPanicAndEmitsErrorEvent(t *testing.T) {
 		t.Fatalf("msgs = %v, want [error]", w.msgs)
 	}
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "event.name", "error.runtime.panic")
+	attrString(t, attrs, "event.name", "runtime.panic.occurred")
 	attrString(t, attrs, "error.type", "runtime.panic")
 	attrString(t, attrs, "level", "ERROR")
 	attrString(t, attrs, "exception.message", "boom")

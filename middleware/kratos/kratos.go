@@ -32,19 +32,28 @@ import (
 type Option func(*options)
 
 type options struct {
-	eventName    log.EventName
-	getRequestID func(ctx context.Context) string
-	statusForErr func(err error) int
-	projector    func(err error, requestID string) (int, any)
+	eventName         log.EventName
+	eventNameResolver httperr.EventNameResolver
+	getRequestID      func(ctx context.Context) string
+	statusForErr      func(err error) int
+	projector         func(err error, requestID string) (int, any)
 }
 
 func defaultOptions() options {
-	return options{eventName: log.EventNameErrorHTTPRequest, statusForErr: httperr.StatusForError}
+	return options{eventNameResolver: httperr.DefaultEventNameResolver, statusForErr: httperr.StatusForError}
 }
 
-// WithEventName 设置错误日志事件名；空值默认 log.EventNameErrorHTTPRequest。
+// WithEventName 设置固定错误事实名并覆盖默认 resolver。
 func WithEventName(name log.EventName) Option {
-	return func(o *options) { o.eventName = name }
+	return func(o *options) {
+		o.eventName = name
+		o.eventNameResolver = nil
+	}
+}
+
+// WithEventNameResolver 设置按错误选择事实名的 resolver，优先于固定 EventName。
+func WithEventNameResolver(resolver httperr.EventNameResolver) Option {
+	return func(o *options) { o.eventNameResolver = resolver }
 }
 
 // WithGetRequestID 从请求 context 提取 request_id 写入日志事件 metadata；可选。
@@ -108,7 +117,11 @@ func ErrorLog(logger *log.Logger, opts ...Option) middleware.Middleware {
 			if o.getRequestID != nil {
 				md.RequestID = o.getRequestID(ctx)
 			}
-			logger.Emit(ctx, log.EventFromError(o.eventName, err, md))
+			eventName := o.eventName
+			if o.eventNameResolver != nil {
+				eventName = o.eventNameResolver(err)
+			}
+			logger.Emit(ctx, log.EventFromError(eventName, err, md))
 			return reply, err
 		}
 	}

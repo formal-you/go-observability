@@ -51,13 +51,15 @@ const (
 	KeyLatencyMS Key = "latency_ms"
 
 	// 业务 vendor 命名空间
-	KeyAppUserID            Key = "app.user_id"
-	KeyAppTenantID          Key = "app.tenant_id"
-	KeyAppResult            Key = "app.result"
-	KeyAppBusinessCode      Key = "app.business_code"
-	KeyAppBusinessMessage   Key = "app.business_message"
-	KeyAppResourceType      Key = "app.resource_type"
-	KeyAppResourceID        Key = "app.resource_id"
+	KeyAppUserID   Key = "app.user_id"
+	KeyAppTenantID Key = "app.tenant_id"
+	KeyAppResult   Key = "app.result"
+	// KeyAppBusinessCode 已弃用：新事件统一使用 KeyAppErrorCode。
+	KeyAppBusinessCode    Key = "app.business_code"
+	KeyAppBusinessMessage Key = "app.business_message"
+	KeyAppResourceType    Key = "app.resource_type"
+	KeyAppResourceID      Key = "app.resource_id"
+	// KeyAppOperation 已弃用：错误码统一使用 KeyAppErrorCode。
 	KeyAppOperation         Key = "app.operation"
 	KeyAppFailureOperation  Key = "app.failure_operation"
 	KeyAppRootCauseType     Key = "app.root_cause_type"

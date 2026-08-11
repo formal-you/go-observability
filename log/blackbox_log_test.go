@@ -37,8 +37,8 @@ func TestLevelOfBlackBox(t *testing.T) {
 // 输入字符串是 Validate 的黑盒测试数据，不是事件埋点（AGENTS.md 规则 1 约束生产侧）。
 func TestEventNameValidateBlackBox(t *testing.T) {
 	valid := []log.EventName{
-		"business.order.paid", // CASE-B1-01 文法样例（领域名不在核心注册表）
-		"access.http.request", // CASE-B1-02
+		"order.payment.succeeded", // CASE-B1-01 领域事实名
+		"http.request.completed",  // CASE-B1-02 框架事实名
 	}
 	for _, name := range valid {
 		if err := name.Validate(); err != nil {
@@ -47,9 +47,10 @@ func TestEventNameValidateBlackBox(t *testing.T) {
 	}
 
 	invalid := []log.EventName{
-		"order.paid",          // CASE-B1-03 段数不足
-		"business..paid",      // CASE-B1-04 空段
-		"Business.Order.Paid", // CASE-B1-05 大写
+		"order.paid",              // CASE-B1-03 段数不足
+		"order..succeeded",        // CASE-B1-04 空段
+		"Order.Payment.Succeeded", // CASE-B1-05 大写
+		"business.order.paid",     // CASE-B1-06 重复 EventType
 	}
 	for _, name := range invalid {
 		if err := name.Validate(); err == nil {
@@ -64,7 +65,7 @@ func TestBusinessEventExtraAttrsBlackBox(t *testing.T) {
 	ev := log.BusinessEvent{
 		EventMetadata: log.EventMetadata{Level: log.LevelInfo},
 		Data: log.BusinessPayload{
-			EventName: log.EventName("business.order.paid"),
+			EventName: log.EventName("order.payment.succeeded"),
 			Result:    log.ResultSuccess,
 			ExtraAttrs: []slog.Attr{
 				slog.String("app.order_id", "ORD-1"),

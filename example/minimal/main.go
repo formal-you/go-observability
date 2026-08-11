@@ -35,11 +35,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, "write event:", err)
 		}),
 	)
-	ctx, span := providers.Tracer("example/minimal").Start(ctx, "business.order.paid")
+	ctx, span := providers.Tracer("example/minimal").Start(ctx, "order.payment.succeeded")
 	logger.Emit(ctx, log.BusinessEvent{
 		EventMetadata: log.EventMetadata{Level: log.LevelInfo},
 		Data: log.BusinessPayload{
-			EventName: log.NewEventName("business", "order", "paid"),
+			EventName: log.NewEventName("order", "payment", "succeeded"),
 			Result:    log.ResultSuccess,
 		},
 	})

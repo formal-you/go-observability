@@ -15,7 +15,7 @@ import (
 )
 
 // businessEventFromError 把 errs.AppError 投影为 BusinessEvent。
-// 适用于 KindValidation / KindBusiness：ErrorType 取 err.ErrorType()，BusinessCode 取
+// 适用于 KindValidation / KindBusiness：ErrorType 取 err.ErrorType()，ErrorCode 取
 // err.ErrCode()（validation 为空时保持空串，由 Attrs 零值省略规则不输出），
 // BusinessMessage 取 err.Error()，Source 取 err.Source()（errs.Source 转 log.Source），
 // Result 固定 failed。缺省级别由 LevelOf 推导，调用方显式设置的 md.Level 不被覆盖。
@@ -28,7 +28,7 @@ func businessEventFromError(eventName EventName, err errs.AppError, md EventMeta
 		Data: BusinessPayload{
 			EventName:       eventName,
 			ErrorType:       string(err.ErrorType()),
-			BusinessCode:    string(err.ErrCode()),
+			ErrorCode:       string(err.ErrCode()),
 			BusinessMessage: err.Error(),
 			Source:          sourceOf(err),
 			Result:          ResultFailed,
@@ -38,7 +38,7 @@ func businessEventFromError(eventName EventName, err errs.AppError, md EventMeta
 
 // sysEventFromError 把 errs.AppError 投影为 ErrorEvent。
 // 适用于 KindSystem：ErrorType 取 err.ErrorType()，ErrorMessage 取 err.Error()，
-// Operation 取 err.ErrCode()（SystemError 可选业务码落 app.operation，可为空），
+// ErrorCode 取 err.ErrCode()（SystemError 可选业务关联码落 app.error_code，可为空），
 // Retryable / RetryCount / UpstreamService / Source 从错误链中的 errs.SystemError 提取，
 // 支持值和指针形式；StackTrace 仅当 errs.StackRule(err.ErrorType()) 判定为 StackMust
 // 时写入 err.Stack()，其余类别留空以控制体积；Result 固定 error。
@@ -53,7 +53,7 @@ func sysEventFromError(eventName EventName, err errs.AppError, md EventMetadata)
 			EventName:    eventName,
 			ErrorType:    string(err.ErrorType()),
 			ErrorMessage: err.Error(),
-			Operation:    string(err.ErrCode()),
+			ErrorCode:    string(err.ErrCode()),
 			Source:       sourceOf(err),
 			Result:       ResultError,
 		},

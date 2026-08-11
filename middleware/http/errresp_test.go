@@ -36,7 +36,7 @@ func TestErrorResponseRendersDefaultBodyAndEmitsEvent(t *testing.T) {
 	if len(w.msgs) != 1 || w.msgs[0] != "business" {
 		t.Fatalf("events = %v, want one business event", w.msgs)
 	}
-	attrString(t, attrMap(w.attrsList[0]), "event.name", "error.http.request")
+	attrString(t, attrMap(w.attrsList[0]), "event.name", "http.request.rejected")
 }
 
 func TestErrorResponseNoErrorPassesThrough(t *testing.T) {
@@ -83,7 +83,7 @@ func TestRecoverCatchesPanicAndEmitsEvent(t *testing.T) {
 	if len(w.msgs) != 1 || w.msgs[0] != "error" {
 		t.Fatalf("events = %v, want one error event", w.msgs)
 	}
-	attrString(t, attrMap(w.attrsList[0]), "event.name", "error.runtime.panic")
+	attrString(t, attrMap(w.attrsList[0]), "event.name", "runtime.panic.occurred")
 }
 
 func TestResponseProjectorOverride(t *testing.T) {
@@ -108,6 +108,26 @@ func TestResponseProjectorOverride(t *testing.T) {
 	if len(w.msgs) != 1 {
 		t.Fatalf("events = %v, want one", w.msgs)
 	}
+}
+
+func TestErrorResponseEventNameResolverTakesPrecedence(t *testing.T) {
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	handler := ErrorResponse(ErrorConfig{
+		Logger:    logger,
+		EventName: log.NewEventName("checkout", "http", "fixed"),
+		EventNameResolver: func(error) log.EventName {
+			return log.NewEventName("order", "creation", "rejected")
+		},
+	})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		SetError(w, errs.NewValidation("order id is required"))
+	}))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/orders", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	attrString(t, attrMap(w.attrsList[0]), "event.name", "order.creation.rejected")
 }
 
 func TestNilLoggerRendersOnly(t *testing.T) {
@@ -160,7 +180,7 @@ func TestErrorResponseInputGuardEmitsSecurityAuditEvents(t *testing.T) {
 	if len(w.msgs) != 3 || !reflect.DeepEqual(w.msgs, []string{"error", "security", "audit"}) {
 		t.Fatalf("msgs = %v, want [error security audit]", w.msgs)
 	}
-	for i, want := range []string{"error.http.request", "security.input.anomaly", "audit.input.anomaly"} {
+	for i, want := range []string{"http.request.failed", "input.threat.detected", "input.anomaly.recorded"} {
 		attrString(t, attrMap(w.attrsList[i]), "event.name", want)
 	}
 }
@@ -191,5 +211,5 @@ func TestRecoverInputGuardEmitsSecurityEvent(t *testing.T) {
 	if len(w.msgs) != 2 || !reflect.DeepEqual(w.msgs, []string{"error", "security"}) {
 		t.Fatalf("msgs = %v, want [error security]", w.msgs)
 	}
-	attrString(t, attrMap(w.attrsList[1]), "event.name", "security.input.anomaly")
+	attrString(t, attrMap(w.attrsList[1]), "event.name", "input.threat.detected")
 }

@@ -25,7 +25,7 @@
 `app.*` 摘要 + `FieldMasker`，不落原始 body。
 
 已落地（与本文档同批提交）：
-- `security.input.anomaly` / `audit.input.anomaly` 框架级事件名常量（log/types.go）；
+- `input.threat.detected` / `input.anomaly.recorded` 框架级事件名常量（log/types.go）；
 - `app.input_field` / `app.input_hash` / `app.input_truncated` 键（log/keys.go）；
 - Error / Security / Audit 三个 payload 的 `ExtraAttrs`（canonical 键守卫 + 保留键过滤）；
 - `httperr.InputSummary` / `InputGuard` / `WithInputSummary` / `InputSummaryFromContext` /
@@ -49,14 +49,14 @@
 
 ### 方案 B：ErrorEvent + SecurityEvent（风险 / 拦截双轨）
 
-- 系统错误照常记 `ErrorEvent`（故障视角）；对「穿透校验的非法输入」额外发 `SecurityEvent`（如 event.name=`security.input.bypass` / `security.input.anomaly`，result=denied/blocked，带 `app.input_*` 摘要、`app.risk_score`、来源 IP）。
+- 系统错误照常记 `ErrorEvent`（故障视角）；对「穿透校验的非法输入」额外发 `SecurityEvent`（如 event.name=`input.threat.detected`，result=denied/blocked，带 `app.input_*` 摘要、`app.risk_score`、来源 IP）。
 - 代码触点：`types.go` 增加框架级 security 事件名常量；复用现有 `SecurityPayload`（SecurityEventType / FailureReason / ActionTaken / RiskScore / Result）；middleware 增加输入摘要注入点。
 - 优点：安全视角独立、可按 risk_score / error.type / 来源 IP 聚合与告警，不污染故障事件；直连 SIEM。
 - 缺点：一个请求可能出现两条事件，需要显式放宽「一个请求最多一个错误出口」为「错误出口唯一，安全事件可并存」；需要维护 security 事件名注册表与更高脱敏要求。
 
 ### 方案 C：ErrorEvent + AuditEvent（可追责审计）
 
-- 系统错误照常记 `ErrorEvent`；对非法输入作为「敏感输入 / 异常操作」记 `AuditEvent`（如 event.name=`audit.input.rejected` / `audit.input.anomaly`），带 actor（用户）、target（资源）、before/after、`app.input_*`。
+- 系统错误照常记 `ErrorEvent`；对非法输入作为「敏感输入 / 异常操作」记 `AuditEvent`（如 event.name=`input.anomaly.recorded`），带 actor（用户）、target（资源）、before/after、`app.input_*`。
 - 代码触点：`types.go` 增加框架级 audit 事件名常量；复用现有 `AuditPayload`（Action / Actor / TargetUserID / ChangedFields / Before / After / Reason / ApprovalID）；审计存储默认需防篡改（接入方责任）。
 - 优点：满足合规「谁在什么时候提交了什么」的可追责要求。
 - 缺点：AuditEvent 语义是「高权限操作 / 敏感资源变更」，普通用户输入是否算 audit 存在争议；保留与防篡改成本高于 Security。

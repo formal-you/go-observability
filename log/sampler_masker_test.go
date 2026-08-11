@@ -141,15 +141,15 @@ func TestDefaultSensitiveKeysReturnsCopy(t *testing.T) {
 
 func TestEventKeepSamplerPrefixesAlwaysKeep(t *testing.T) {
 	s := EventKeepSampler{
-		KeepPrefixes: []string{"business.", "error.", "security.", "audit.", "probe."},
+		KeepPrefixes: []string{"order.", "runtime.", "auth.", "config.", "health."},
 		Fallback:     ResultKeepSampler{Ratio: 0},
 	}
 	for _, name := range []string{
-		"business.order.paid",
-		"error.runtime.panic",
-		"security.auth.denied",
-		"audit.config.changed",
-		"probe.health.check",
+		"order.payment.succeeded",
+		"runtime.panic.occurred",
+		"auth.session.denied",
+		"config.change.recorded",
+		"health.check.completed",
 	} {
 		attrs := []slog.Attr{
 			slog.String(string(KeyEventName), name),
@@ -163,12 +163,12 @@ func TestEventKeepSamplerPrefixesAlwaysKeep(t *testing.T) {
 
 func TestEventKeepSamplerFallbackDelegation(t *testing.T) {
 	s := EventKeepSampler{
-		KeepPrefixes: []string{"business.", "error.", "security.", "audit.", "probe."},
+		KeepPrefixes: []string{"order."},
 		Fallback:     ResultKeepSampler{Ratio: 0},
 	}
 	access := func(result Result) []slog.Attr {
 		return []slog.Attr{
-			slog.String(string(KeyEventName), "access.http.request"),
+			slog.String(string(KeyEventName), "http.request.completed"),
 			slog.String(string(KeyAppResult), string(result)),
 		}
 	}
@@ -181,9 +181,9 @@ func TestEventKeepSamplerFallbackDelegation(t *testing.T) {
 }
 
 func TestEventKeepSamplerNilFallback(t *testing.T) {
-	s := EventKeepSampler{KeepPrefixes: []string{"business."}}
+	s := EventKeepSampler{KeepPrefixes: []string{"order."}}
 	attrs := []slog.Attr{
-		slog.String(string(KeyEventName), "access.http.request"),
+		slog.String(string(KeyEventName), "http.request.completed"),
 		slog.String(string(KeyAppResult), string(ResultSuccess)),
 	}
 	if !s.Sample(context.Background(), attrs) {
@@ -193,12 +193,47 @@ func TestEventKeepSamplerNilFallback(t *testing.T) {
 
 func TestEventKeepSamplerMissingEventName(t *testing.T) {
 	s := EventKeepSampler{
-		KeepPrefixes: []string{"business."},
+		KeepPrefixes: []string{"order."},
 		Fallback:     ResultKeepSampler{Ratio: 0},
 	}
 	attrs := []slog.Attr{slog.String(string(KeyAppResult), string(ResultSuccess))}
 	if s.Sample(context.Background(), attrs) {
 		t.Error("event.name 缺失应走 Fallback（Ratio=0 → 丢弃）")
+	}
+}
+
+func TestEventKeepSamplerLegacyTypePrefixCompatibility(t *testing.T) {
+	s := EventKeepSampler{
+		KeepPrefixes: []string{"business."},
+		Fallback:     ResultKeepSampler{Ratio: 0},
+	}
+	attrs := []slog.Attr{
+		slog.String(string(KeyEventName), "order.payment.succeeded"),
+		slog.String(string(KeyAppResult), string(ResultSuccess)),
+	}
+	if !s.SampleEvent(context.Background(), EventBusiness, attrs) {
+		t.Error("旧 business. 配置应按 EventType 兼容保留 BusinessEvent")
+	}
+	if s.SampleEvent(context.Background(), EventAccess, attrs) {
+		t.Error("旧 business. 配置不应保留 AccessEvent")
+	}
+}
+
+func TestEventTypeKeepSampler(t *testing.T) {
+	s := NewEventTypeKeepSampler(
+		[]EventType{EventBusiness, EventError, EventSecurity, EventAudit, EventProbe},
+		ResultKeepSampler{Ratio: 0},
+	)
+	attrs := []slog.Attr{slog.String(string(KeyAppResult), string(ResultSuccess))}
+	if !s.SampleEvent(context.Background(), EventBusiness, attrs) {
+		t.Error("BusinessEvent 应按 EventType 恒保留")
+	}
+	if s.SampleEvent(context.Background(), EventAccess, attrs) {
+		t.Error("成功 AccessEvent 应交给 Fallback 并被丢弃")
+	}
+	failed := []slog.Attr{slog.String(string(KeyAppResult), string(ResultFailed))}
+	if !s.SampleEvent(context.Background(), EventAccess, failed) {
+		t.Error("失败 AccessEvent 应由 ResultKeepSampler 强制保留")
 	}
 }
 

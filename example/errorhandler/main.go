@@ -42,7 +42,7 @@ func main() {
 		logger.Emit(ctx, log.BusinessEvent{
 			EventMetadata: log.EventMetadata{Level: log.LevelInfo},
 			Data: log.BusinessPayload{
-				EventName: log.NewEventName("business", "order", "paid"),
+				EventName: log.NewEventName("order", "payment", "succeeded"),
 				Result:    log.ResultSuccess,
 			},
 		})

@@ -47,7 +47,7 @@ go-observability/
 │   ├── events.go                # 六类事件结构体（EventMetadata + Data）
 │   ├── normalize.go             # 归一化：metadata+payload → 扁平 attrs；reservedKeys 过滤；零值省略
 │   ├── log.go                   # Logger / Writer / Sampler / Masker / ErrorHandler / Option
-│   ├── sampler.go               # ResultKeepSampler（高价值结果强制保留）+ EventKeepSampler（事件前缀全量）
+│   ├── sampler.go               # ResultKeepSampler + EventTypeKeepSampler（粗分类全量）+ EventKeepSampler（领域前缀）
 │   ├── sampler_rand.go          # 并发安全随机源（math/rand/v2）
 │   ├── masker.go                # FieldMasker：按键名递归脱敏（group/map/slice/LogValuer）
 │   ├── error_project.go         # EventFromError / LevelOf：errs.AppError → 事件投影
@@ -97,7 +97,7 @@ go-observability/
 │   ├── main.go                  # 主示例：Gin + telemetry + OTLP/JSONL 出口选择
 │   ├── config/                  # 应用 / Collector 配置模板（.env.example、docker-compose.example）
 │   ├── minimal/main.go          # 不依赖框架的最小 JSONL 示例
-│   ├── mall/                    # 领域事件注册表示范：business.* 事件名 + app.* 专属键
+│   ├── mall/                    # 领域事件注册表示范：order.* 事实名 + app.* 专属键
 │   ├── metrics/main.go          # 使用方定义 RED 与业务指标
 │   ├── nethttp/main.go          # 标准库 HTTP access 事件
 │   └── samber/main.go           # 与 samber slog handler 互操作
@@ -185,7 +185,7 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 
 ## 6. 关键设计决策与不可违反边界
 
-1. **三段式事件名**：`类别.模块.操作`（如 `access.http.request`），必须经 `Validate`；框架级事件登记在 `types.go`，领域 `business.*` 由接入方自建注册表（见 `example/mall`），禁止在中间件/生产埋点里散落手写字符串。
+1. **三段式事件名**：`领域.对象.事实`（如 `http.request.completed`），必须经 `Validate`；`msg` 已承载六类粗分类，因此首段不得使用 `access/business/error/security/audit/probe`。框架级事件登记在 `types.go`，领域事件由接入方自建注册表（见 `example/mall`），禁止在中间件/生产埋点里散落手写字符串。
 2. **semconv 1.41.0 键名**：路径用 `url.path`（不是 `http.request.path`）；代码位置用 `code.function.name` / `code.file.path` / `code.line.number`。
 3. **顶层映射集中**：新增保留键必须同时更新 `attrkv.recordAttrKeys` 与 `normalize.reservedKeys`，保证 OTLP 剥离与 file 保留一致。
 4. **公共字段登记**：核心公共字段必须在 `keys.go` 登记；vendor 一律 `app.*`；领域专属键（`order_id` 等）由接入方自建，不进核心 `keys.go`。

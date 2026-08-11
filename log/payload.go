@@ -43,12 +43,15 @@ func (e AccessPayload) Attrs() []slog.Attr {
 }
 
 // BusinessPayload 记录领域业务动作与业务拒绝。
+// ErrorCode 业务错误码：（服务/模块）.（场景/操作）.（结果/具体错误）
 type BusinessPayload struct {
-	EventName       EventName
-	ErrorType       string // error.type：business.* / validation.failed（低基数失败类别）
-	Subject         Subject
-	Resource        Resource
-	BusinessCode    string // ErrCode：（服务/模块）.（场景/操作）.（结果/具体错误）。
+	EventName EventName
+	ErrorType string // error.type：business.* / validation.failed（低基数失败类别）
+	Subject   Subject
+	Resource  Resource
+	ErrorCode string // app.error_code：稳定具体错误码。
+	// BusinessCode 已弃用：请使用 ErrorCode；仅作为源码兼容输入，不再输出 app.business_code。
+	BusinessCode    string
 	BusinessMessage string
 	Source          Source // code.function.name / code.file.path / code.line.number
 	Result          Result
@@ -68,7 +71,11 @@ func (e BusinessPayload) Attrs() []slog.Attr {
 	attrs = appendString(attrs, KeyAppTenantID, e.Subject.TenantID)
 	attrs = appendString(attrs, KeyAppResourceType, e.Resource.Type)
 	attrs = appendString(attrs, KeyAppResourceID, e.Resource.ID)
-	attrs = appendString(attrs, KeyAppBusinessCode, e.BusinessCode)
+	errorCode := e.ErrorCode
+	if errorCode == "" {
+		errorCode = e.BusinessCode
+	}
+	attrs = appendString(attrs, KeyAppErrorCode, errorCode)
 	attrs = appendString(attrs, KeyAppBusinessMessage, e.BusinessMessage)
 	attrs = appendString(attrs, KeyCodeFunctionName, e.Source.Function)
 	attrs = appendString(attrs, KeyCodeFilePath, e.Source.Filepath)
@@ -88,6 +95,7 @@ var businessPayloadCanonicalKeys = map[string]struct{}{
 	string(KeyAppTenantID):        {},
 	string(KeyAppResourceType):    {},
 	string(KeyAppResourceID):      {},
+	string(KeyAppErrorCode):       {},
 	string(KeyAppBusinessCode):    {},
 	string(KeyAppBusinessMessage): {},
 	string(KeyCodeFunctionName):   {},
@@ -108,11 +116,14 @@ func isBusinessExtraAttrKeyAllowed(key string) bool {
 }
 
 // ErrorPayload 记录系统错误、panic、依赖失败或重试上下文。
+// ErrorCode 业务错误码：（服务/模块）.（场景/操作）.（结果/具体错误）
 type ErrorPayload struct {
-	EventName        EventName
-	ErrorType        string // error.type：低基数失败类别
-	ErrorMessage     string // exception.message
-	StackTrace       string // exception.stacktrace
+	EventName    EventName
+	ErrorType    string // error.type：低基数失败类别
+	ErrorMessage string // exception.message
+	StackTrace   string // exception.stacktrace
+	ErrorCode    string // app.error_code：可选业务关联码。
+	// Operation 已弃用：请使用 ErrorCode；仅作为源码兼容输入，不再输出 app.operation。
 	Operation        string
 	FailureOperation string
 	RootCauseType    string
@@ -135,7 +146,11 @@ func (e ErrorPayload) Attrs() []slog.Attr {
 	attrs = appendString(attrs, KeyErrorType, e.ErrorType)
 	attrs = appendString(attrs, KeyExceptionMessage, e.ErrorMessage)
 	attrs = appendString(attrs, KeyExceptionStacktrace, e.StackTrace)
-	attrs = appendString(attrs, KeyAppOperation, e.Operation)
+	errorCode := e.ErrorCode
+	if errorCode == "" {
+		errorCode = e.Operation
+	}
+	attrs = appendString(attrs, KeyAppErrorCode, errorCode)
 	attrs = appendString(attrs, KeyAppFailureOperation, e.FailureOperation)
 	attrs = appendString(attrs, KeyAppRootCauseType, e.RootCauseType)
 	attrs = appendBool(attrs, KeyAppRetryable, e.Retryable)
@@ -158,6 +173,7 @@ var errorPayloadCanonicalKeys = map[string]struct{}{
 	string(KeyErrorType):           {},
 	string(KeyExceptionMessage):    {},
 	string(KeyExceptionStacktrace): {},
+	string(KeyAppErrorCode):        {},
 	string(KeyAppOperation):        {},
 	string(KeyAppFailureOperation): {},
 	string(KeyAppRootCauseType):    {},

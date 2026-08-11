@@ -34,7 +34,7 @@ func TestSecurityLogEmitsSetSecurityEvent(t *testing.T) {
 		t.Fatalf("msgs = %v, want [security]", w.msgs)
 	}
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "event.name", "security.input.anomaly")
+	attrString(t, attrs, "event.name", "input.threat.detected")
 	attrString(t, attrs, "app.security_event_type", "auth.bypass")
 	attrString(t, attrs, "app.action_taken", "blocked")
 	attrString(t, attrs, "app.risk_score", "90")
@@ -98,7 +98,7 @@ func TestAuditLogEmitsSetAuditEvent(t *testing.T) {
 		t.Fatalf("msgs = %v, want [audit]", w.msgs)
 	}
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "event.name", "audit.input.anomaly")
+	attrString(t, attrs, "event.name", "input.anomaly.recorded")
 	attrString(t, attrs, "app.action", "user.role.update")
 	attrString(t, attrs, "app.actor_user_id", "u-1001")
 	attrString(t, attrs, "app.target_user_id", "u-2002")
@@ -156,7 +156,7 @@ func TestSecurityLogDecideEmits(t *testing.T) {
 		t.Fatalf("msgs = %v, want [security]", w.msgs)
 	}
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "event.name", "security.input.anomaly")
+	attrString(t, attrs, "event.name", "input.threat.detected")
 	attrString(t, attrs, "app.security_event_type", "auth.denied")
 	attrString(t, attrs, "app.risk_score", "80")
 	attrString(t, attrs, "app.result", "blocked")
@@ -215,7 +215,7 @@ func TestAuditLogDescribeEmits(t *testing.T) {
 		t.Fatalf("msgs = %v, want [audit]", w.msgs)
 	}
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "event.name", "audit.input.anomaly")
+	attrString(t, attrs, "event.name", "input.anomaly.recorded")
 	attrString(t, attrs, "app.action", "user.role.update")
 	attrString(t, attrs, "app.actor_user_id", "u-1001")
 	attrString(t, attrs, "app.result", "success")

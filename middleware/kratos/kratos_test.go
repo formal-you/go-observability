@@ -145,7 +145,7 @@ func TestErrorLog(t *testing.T) {
 			t.Fatalf("events = %d, want 1", len(w.attrsList))
 		}
 		attrs := attrMapOf(w.attrsList[0])
-		if attrs["event.name"] != "error.http.request" {
+		if attrs["event.name"] != "http.request.rejected" {
 			t.Fatalf("event.name = %v", attrs["event.name"])
 		}
 		if attrs["error.type"] != "business.todo.not_found" {
@@ -153,6 +153,22 @@ func TestErrorLog(t *testing.T) {
 		}
 		if attrs["app.result"] != "failed" {
 			t.Fatalf("app.result = %v", attrs["app.result"])
+		}
+	})
+	t.Run("custom resolver takes precedence", func(t *testing.T) {
+		w := &captureWriter{}
+		logger := log.NewLogger(w)
+		mw := ErrorLog(logger,
+			WithEventName(log.NewEventName("checkout", "request", "fixed")),
+			WithEventNameResolver(func(error) log.EventName {
+				return log.NewEventName("order", "creation", "rejected")
+			}),
+		)
+		wantErr := errs.NewBusiness("todo_not_found", errs.ErrorType("business.todo.not_found"), "todo not found")
+		_, _ = mw(func(context.Context, any) (any, error) { return nil, wantErr })(context.Background(), nil)
+		attrs := attrMapOf(w.attrsList[0])
+		if attrs["event.name"] != "order.creation.rejected" {
+			t.Fatalf("event.name = %v", attrs["event.name"])
 		}
 	})
 	t.Run("nil logger is passthrough", func(t *testing.T) {

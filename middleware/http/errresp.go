@@ -3,7 +3,7 @@
 // 其他框架体系见 middleware/gin（Gin）与 middleware/grpc（gRPC）。
 //
 // ErrorResponse 在链尾读取 SetError 挂载的错误并渲染，Recover 捕获 panic 后渲染；
-// 两者都先写出错误事件（error.http.request / error.runtime.panic），状态码与响应体
+// 两者都先写出错误事件（http.request.failed / runtime.panic.occurred），状态码与响应体
 // 经 httperr 契约核心处理，可由 ResponseProjector 注入（默认扁平 {code,message,request_id?}）。
 //
 // Logger 为 nil 时只渲染响应体、不写事件：net/http 中间件允许应用未装配 logger 时
@@ -24,9 +24,13 @@ type ErrorConfig struct {
 	// Logger 写出错误事件；nil 时只渲染响应体、不写事件。
 	Logger *log.Logger
 
-	// EventName 错误事件名；空值默认 error.http.request（ErrorResponse）
-	// 或 error.runtime.panic（Recover）。
+	// EventName 固定错误事实名；ErrorResponse 仅在 EventNameResolver 为空时使用，
+	// Recover 为空时默认 runtime.panic.occurred。
 	EventName log.EventName
+
+	// EventNameResolver 按错误选择事实名，仅供 ErrorResponse 使用；优先于 EventName。
+	// nil 且 EventName 为空时按错误 Kind 使用 http.request.rejected / http.request.failed。
+	EventNameResolver httperr.EventNameResolver
 
 	// GetRequestID 从请求提取 request_id：写入响应体并补充到事件 metadata；可选。
 	GetRequestID func(r *http.Request) string
@@ -68,9 +72,13 @@ func SetError(w http.ResponseWriter, err error) {
 // log.EventFromError 写出错误事件后，按 ResponseProjector 渲染响应体。
 // handler 只负责挂载错误，不自行决定状态码与响应体。
 func ErrorResponse(cfg ErrorConfig) func(http.Handler) http.Handler {
-	eventName := cfg.EventName
-	if eventName == "" {
-		eventName = log.EventNameErrorHTTPRequest
+	eventNameResolver := cfg.EventNameResolver
+	if eventNameResolver == nil {
+		if cfg.EventName != "" {
+			eventNameResolver = func(error) log.EventName { return cfg.EventName }
+		} else {
+			eventNameResolver = httperr.DefaultEventNameResolver
+		}
 	}
 	projector := cfg.ResponseProjector
 	if projector == nil {
@@ -92,7 +100,7 @@ func ErrorResponse(cfg ErrorConfig) func(http.Handler) http.Handler {
 				if requestID != "" {
 					md.RequestID = requestID
 				}
-				cfg.Logger.Emit(r.Context(), log.EventFromError(eventName, recorder.err, md))
+				cfg.Logger.Emit(r.Context(), log.EventFromError(eventNameResolver(recorder.err), recorder.err, md))
 				httperr.EmitGuardEvents(cfg.Logger, r.Context(), r, recorder.err, cfg.InputGuard)
 			}
 			status, body := projector(recorder.err, requestID)
@@ -102,12 +110,12 @@ func ErrorResponse(cfg ErrorConfig) func(http.Handler) http.Handler {
 }
 
 // Recover 返回捕获 handler panic 的中间件：经 httperr.SystemErrorFromPanic 构造非预期
-// 系统错误（runtime.panic + 必记堆栈），写出 error.runtime.panic 事件后按
+// 系统错误（runtime.panic + 必记堆栈），写出 runtime.panic.occurred 事件后按
 // ResponseProjector 渲染响应，避免 panic 外泄到 net/http 层。
 func Recover(cfg ErrorConfig) func(http.Handler) http.Handler {
 	eventName := cfg.EventName
 	if eventName == "" {
-		eventName = log.EventNameErrorRuntimePanic
+		eventName = log.EventNameRuntimePanicOccurred
 	}
 	projector := cfg.ResponseProjector
 	if projector == nil {
