@@ -84,6 +84,37 @@ func TestAccessLogStatusMapping(t *testing.T) {
 	}
 }
 
+// TestAccessLogOutsideRecoverRecordsPanicResponse 验证推荐注册顺序：AccessLog 包在
+// Recover 外层时，panic 先投影为 ErrorEvent，再由 AccessLog 记录最终 500 响应。
+func TestAccessLogOutsideRecoverRecordsPanicResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	r := gin.New()
+	r.Use(AccessLog(AccessConfig{Logger: logger}))
+	r.Use(Recover(RecoverConfig{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
+	r.GET("/panic", func(*gin.Context) { panic("boom") })
+
+	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	if len(w.msgs) != 2 || w.msgs[0] != "error" || w.msgs[1] != "access" {
+		t.Fatalf("msgs = %v, want [error access]", w.msgs)
+	}
+	accessAttrs := attrMap(w.attrsList[1])
+	if got, ok := accessAttrs["http.response.status_code"].(slog.Value); !ok || got.Int64() != http.StatusInternalServerError {
+		t.Errorf("http.response.status_code = %v, want 500", accessAttrs["http.response.status_code"])
+	}
+	if got, ok := accessAttrs["app.result"].(slog.Value); !ok || got.String() != "failed" {
+		t.Errorf("app.result = %v, want failed", accessAttrs["app.result"])
+	}
+}
+
 func TestAccessLogTraceFromOTelSpan(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}

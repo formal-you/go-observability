@@ -44,13 +44,14 @@ func main() {
 	logger := log.NewLogger(w)
 
 	// 全链路中间件（注册顺序即执行顺序）：
-	// trace（server span，注入 ctx）→ recover（panic 收口）→ ginlog（access 事件）
+	// trace（server span，注入 ctx）→ ginlog（access 事件）→ recover（panic 收口）
 	// → metrics（http.server.request.duration）→ errresp（显式错误收口）。
+	// AccessLog 必须包在 Recover 外层，才能在 panic 被收口后记录最终 500 响应。
 	r := gin.New()
 	r.Use(
 		ginmw.Trace(ginmw.TraceConfig{}),
-		ginmw.Recover(ginmw.RecoverConfig{Logger: logger}),
 		ginmw.AccessLog(ginmw.AccessConfig{Logger: logger}),
+		ginmw.Recover(ginmw.RecoverConfig{Logger: logger}),
 		ginmw.Metrics(ginmw.MetricsConfig{}),
 		ginmw.ErrorResponse(ginmw.ErrorConfig{Logger: logger}),
 	)
