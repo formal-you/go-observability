@@ -354,7 +354,7 @@ func TestResponseProjectorOverride(t *testing.T) {
 	engine := gin.New()
 	engine.Use(Middleware(Config{
 		Logger: logger,
-		ResponseProjector: func(err error, _ string) (int, gin.H) {
+		ResponseProjector: func(err error, _ string) (int, any) {
 			return http.StatusUnauthorized, gin.H{"error": gin.H{"code": "invalid_credentials", "message": err.Error()}}
 		},
 	}))

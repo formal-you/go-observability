@@ -24,7 +24,7 @@
 | OTel 映射 | `internal/attrkv` | `slog.Attr` ↔ OTel 值转换 + LogRecord 顶层字段映射（唯一核心映射层） |
 | endpoint 校验 | `internal/otlpendpoint` | OTLP gRPC endpoint 统一校验与规范化（host:port / http(s) URL） |
 | 三信号装配 | `telemetry` | 创建并关闭 Trace / Metric / Log Provider，选择日志出口 |
-| HTTP/gRPC 集成 | `middleware/ginlog`、`middleware/recover`、`middleware/errresp`、`middleware/kratos` | Gin access 日志、panic 收口与统一错误响应；net/http 见 `example/nethttp`；kratos v3 见 `middleware/kratos`（HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter） |
+| HTTP/gRPC 集成 | `middleware/httperr`（契约核心）、`middleware/ginlog`、`middleware/errresp`、`middleware/recover`、`middleware/nethttp`、`middleware/kratos` | 框架无关错误契约核心（httperr）+ Gin/net/http/kratos 薄适配壳：access 日志、panic 收口与统一错误响应；kratos v3 见 `middleware/kratos`（HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter） |
 
 依赖方向：`errs` 与 `log/` 互不依赖对方实现（log 包经 `EventFromError` 消费 `errs.AppError` 接口，`errs` 不依赖 log 包）；`middleware` 依赖 log 包与 `errs`（ginlog 只依赖 log 包，errresp/recover 还依赖 `errs`）；`writer/*`、`telemetry` 依赖 log 包与 `internal/*`。
 
@@ -75,10 +75,12 @@ go-observability/
 │   └── otlp/otlp.go             # OTLP gRPC Writer（BatchProcessor；可注入外部 LoggerProvider）
 │
 ├── middleware/
+│   ├── httperr/httperr.go       # 框架无关错误契约核心：Kind→状态码、安全 reason/message/metadata、扁平响应体、span 元数据
 │   ├── ginlog/ginlog.go         # Gin access 事件中间件（status→level/result 映射、trace/request 提取）
-│   ├── errresp/errresp.go       # Gin 统一错误收口：读 c.Errors，按 errs.Kind 映射状态码/响应体并投影事件
-│   ├── recover/recover.go       # Gin panic 收口（构造 SystemError → EventFromError → 统一 500）
-│   └── kratos/kratos.go         # kratos v3 适配：HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter（errs/kratos 原生错误双识别）
+│   ├── errresp/errresp.go       # Gin 显式错误收口（httperr 薄壳：c.Errors → 事件 + 响应）
+│   ├── recover/recover.go       # Gin panic 收口（httperr 薄壳：SystemErrorFromPanic → 事件 + 500）
+│   ├── nethttp/nethttp.go       # net/http 显式错误 + panic 收口（httperr 薄壳）
+│   └── kratos/kratos.go         # kratos v3 适配：HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter（httperr 契约 + kratos 原生错误双识别）
 │
 ├── telemetry/
 │   └── telemetry.go             # 三信号 Provider 装配 + Shutdown + NewLogWriter 出口选择

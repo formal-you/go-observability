@@ -60,8 +60,8 @@ func TestMiddlewareCatchesPanicAndEmitsErrorEvent(t *testing.T) {
 	logger := log.NewLogger(w)
 	r := gin.New()
 	r.Use(Middleware(Config{
-		Logger:    logger,
-		RequestID: func(*gin.Context) string { return "req-panic-1" },
+		Logger:       logger,
+		GetRequestID: func(*gin.Context) string { return "req-panic-1" },
 	}))
 	r.GET("/boom", func(c *gin.Context) { panic("boom") })
 
@@ -162,7 +162,7 @@ func TestResponseProjectorOverride(t *testing.T) {
 	engine := gin.New()
 	engine.Use(Middleware(Config{
 		Logger: logger,
-		ResponseProjector: func(_ error, _ string) (int, gin.H) {
+		ResponseProjector: func(_ error, _ string) (int, any) {
 			return http.StatusInternalServerError, gin.H{"error": gin.H{"code": "internal_error", "message": "internal server error"}}
 		},
 	}))

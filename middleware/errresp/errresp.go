@@ -1,26 +1,23 @@
 // Package errresp 提供 Gin 统一错误收口中间件。
 //
-// 职责：在链尾读取 c.Errors，按 errs.Kind 映射 HTTP 状态码与统一响应体，
-// 经 log.EventFromError 投影错误事件后写出，避免 handler 各自维护响应格式与
-// 字段映射；handler 只需调用 Abort 挂载错误，不自行决定状态码与响应体。
+// 职责：在链尾读取 c.Errors，经 httperr 契约核心（状态码/响应体/span 元数据）映射，
+// 经 log.EventFromError 投影错误事件后写出，避免 handler 各自维护响应格式与字段映射；
+// handler 只需调用 Abort 挂载错误，不自行决定状态码与响应体。
 //
 // 与 recovermw 的边界：本中间件只处理显式挂载到 c.Errors 的错误；recover 捕获
 // panic 后直接渲染 500 并中止（不写 c.Errors）。两者组合时，panic 会跳过
 // 本中间件 c.Next() 之后的代码，因此一个请求最多一个错误出口。
 //
-// 依赖方向：本包只依赖根 log 包、errs 与 go.opentelemetry.io/otel/trace
-// （AGENTS.md 允许 middleware 层使用 OTel）；不依赖任何业务层。
+// 依赖方向：本包是 httperr 核心的 Gin 适配壳——只依赖根 log 包、errs、httperr 与 gin，
+// 不承载错误映射逻辑（AGENTS.md 允许 middleware 层使用 OTel）。
 package errresp
 
 import (
-	"errors"
-	"net/http"
-
 	"github.com/gin-gonic/gin"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/formal-you/go-observability/errs"
 	"github.com/formal-you/go-observability/log"
+	"github.com/formal-you/go-observability/middleware/httperr"
 )
 
 // Config 中间件配置。
@@ -36,12 +33,12 @@ type Config struct {
 	// 可选，未提供则不输出该字段。
 	GetRequestID func(c *gin.Context) string
 
-	// StatusForError 错误到 HTTP 状态码的映射；空值使用 defaultStatusForError。
+	// StatusForError 错误到 HTTP 状态码的映射；空值使用 httperr.StatusForError。
 	StatusForError func(err error) int
 
 	// ResponseProjector 自定义错误响应体与状态码；nil 使用默认（扁平 {code,message,request_id?}）。
 	// 接入方可用它注入自定义契约形状（如嵌套 error 对象），状态码与响应体一次决定。
-	ResponseProjector func(err error, requestID string) (int, gin.H)
+	ResponseProjector httperr.Projector
 }
 
 // Middleware 返回收口显式业务/系统错误的 Gin 中间件。
@@ -58,13 +55,13 @@ func Middleware(cfg Config) gin.HandlerFunc {
 	}
 	statusForError := cfg.StatusForError
 	if statusForError == nil {
-		statusForError = defaultStatusForError
+		statusForError = httperr.StatusForError
 	}
 	projector := cfg.ResponseProjector
 	if projector == nil {
 		// 默认投影组合调用方可能覆盖的 StatusForError 与缺省响应体，保证向后兼容。
-		projector = func(err error, requestID string) (int, gin.H) {
-			return statusForError(err), responseBody(err, requestID)
+		projector = func(err error, requestID string) (int, any) {
+			return statusForError(err), httperr.ResponseBody(err, requestID)
 		}
 	}
 
@@ -77,11 +74,7 @@ func Middleware(cfg Config) gin.HandlerFunc {
 		}
 		err := last.Err
 
-		md := log.EventMetadata{}
-		if sc := trace.SpanContextFromContext(c.Request.Context()); sc.IsValid() {
-			md.TraceID = sc.TraceID().String()
-			md.SpanID = sc.SpanID().String()
-		}
+		md := httperr.EventMetadataFromContext(c.Request.Context())
 		if cfg.GetRequestID != nil {
 			md.RequestID = cfg.GetRequestID(c)
 		}
@@ -105,63 +98,4 @@ func Abort(c *gin.Context, err error) {
 	}
 	_ = c.Error(err)
 	c.Abort()
-}
-
-// defaultStatusForError 按 errs.Kind 映射缺省 HTTP 状态码：
-// validation→400（参数/入参校验失败）、business→409（业务规则拒绝）、
-// system 与普通 error→500（非预期故障，不向客户端透传内部细节）。
-// 调用方可通过 Config.StatusForError 整体覆盖。
-func defaultStatusForError(err error) int {
-	var appErr errs.AppError
-	if errors.As(err, &appErr) {
-		switch appErr.Kind() {
-		case errs.KindValidation:
-			return http.StatusBadRequest
-		case errs.KindBusiness:
-			return http.StatusConflict
-		case errs.KindSystem:
-			return http.StatusInternalServerError
-		}
-	}
-	return http.StatusInternalServerError
-}
-
-// responseBody 构造统一错误响应体，与 recover 中间件保持同构：{code, message, request_id?}。
-// validation/business 属预期内拒绝，透传业务消息与业务码；system 与普通 error 属
-// 非预期故障，返回固定消息，避免把内部错误细节泄漏给客户端（细节只进入 ErrorEvent
-// 的 exception.message，供日志侧排查）。
-func responseBody(err error, requestID string) gin.H {
-	body := gin.H{}
-	if appErr, ok := asAppError(err); ok {
-		switch appErr.Kind() {
-		case errs.KindValidation:
-			body["code"] = "VALIDATION_ERROR"
-			body["message"] = appErr.Error()
-		case errs.KindBusiness:
-			body["code"] = string(appErr.ErrCode())
-			if body["code"] == "" {
-				body["code"] = "BIZ_ERROR"
-			}
-			body["message"] = appErr.Error()
-		default:
-			body["code"] = "SYS_ERROR"
-			body["message"] = "系统繁忙，请稍后重试"
-		}
-	} else {
-		body["code"] = "SYS_ERROR"
-		body["message"] = "系统繁忙，请稍后重试"
-	}
-	if requestID != "" {
-		body["request_id"] = requestID
-	}
-	return body
-}
-
-// asAppError 从错误链中提取 errs.AppError；非 AppError 返回 false。
-func asAppError(err error) (errs.AppError, bool) {
-	var appErr errs.AppError
-	if errors.As(err, &appErr) && appErr != nil {
-		return appErr, true
-	}
-	return nil, false
 }
