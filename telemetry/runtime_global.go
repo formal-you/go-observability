@@ -70,7 +70,13 @@ func (r *Runtime) Shutdown(ctx context.Context) error {
 		r.restoreMu.Unlock()
 		var errs []error
 		if r.loggerProvider != nil {
-			errs = appendError(errs, r.loggerProvider.Shutdown(ctx))
+			logErr := r.loggerProvider.Shutdown(ctx)
+			if logErr != nil && r.counters != nil {
+				// LoggerProvider can return a context error before its processor
+				// reaches the exporter, so the exporter wrapper cannot observe it.
+				r.counters.logExportErrors.Add(1)
+			}
+			errs = appendError(errs, logErr)
 		}
 		if r.meterProvider != nil {
 			errs = appendError(errs, r.meterProvider.Shutdown(ctx))

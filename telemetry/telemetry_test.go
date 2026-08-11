@@ -328,6 +328,39 @@ func TestShutdownNilAndDisabled(t *testing.T) {
 	}
 }
 
+type failingLogProcessor struct{}
+
+func (failingLogProcessor) Enabled(context.Context, sdklog.EnabledParameters) bool {
+	return true
+}
+
+func (failingLogProcessor) OnEmit(context.Context, *sdklog.Record) error {
+	return nil
+}
+
+func (failingLogProcessor) Shutdown(context.Context) error {
+	return context.DeadlineExceeded
+}
+
+func (failingLogProcessor) ForceFlush(context.Context) error {
+	return nil
+}
+
+func TestShutdownRecordsLoggerProviderFailure(t *testing.T) {
+	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(failingLogProcessor{}))
+	runtime := &Runtime{
+		loggerProvider: provider,
+		counters:       new(runtimeCounters),
+	}
+
+	if err := runtime.Shutdown(context.Background()); err == nil {
+		t.Fatal("Shutdown should return the logger provider failure")
+	}
+	if stats := runtime.Stats(); stats.LogExportErrors != 1 {
+		t.Fatalf("logger provider shutdown failure count = %d, want 1", stats.LogExportErrors)
+	}
+}
+
 func TestEnabledFromEnvironment(t *testing.T) {
 	t.Setenv("OTEL_SDK_DISABLED", "true")
 	if EnabledFromEnvironment() {
