@@ -29,6 +29,10 @@
 
 - 新增 `middleware/kratos`：go-kratos v3 传输层适配——`ErrorEncoder`（HTTP 错误编码）与 `GRPCErrorMapper`（gRPC status 映射，reason/error.type 写入 `errdetails.ErrorInfo`），errs.AppError / kratos 原生错误双识别、system 与普通错误不透传内部细节；`ErrorLog` 错误事件日志 filter 复用 `log.EventFromError`。
 
+- 新增 `SecurityLog` / `AuditLog` 中间件（gin + net/http）：`Decide` / `Describe` 拉取式——认证/授权中间件提供判定，链尾自动写出 SecurityEvent / AuditEvent（缺省 WARN / INFO，`Config.Level` 可覆盖）；`SetSecurity` / `SetAudit` 保留为深层代码判定的回退路径。
+- 新增错误路径安全/审计注入点：`httperr.InputGuard` 与 `InputSummary`（`httperr.WithInputSummary`）——非法输入穿透校验触发系统错误时错误事件唯一，可按应用规则补发 Security / Audit 事件（ADR-0007 方案 D）。
+- Error / Security / Audit payload 新增 `ExtraAttrs`（canonical 键守卫 + 保留键过滤）；新增框架级事件名 `security.input.anomaly` / `audit.input.anomaly` 与键 `app.input_field` / `app.input_hash` / `app.input_truncated`。
+
 ### Changed
 - 升级 OpenTelemetry 依赖至 otel v1.45.0 / log v0.21.0（破坏性 API：log 包移除 `Value`/`KeyValue`，`attrkv` 迁移到 `attribute` 包）；Go 要求升至 1.26。
 
@@ -55,5 +59,6 @@
 - 修复 `FieldMasker` 未递归处理 map、slice 与 `LogValuer` 导致的嵌套敏感字段泄漏。
 - 修复指针及 `%w` 包装错误丢失 retry、source、stack、upstream 信息，并为 typed-nil error 提供安全兜底。
 - 阻止 `BusinessPayload.ExtraAttrs` 覆盖身份、资源、业务、代码位置、`event.name` 与 `app.result` 等 canonical 字段。
+- `writer/file` JSONL 输出改为固定规范字段顺序（timestamp → level → msg → 链路/延迟 → event.name → 事件字段 → app.result 收尾），消除同一字段（尤其 `app.result`）在不同事件间相对位置漂移。
 
 尚未创建首个版本标签，链接定义将在正式发布时补充。

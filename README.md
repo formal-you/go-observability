@@ -48,6 +48,7 @@
 | 🧨 | **错误投影** | 普通 error、值/指针错误和 `%w` 链都能稳定提取 |
 | 🛡️ | **日志治理** | 可注入 Sampler、递归 Masker、写入错误回调 |
 | 🚚 | **三种 Writer** | file、stdout、OTLP gRPC 共享同一套事件模型 |
+| 🛡️ | **Security / Audit 中间件** | `SecurityLog` / `AuditLog`（gin + net/http）把认证/授权判定与审计留痕自动写成事件 |
 | 📡 | **统一 telemetry** | Trace、Metric、Log Provider、Resource 与 Shutdown 集中装配 |
 | 🧰 | **可运行参考栈** | Gin、net/http、Metric 示例与本地 LGTM 环境 |
 

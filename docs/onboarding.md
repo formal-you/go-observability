@@ -35,6 +35,6 @@ tail -n 1 ./logs/events.jsonl
 | 调整公共字段 | `keys.go`、归一化代码、测试与文档 |
 | 新增写出后端 | `writer/` 下新包，实现 `log.Writer` |
 | 调整三信号装配 | 公开包 `telemetry` |
-| 接入 Gin | `middleware/ginlog` 与 `middleware/recover` |
+| 接入 Gin / net/http 中间件 | `middleware/gin`（ginmw）与 `middleware/http`（httpmw）：access / error / recover / security / audit / trace / metrics |
 
 修改完成后执行 `gofmt -w .`、`go vet ./...`、`go test ./...`，并把用户可见变化记录到 CHANGELOG 的 `[Unreleased]`。
