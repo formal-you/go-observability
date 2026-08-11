@@ -104,6 +104,9 @@ func assertRequestScenario(
 	}
 	assertValidTrace(t, traceInfo)
 	for i, event := range got {
+		if _, exists := event["parent_span_id"]; exists {
+			t.Errorf("日志不应重复写入 parent_span_id: %v", event)
+		}
 		assertString(t, event, "msg", wantTypes[i])
 		assertString(t, event, "event.name", wantNames[i])
 		assertString(t, event, "trace_id", traceInfo.TraceID)
@@ -163,6 +166,9 @@ func assertBackgroundScenarios(t *testing.T, events []map[string]any, report *sc
 			t.Errorf("后台事件 %s 不应伪造 request_id", item.eventName)
 		}
 		assertNoHTTPFields(t, found)
+		if _, exists := found["parent_span_id"]; exists {
+			t.Errorf("后台日志不应写入 parent_span_id: %v", found)
+		}
 		traceInfo := traces[item.scenario]
 		assertValidTrace(t, traceInfo)
 		assertString(t, found, "trace_id", traceInfo.TraceID)

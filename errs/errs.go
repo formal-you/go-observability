@@ -11,10 +11,12 @@ package errs
 import (
 	"errors"
 	"fmt"
+	"path"
 	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
+	"unicode/utf8"
 )
 
 // ErrorKind 错误预期性分类：validation / business / system。
@@ -170,25 +172,119 @@ const (
 	StackNone StackPolicy = "none"
 )
 
+// StackPathPolicy 控制 stacktrace 与 code.file.path 中的路径暴露程度。
+type StackPathPolicy string
+
+const (
+	StackPathFull     StackPathPolicy = "full"
+	StackPathBase     StackPathPolicy = "base"
+	StackPathRedacted StackPathPolicy = "redacted"
+)
+
+const (
+	defaultStackMaxBytes    = 64 * 1024
+	productionStackMaxBytes = 16 * 1024
+	// StackTruncationMarker 是超限堆栈末尾的稳定标记，计入 MaxBytes。
+	StackTruncationMarker = "\n... [stacktrace truncated]\n"
+)
+
+// StackConfig 配置堆栈大小、路径处理与按 ErrorType 前缀覆盖的记录策略。
+// 应在进程启动阶段设置，之后保持只读。
+type StackConfig struct {
+	MaxBytes   int
+	PathPolicy StackPathPolicy
+	Overrides  map[string]StackPolicy
+}
+
+// DevelopmentStackConfig 返回开发环境默认配置：64 KiB，保留完整路径。
+func DevelopmentStackConfig() StackConfig {
+	return StackConfig{MaxBytes: defaultStackMaxBytes, PathPolicy: StackPathFull, Overrides: map[string]StackPolicy{}}
+}
+
+// ProductionStackConfig 返回生产环境建议配置：16 KiB，仅保留文件名，并关闭
+// 高频、可预期失败的自动堆栈。runtime.panic 始终保持 must。
+func ProductionStackConfig() StackConfig {
+	return StackConfig{
+		MaxBytes:   productionStackMaxBytes,
+		PathPolicy: StackPathBase,
+		Overrides: map[string]StackPolicy{
+			"runtime.context_cancelled": StackNone,
+			"lock.":                     StackNone,
+			"idempotency.":              StackNone,
+			"stock.":                    StackNone,
+			"data.":                     StackNone,
+		},
+	}
+}
+
 // stackOverrides 保存使用方注入的「error.type 前缀 → 堆栈策略」覆盖表；命中时优先于
 // 内置默认策略。由 SetStackPolicy 在进程启动期一次性写入，之后只读。
 var (
 	stackOverridesMu sync.RWMutex
 	stackOverrides   = map[string]StackPolicy{}
+	stackMaxBytes    = defaultStackMaxBytes
+	stackPathPolicy  = StackPathFull
 )
+
+// CurrentStackConfig 返回当前配置的独立副本。
+func CurrentStackConfig() StackConfig {
+	stackOverridesMu.RLock()
+	defer stackOverridesMu.RUnlock()
+	return StackConfig{
+		MaxBytes:   stackMaxBytes,
+		PathPolicy: stackPathPolicy,
+		Overrides:  cloneStackOverrides(stackOverrides),
+	}
+}
+
+// SetStackConfig 验证并安装完整堆栈配置。runtime.panic 不允许被降为 optional/none。
+func SetStackConfig(config StackConfig) error {
+	if config.MaxBytes < len(StackTruncationMarker) {
+		return fmt.Errorf("stack max bytes must be at least %d", len(StackTruncationMarker))
+	}
+	switch config.PathPolicy {
+	case StackPathFull, StackPathBase, StackPathRedacted:
+	default:
+		return fmt.Errorf("invalid stack path policy %q", config.PathPolicy)
+	}
+	for prefix, policy := range config.Overrides {
+		if prefix == "" {
+			return errors.New("stack policy prefix must not be empty")
+		}
+		if !validStackPolicy(policy) {
+			return fmt.Errorf("invalid stack policy %q", policy)
+		}
+	}
+	if stackRuleWithOverrides(TypeRuntimePanic, config.Overrides) != StackMust {
+		return errors.New("runtime.panic stack policy must remain must")
+	}
+	stackOverridesMu.Lock()
+	stackMaxBytes = config.MaxBytes
+	stackPathPolicy = config.PathPolicy
+	stackOverrides = cloneStackOverrides(config.Overrides)
+	stackOverridesMu.Unlock()
+	return nil
+}
+
+func validStackPolicy(policy StackPolicy) bool {
+	return policy == StackMust || policy == StackOptional || policy == StackNone
+}
+
+func cloneStackOverrides(source map[string]StackPolicy) map[string]StackPolicy {
+	cloned := make(map[string]StackPolicy, len(source))
+	for prefix, policy := range source {
+		cloned[prefix] = policy
+	}
+	return cloned
+}
 
 // SetStackPolicy 设置前缀→策略覆盖表（如 "db." -> StackNone、精确类型
 // "runtime.context_cancelled" -> StackMust）；空 map / nil 恢复为仅使用内置默认策略。
 // 必须在进程启动阶段、任何错误构造/事件写出前调用（与 log.SetFlags 同类）；
 // StackRule 对命中覆盖前缀的类型优先返回覆盖策略（最长前缀优先），未命中回落到内置默认。
 func SetStackPolicy(overrides map[string]StackPolicy) {
-	copied := make(map[string]StackPolicy, len(overrides))
-	for prefix, policy := range overrides {
-		if prefix == "" {
-			continue
-		}
-		copied[prefix] = policy
-	}
+	copied := cloneStackOverrides(overrides)
+	delete(copied, "")
 	stackOverridesMu.Lock()
 	stackOverrides = copied
 	stackOverridesMu.Unlock()
@@ -210,6 +306,31 @@ func StackRule(t ErrorType) StackPolicy {
 	switch {
 	case p == "runtime.context_cancelled":
 		// 高频且多为客户端主动取消，逐次采集堆栈成本高、诊断价值低；需要时由调用方 WithStack。
+		return StackOptional
+	case hasAnyPrefix(p, "runtime.", "db.", "redis.", "mq.", "http."):
+		return StackMust
+	case hasAnyPrefix(p, "lock.", "idempotency.", "stock.race", "data."):
+		return StackOptional
+	default:
+		return StackNone
+	}
+}
+
+func stackRuleWithOverrides(t ErrorType, overrides map[string]StackPolicy) StackPolicy {
+	p := string(t)
+	best := ""
+	var selected StackPolicy
+	for prefix, policy := range overrides {
+		if len(prefix) > len(best) && strings.HasPrefix(p, prefix) {
+			best = prefix
+			selected = policy
+		}
+	}
+	if best != "" {
+		return selected
+	}
+	switch {
+	case p == "runtime.context_cancelled":
 		return StackOptional
 	case hasAnyPrefix(p, "runtime.", "db.", "redis.", "mq.", "http."):
 		return StackMust
@@ -412,14 +533,15 @@ func NewBusinessError(cfg BusinessErrorConfig) (BizError, error) {
 // 非预期失败（DB/Redis/MQ/HTTP 上游/运行时）使用本类型，收口层据此告警并按类型映射。
 type SystemError struct {
 	appError
-	typ       ErrorType
-	code      ErrorCode
-	retryable bool
-	retries   int
-	exhausted bool
-	upstream  string
-	stack     string
-	source    Source
+	typ            ErrorType
+	code           ErrorCode
+	retryable      bool
+	retries        int
+	exhausted      bool
+	upstream       string
+	stack          string
+	stackTruncated bool
+	source         Source
 }
 
 // Kind 返回 KindSystem：系统错误一律属于系统分类。
@@ -460,6 +582,11 @@ func (e SystemError) Upstream() string {
 // Stack 返回收口层填充的堆栈（由 WithStack 设置）。
 func (e SystemError) Stack() string {
 	return e.stack
+}
+
+// StackTruncated 报告 Stack 是否因 MaxBytes 限制被截断。
+func (e SystemError) StackTruncated() bool {
+	return e.stackTruncated
 }
 
 // Source 返回代码位置；未设置时为零值 Source{}。
@@ -527,6 +654,8 @@ func NewSystem(typ ErrorType, message string, opts ...SystemOption) SystemError 
 	if e.stack == "" && StackRule(e.typ) == StackMust {
 		e.stack = CaptureStack()
 	}
+	e.stack, e.stackTruncated = prepareStack(e.stack)
+	e.source.Filepath = preparePath(e.source.Filepath)
 	return e
 }
 
@@ -581,7 +710,69 @@ func NewSystemError(cfg SystemErrorConfig) (SystemError, error) {
 	if e.stack == "" && StackRule(e.typ) == StackMust {
 		e.stack = CaptureStack()
 	}
+	e.stack, e.stackTruncated = prepareStack(e.stack)
+	e.source.Filepath = preparePath(e.source.Filepath)
 	return e, nil
+}
+
+func prepareStack(stack string) (string, bool) {
+	if stack == "" {
+		return "", false
+	}
+	stack = strings.ToValidUTF8(stack, "�")
+	config := CurrentStackConfig()
+	stack = prepareStackPaths(stack, config.PathPolicy)
+	if len(stack) <= config.MaxBytes {
+		return stack, false
+	}
+	keep := config.MaxBytes - len(StackTruncationMarker)
+	for keep > 0 && !utf8.ValidString(stack[:keep]) {
+		keep--
+	}
+	return stack[:keep] + StackTruncationMarker, true
+}
+
+func prepareStackPaths(stack string, policy StackPathPolicy) string {
+	if policy == StackPathFull {
+		return stack
+	}
+	lines := strings.Split(stack, "\n")
+	for i, line := range lines {
+		if !strings.HasPrefix(line, "\t") {
+			continue
+		}
+		location := strings.TrimPrefix(line, "\t")
+		colon := strings.LastIndex(location, ":")
+		if colon < 0 {
+			continue
+		}
+		filepath := location[:colon]
+		suffix := location[colon:]
+		if policy == StackPathBase {
+			filepath = path.Base(strings.ReplaceAll(filepath, "\\", "/"))
+		} else {
+			filepath = "<redacted>"
+		}
+		lines[i] = "\t" + filepath + suffix
+	}
+	return strings.Join(lines, "\n")
+}
+
+func preparePath(filepath string) string {
+	if filepath == "" {
+		return ""
+	}
+	stackOverridesMu.RLock()
+	policy := stackPathPolicy
+	stackOverridesMu.RUnlock()
+	switch policy {
+	case StackPathBase:
+		return path.Base(strings.ReplaceAll(filepath, "\\", "/"))
+	case StackPathRedacted:
+		return "<redacted>"
+	default:
+		return filepath
+	}
 }
 
 func validateMessage(message string) (string, error) {

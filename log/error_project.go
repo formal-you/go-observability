@@ -65,6 +65,10 @@ func sysEventFromError(eventName EventName, err errs.AppError, md EventMetadata)
 		ev.Data.UpstreamService = se.Upstream()
 		if errs.StackRule(err.ErrorType()) == errs.StackMust {
 			ev.Data.StackTrace = se.Stack()
+			var truncated interface{ StackTruncated() bool }
+			if errors.As(err, &truncated) && !isNilValue(truncated) {
+				ev.Data.StackTraceTruncated = truncated.StackTruncated()
+			}
 		}
 	}
 	return ev

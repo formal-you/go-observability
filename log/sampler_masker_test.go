@@ -57,6 +57,8 @@ func TestFieldMasker(t *testing.T) {
 		slog.String(string(KeyAppUserID), "u1"),
 		slog.String("app.custom_secret", "s"),
 		slog.String("http.request.method", "GET"),
+		slog.String("phone", "13800138000"),
+		slog.String("request.body", `{"password":"secret"}`),
 		slog.Group("nested", slog.String("token", "t")),
 	}
 	out := m.Mask(context.Background(), in)
@@ -84,6 +86,9 @@ func TestFieldMasker(t *testing.T) {
 	}
 	if got["nested.token"] != "***" {
 		t.Errorf("group 内 token 未掩码: %v", got)
+	}
+	if got["phone"] != "***" || got["request.body"] != "***" {
+		t.Errorf("PII/request body 未掩码: %v", got)
 	}
 }
 

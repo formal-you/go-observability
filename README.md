@@ -210,6 +210,15 @@ log 包以标准库 `log/slog` 为属性载体。OTel 依赖集中在转换、Wr
 
 `NewLogger` 不会悄悄开启采样或脱敏。接入方必须明确选择 `ResultKeepSampler`、`FieldMasker` 和错误回调，避免“以为已经安全”的错误默认值。
 
+认证边界可以把可信身份放入 `log.WithIdentityContext`，并在 Logger 上配置
+`log.WithIdentityExtractor(log.ContextIdentityExtractor{})`。`Subject.UserID` 新事件输出为
+`user.id`，租户为 `app.tenant_id`；Security/Audit 的 Actor 输出为 `app.actor_user_id` /
+`app.actor_role`，可信非空字段会覆盖伪造的事件属性。`FieldMasker{}` 内置处理凭证、Cookie、
+手机号、证件号和常见 request body 键，生产代码仍需显式启用并补充组织特有敏感键。
+
+系统错误的堆栈通过 `errs.SetStackConfig(errs.ProductionStackConfig())` 做大小和路径治理；
+超限会输出 `app.stacktrace_truncated=true`，panic 不允许关闭诊断堆栈。
+
 ### 🧨 4. 错误链是公共输入，不是实现细节
 
 `EventFromError` 与 `LevelOf` 接受标准 `error`，沿 `%w` 链提取应用错误信息，并对普通 error 与 typed-nil 提供稳定兜底。

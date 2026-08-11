@@ -73,6 +73,27 @@ type TraceExtractor interface {
 	ExtractTraceContext(ctx context.Context) TraceContext
 }
 
+// IdentityExtractor 从 context.Context 提取已经过认证的 Subject / Actor。
+// 非空提取值优先于事件载荷中的同名值。
+type IdentityExtractor interface {
+	ExtractIdentityContext(ctx context.Context) IdentityContext
+}
+
+// IdentityExtractorFunc 允许以函数实现 IdentityExtractor。
+type IdentityExtractorFunc func(context.Context) IdentityContext
+
+func (f IdentityExtractorFunc) ExtractIdentityContext(ctx context.Context) IdentityContext {
+	return f(ctx)
+}
+
+// ContextIdentityExtractor 读取 WithIdentityContext 保存的身份上下文。
+type ContextIdentityExtractor struct{}
+
+func (ContextIdentityExtractor) ExtractIdentityContext(ctx context.Context) IdentityContext {
+	identity, _ := IdentityContextFromContext(ctx)
+	return identity
+}
+
 // Option 配置 NewLogger 创建的 Logger。
 // Option 只在构造阶段读取。NewLogger 返回后不会再次修改配置，因此 Logger 本身
 // 不需要围绕 sampler、masker 或基础 metadata 加锁；这些注入组件仍需自行满足
@@ -80,12 +101,13 @@ type TraceExtractor interface {
 type Option func(*loggerOptions)
 
 type loggerOptions struct {
-	errorHandler   ErrorHandler
-	baseMetadata   EventMetadata
-	sampler        Sampler
-	masker         Masker
-	traceExtractor TraceExtractor
-	minLevel       Level
+	errorHandler      ErrorHandler
+	baseMetadata      EventMetadata
+	sampler           Sampler
+	masker            Masker
+	traceExtractor    TraceExtractor
+	identityExtractor IdentityExtractor
+	minLevel          Level
 }
 
 // WithErrorHandler 配置 Writer 写入失败时的观察函数。
@@ -121,6 +143,14 @@ func WithMasker(masker Masker) Option {
 func WithTraceExtractor(extractor TraceExtractor) Option {
 	return func(options *loggerOptions) {
 		options.traceExtractor = extractor
+	}
+}
+
+// WithIdentityExtractor 配置可信身份自动补全。提取出的非空字段优先于事件载荷，
+// Actor 字段只注入 SecurityEvent 与 AuditEvent。
+func WithIdentityExtractor(extractor IdentityExtractor) Option {
+	return func(options *loggerOptions) {
+		options.identityExtractor = extractor
 	}
 }
 
@@ -164,6 +194,9 @@ func (l *Logger) Emit(ctx context.Context, ev EventPayload) {
 	if l.options.traceExtractor != nil {
 		attrs = fillTraceContext(attrs, l.options.traceExtractor.ExtractTraceContext(ctx))
 	}
+	if l.options.identityExtractor != nil {
+		attrs = applyIdentityContext(attrs, ev.EventType(), l.options.identityExtractor.ExtractIdentityContext(ctx))
+	}
 	if l.options.minLevel != "" && !atLeastLevel(attrs, l.options.minLevel) {
 		return
 	}
@@ -184,6 +217,52 @@ func (l *Logger) Emit(ctx context.Context, ev EventPayload) {
 	if err := l.writer.Write(ctx, msg, attrs...); err != nil && l.options.errorHandler != nil {
 		l.options.errorHandler(ctx, msg, attrs, err)
 	}
+}
+
+// applyIdentityContext 用可信非空值替换事件中的同名身份字段。
+// 空提取值不删除事件明确提供的字段，便于后台任务显式记录 Subject。
+func applyIdentityContext(attrs []slog.Attr, eventType EventType, identity IdentityContext) []slog.Attr {
+	replacements := make(map[string]string, 4)
+	if identity.Subject.UserID != "" {
+		replacements[string(KeyUserID)] = identity.Subject.UserID
+		replacements[string(KeyAppUserID)] = identity.Subject.UserID
+	}
+	if identity.Subject.TenantID != "" {
+		replacements[string(KeyAppTenantID)] = identity.Subject.TenantID
+	}
+	if eventType == EventSecurity || eventType == EventAudit {
+		if identity.Actor.UserID != "" {
+			replacements[string(KeyAppActorUserID)] = identity.Actor.UserID
+		}
+		if identity.Actor.Role != "" {
+			replacements[string(KeyAppActorRole)] = identity.Actor.Role
+		}
+	}
+	if len(replacements) == 0 {
+		return attrs
+	}
+	out := make([]slog.Attr, 0, len(attrs)+len(replacements))
+	for _, attr := range attrs {
+		if _, replace := replacements[attr.Key]; replace {
+			continue
+		}
+		out = append(out, attr)
+	}
+	if userID := identity.Subject.UserID; userID != "" {
+		out = append(out, slog.String(string(KeyUserID), userID))
+	}
+	if tenantID := identity.Subject.TenantID; tenantID != "" {
+		out = append(out, slog.String(string(KeyAppTenantID), tenantID))
+	}
+	if eventType == EventSecurity || eventType == EventAudit {
+		if actorID := identity.Actor.UserID; actorID != "" {
+			out = append(out, slog.String(string(KeyAppActorUserID), actorID))
+		}
+		if role := identity.Actor.Role; role != "" {
+			out = append(out, slog.String(string(KeyAppActorRole), role))
+		}
+	}
+	return out
 }
 
 func atLeastLevel(attrs []slog.Attr, minimum Level) bool {

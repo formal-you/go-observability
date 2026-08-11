@@ -1,9 +1,9 @@
 # PR Proposal：Production Observability Event System
 
-- 状态：Draft，待确认关键决策后实施
+- 状态：Partially implemented；P0 基线、P1 身份/堆栈治理和 P2 证据已在本地分支实现，剩余部署侧与性能目标需独立 Issue
 - 日期：2026-08-11
 - 输入：`example/blackbox/sample.json`、当前代码、`CONTEXT.md`、既有 ADR
-- 范围：定义后续 PR 的行为契约与拆分，不在本文提交中修改生产代码
+- 范围：记录已落地能力、仍需独立 Issue 的后续工作与验收证据
 
 ## 1. 结论
 
@@ -21,7 +21,7 @@ Trace 父子关系，并使用了部分过时或非规范字段名。
 
 ## 2. 样例事实
 
-`sample.json` 中共 12 条事件。它已经证明：
+`sample.json` 中共 12 条事件。以下事实是提案创建时的基线，不代表当前缺陷：
 
 - 12/12 有合法 `trace_id` / `span_id`；
 - 10 条 HTTP 来源事件具有 `request_id`，2 条后台事件没有伪造 `request_id`；
@@ -29,11 +29,11 @@ Trace 父子关系，并使用了部分过时或非规范字段名。
 - HTTP 字段只属于 AccessEvent；
 - 系统错误按既有 StackPolicy 输出堆栈。
 
-它同时暴露了三个真实问题：
+提案创建时它同时暴露了三个真实问题，现已修复并由黑盒锁定：
 
-- 只有 5/12 条 file 事件包含 `timestamp`；
-- file 投影没有服务身份，无法仅凭文件查询服务、版本、实例和环境；
-- 业务拒绝是 `msg=business`，默认 `event.name=http.request.rejected`；旧的 `error.http.request` 同时混淆粗分类与失败事实。
+- 只有 5/12 条 file 事件包含 `timestamp`（现为 12/12）；
+- file 投影没有服务身份（现由 Writer 注入规范 Resource 键）；
+- 旧的 `error.http.request` 混淆粗分类与失败事实（现由 EventName/ErrorType/ErrorCode 分离）。
 
 `sample.json` 不是 OTLP 完整视图。当前 telemetry 已把服务信息放在 OTel Resource，因此“样例没有
 service 字段”等于“file 投影不可见”，不等于“OTLP 没有 Service Metadata”。
@@ -49,8 +49,8 @@ service 字段”等于“file 投影不可见”，不等于“OTLP 没有 Serv
 | request_id → trace_id → span_id | 不认可层级关系 | 三者用途不同；HTTP 请求只要求稳定关联，不定义父子关系 |
 | 增加 parent_span_id | 不认可 | 父 Span 属于 Trace 数据；重复写入每条日志会产生冗余和漂移 |
 | 重构 error schema | 认可问题，修订字段 | 保留 `error.type`；具体码使用 `app.error_code`；消息按业务/异常语义分开 |
-| 生产默认不写完整 stacktrace | 部分认可 | 已有 StackPolicy；增加大小、脱敏和生产 profile 约束，不在核心内建对象存储 |
-| 增加 user.id / tenant.id | 能力已部分存在 | 当前已有 `app.user_id` / `app.tenant_id`；后续统一上下文注入与 PII 策略 |
+| 生产默认不写完整 stacktrace | 已实现 | `StackConfig` 提供 16 KiB production profile、路径裁剪、稳定截断标记；不在核心内建对象存储 |
+| 增加 user.id / tenant.id | 已实现 | 用户标识输出 `user.id`，租户继续 `app.tenant_id`；`IdentityExtractor` 统一注入并由 ADR-0012 约束 |
 | 改为嵌套 service/http/error 对象 | 不认可 | 会破坏源即规范、OTel 映射和现有字段查询；继续使用扁平键 |
 | 日志 Writer 全部异步 | 不认可默认化 | OTLP 已由 BatchProcessor 异步批量导出；file 仍同步，异步 file 必须显式选择溢出策略 |
 | 增强 OpenTelemetry 兼容 | 已是基线 | 本阶段是修复语义漂移，而不是重新引入 OTel |
@@ -150,7 +150,7 @@ Trace storage
 ### RULE-P1-001：用户与租户上下文
 
 - 保留统一 Subject/Actor 模型，避免业务代码在每条事件上手工拼接；
-- 评估把用户标识对齐为 `user.id`，租户继续使用 `app.tenant_id`；
+- 用户标识对齐为 `user.id`，租户继续使用 `app.tenant_id`（ADR-0012）；
 - user/tenant 只用于日志与 trace 查询，禁止作为默认 Metric 维度；
 - 默认敏感键覆盖 password、token、authorization、cookie、证件号、手机号等；
 - 原始凭证和原始 request body 不进入事件。
@@ -158,7 +158,7 @@ Trace storage
 ### RULE-P1-002：StackPolicy 有界化
 
 - 保留 `exception.stacktrace` 标准字段与现有 must/optional/none 分类；
-- 增加最大字节数、截断标记和路径处理策略，避免单条日志失控；
+- 已增加最大字节数、截断标记和路径处理策略，避免单条日志失控；
 - production profile 可覆盖高频 error.type 为 optional/none，但 panic 必须有可用诊断出口；
 - 如接入外部 Error Storage，只提供注入接口和 `app.error_id` 关联，不把对象存储依赖放入核心包；
 - 不采用非规范 `exception.id`。
@@ -191,10 +191,10 @@ Trace storage
 | ACCEPT-P0-006 | 每个未跳过 HTTP 请求恰好一个 AccessEvent，覆盖 2xx/4xx/5xx/panic | blackbox |
 | ACCEPT-P0-007 | 同请求事件共享 trace/request；子 Span 可不同；后台事件无伪 request_id | blackbox |
 | ACCEPT-P0-008 | 日志中不存在 parent_span_id，Trace Processor 能重建父子树 | integration |
-| ACCEPT-P1-001 | 敏感键在嵌套 map/slice/group/LogValuer 中均被 Masker 处理 | unit + mutation |
-| ACCEPT-P1-002 | stacktrace 超限时确定性截断且有截断标记 | unit + blackbox |
-| ACCEPT-P2-001 | OTLP Shutdown 能 flush；队列满/Collector 不可用行为有可观测计数 | integration |
-| ACCEPT-P2-002 | benchmark 报告包含 ns/op、B/op、allocs/op，不虚构固定性能目标 | benchmark |
+| ACCEPT-P1-001 | 敏感键在嵌套 map/slice/group/LogValuer 中均被 Masker 处理，身份上下文不能被伪造属性覆盖 | unit + blackbox |
+| ACCEPT-P1-002 | stacktrace 超限时确定性截断且有截断标记，production profile 保留 panic 诊断出口 | unit + blackbox |
+| ACCEPT-P2-001 | OTLP Shutdown 能 flush；Collector 不可用时 Runtime.Stats 可观察 exporter 错误 | integration |
+| ACCEPT-P2-002 | benchmark 报告包含 ns/op、B/op、allocs/op，并记录环境与事件大小 | benchmark |
 
 查询验收示例：
 
@@ -220,14 +220,14 @@ service.version="1.2.3" AND error.type=*
 
 每个 PR 独立提交、独立验证，不把 P0/P1/P2 合成一次不可审阅的破坏性改动。
 
-## 10. 待确认问题
+## 10. 已决策 / 待确认问题
 
-- SPEC-LOG-001：file 投影是否要求 `service.version` / `service.instance.id` 在开发环境也必填，还是仅 production profile 必填？
+- 已决策：file 投影中的 `service.name` 必填，其余服务身份可选；空值不伪造。
 - SPEC-LOG-002：`app.business_code` 与 SystemError 的 `app.operation` 已统一迁移为 `app.error_code`；后续只需决定何时移除旧 Go 字段别名。
 - SPEC-LOG-003：业务拒绝的中间件默认名采用 `http.request.rejected`，系统错误采用 `http.request.failed`。
-- SPEC-LOG-004：生产环境 panic stack 是保留并截断，还是必须接入外部 Error Storage 后才允许移除？
+- 已决策：production profile 保留并截断 panic stack；外部 Error Storage 只能通过未来注入接口关联 `app.error_id`。
 - SPEC-LOG-005：异步 file Writer 的满队列策略选择阻塞、丢最新、丢最旧还是降级同步？
-- SPEC-LOG-006：性能门槛的目标 QPS、平均事件大小与最大内存预算是多少？
+- SPEC-LOG-006：性能门槛的目标 QPS、平均事件大小与最大内存预算仍需部署方按业务容量确认；本 PR 只建立可复现基线，不伪造门槛。
 
 这些问题不阻塞 P0 的 Timestamp 与 semconv Resource 键修复，但会阻塞错误字段破坏性迁移、
 production stack 默认值和异步 file Writer 实现。

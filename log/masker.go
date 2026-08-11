@@ -29,10 +29,21 @@ var defaultSensitiveKeys = [...]string{
 	"api_key",
 	"apikey",
 	"private_key",
+	"cookie",
+	"set-cookie",
+	"id_card",
+	"identity_card",
+	"national_id",
+	"phone",
+	"mobile",
+	"http.request.body",
+	"request.body",
+	"request_body",
+	"raw_body",
 }
 
 // DefaultSensitiveKeys 返回基础脱敏键清单的副本（密钥/凭证类；非合规全集）。
-// 不含 app.user_id 等业务标识；PII 策略由接入方经 Keys 追加。
+// 不含 user.id / app.tenant_id 等业务标识；组织特有的 PII 键由接入方经 Keys 追加。
 func DefaultSensitiveKeys() []string {
 	return append([]string(nil), defaultSensitiveKeys[:]...)
 }

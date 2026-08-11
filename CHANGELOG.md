@@ -21,6 +21,9 @@
 - blackbox 新增可实际读取的 YAML 配置模板，覆盖服务身份、最低级别、输出路径、覆盖策略、文件轮转和 OTLP endpoint。
 - `ResultKeepSampler`、`FieldMasker` 与写入错误回调。
 - 新增 `EventTypeKeepSampler`：按 `msg` / EventType 全量保留业务、错误、安全、审计和探测事件，其余事件委托 Fallback（如 `ResultKeepSampler`）采样；`EventKeepSampler` 保留用于领域前缀与旧配置兼容。
+- 新增 `IdentityContext` / `IdentityExtractor`：可信 Subject / Actor 上下文自动补全，用户标识输出 semconv `user.id`；新增手机号、证件号、Cookie 和 request body 等默认敏感键。
+- 新增 `errs.StackConfig`：提供 64 KiB 开发 / 16 KiB 生产 profile、路径策略、稳定截断标记与 panic 保护。
+- `telemetry.Config` 支持注入公开 `TraceExporter` / `MetricReader`、OTLP 日志有界队列和 `Runtime.Stats` exporter 错误计数。
 - 新增 `CONTEXT.md` 项目术语表：统一「采样」「批量导出间隔」「事件模型」及 OTel Trace / Metric / Log / Error 专业术语，避免沟通误导。
 - `TraceExtractor` 接线：新增 `WithTraceExtractor` 与 `middleware/trace.NewTraceExtractor`，事件未显式携带 trace_id/span_id 时自动补全（不覆盖已设值）。
 - 新增采样器构造器 `NewResultKeepSampler` / `NewEventKeepSampler`：非法入参构造期 panic，消除零值陷阱。
@@ -44,6 +47,7 @@
 - BizError 与 SystemError 的稳定具体错误码统一投影到 `app.error_code`；旧 `app.business_code` / `app.operation` 不再输出，旧 Go 字段仅保留源码兼容输入。
 - 默认运维建议改为 HTTP AccessEvent 全量保留（健康检查用 `SkipPaths` 排除）；成功 access 概率采样保留为使用方显式选择，并明确会放弃完整的跨事件 access 关联。
 - Resource 输出键修正为 `service.instance.id` / `deployment.environment.name`；`Environment` 默认值统一为 `development`。
+- `Subject.UserID` 的新事件输出从 `app.user_id` 迁移到 semconv `user.id`；旧常量保留为 Deprecated 兼容输入。
 - 升级 OpenTelemetry 依赖至 otel v1.45.0 / log v0.21.0（破坏性 API：log 包移除 `Value`/`KeyValue`，`attrkv` 迁移到 `attribute` 包）；Go 要求升至 1.26。
 
 - `errs` 堆栈策略可配置：新增 `errs.SetStackPolicy`，使用方可按 `error.type` 前缀覆盖默认策略（最长前缀优先，空 map = 库内置默认）；`NewSystem` 构造采集与 `error_project` 事件渲染均跟随同一策略。

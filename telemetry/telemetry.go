@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -41,6 +42,7 @@ const (
 	defaultLogBatchTimeout      = 1 * time.Second
 	defaultTraceSampleRatio     = 0.1
 	defaultExportBatchSize      = 512
+	defaultLogQueueSize         = 2048
 )
 
 // LogOutput selects the log Writer created by Runtime.NewWriter.
@@ -79,6 +81,14 @@ type Config struct {
 	MetricExportInterval time.Duration
 	// LogBatchTimeout 是 log 批量导出间隔；零值使用 1s。
 	LogBatchTimeout time.Duration
+	// LogQueueSize 是 OTLP Log BatchProcessor 的有界队列容量；零值使用 2048。
+	LogQueueSize int
+	// TraceExporter 允许测试或自定义部署注入公开 OTel SpanExporter。
+	// 为空时按 Endpoint 创建 OTLP gRPC exporter。
+	TraceExporter sdktrace.SpanExporter
+	// MetricReader 允许测试或自定义部署注入公开 OTel Reader。
+	// 为空时按 Endpoint 创建 OTLP 周期导出 Reader。
+	MetricReader sdkmetric.Reader
 	// Resource 可覆盖由服务身份字段构建的 Resource。
 	Resource *resource.Resource
 }
@@ -100,11 +110,33 @@ type Runtime struct {
 	loggerProvider *sdklog.LoggerProvider
 	logOutput      LogOutput
 	fileMetadata   file.ResourceMetadata
+	counters       *runtimeCounters
 
 	restoreMu   sync.Mutex
 	restores    []func()
 	shutdown    sync.Once
 	shutdownErr error
+}
+
+type runtimeCounters struct {
+	logExportErrors atomic.Uint64
+}
+
+// RuntimeStats 是 Runtime 的导出诊断快照。它不代表后端已持久化，只记录 SDK
+// exporter 返回的错误次数；日志队列丢弃仍由 OTel SDK 的内部诊断日志报告。
+type RuntimeStats struct {
+	LogExportErrors uint64
+}
+
+// Stats 返回当前 Runtime 的导出错误快照。
+func (r *Runtime) Stats() RuntimeStats {
+	if r == nil {
+		return RuntimeStats{}
+	}
+	if r.counters == nil {
+		return RuntimeStats{}
+	}
+	return RuntimeStats{LogExportErrors: r.counters.logExportErrors.Load()}
 }
 
 // Providers is retained for source compatibility.
@@ -128,28 +160,47 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 		return nil, err
 	}
 	res := resourceForConfig(cfg)
+	counters := new(runtimeCounters)
 
-	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithEndpointURL(endpoint))
-	if err != nil {
-		return nil, fmt.Errorf("telemetry: create trace exporter: %w", err)
+	traceExporter := cfg.TraceExporter
+	ownsTraceExporter := false
+	if traceExporter == nil {
+		traceExporter, err = otlptracegrpc.New(ctx, otlptracegrpc.WithEndpointURL(endpoint))
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: create trace exporter: %w", err)
+		}
+		ownsTraceExporter = true
 	}
-	metricExporter, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithEndpointURL(endpoint))
-	if err != nil {
-		_ = traceExporter.Shutdown(ctx)
-		return nil, fmt.Errorf("telemetry: create metric exporter: %w", err)
+	metricReader := cfg.MetricReader
+	ownsMetricReader := false
+	if metricReader == nil {
+		metricExporter, metricErr := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithEndpointURL(endpoint))
+		if metricErr != nil {
+			if ownsTraceExporter {
+				_ = traceExporter.Shutdown(ctx)
+			}
+			return nil, fmt.Errorf("telemetry: create metric exporter: %w", metricErr)
+		}
+		metricReader = sdkmetric.NewPeriodicReader(metricExporter, sdkmetric.WithInterval(cfg.MetricExportInterval))
+		ownsMetricReader = true
 	}
 	var loggerProvider *sdklog.LoggerProvider
 	if cfg.LogOutput == LogOutputOTLP {
 		logExporter, err := otlploggrpc.New(ctx, otlploggrpc.WithEndpointURL(endpoint))
 		if err != nil {
-			_ = metricExporter.Shutdown(ctx)
-			_ = traceExporter.Shutdown(ctx)
+			if ownsMetricReader {
+				_ = metricReader.Shutdown(ctx)
+			}
+			if ownsTraceExporter {
+				_ = traceExporter.Shutdown(ctx)
+			}
 			return nil, fmt.Errorf("telemetry: create log exporter: %w", err)
 		}
 		loggerProvider = sdklog.NewLoggerProvider(
-			sdklog.WithProcessor(sdklog.NewBatchProcessor(logExporter,
+			sdklog.WithProcessor(sdklog.NewBatchProcessor(countingLogExporter{delegate: logExporter, errors: &counters.logExportErrors},
 				sdklog.WithExportInterval(cfg.LogBatchTimeout),
 				sdklog.WithExportMaxBatchSize(defaultExportBatchSize),
+				sdklog.WithMaxQueueSize(cfg.LogQueueSize),
 			)),
 			sdklog.WithResource(res),
 		)
@@ -163,12 +214,13 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 			sdktrace.WithResource(res),
 		),
 		meterProvider: sdkmetric.NewMeterProvider(
-			sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter, sdkmetric.WithInterval(cfg.MetricExportInterval))),
+			sdkmetric.WithReader(metricReader),
 			sdkmetric.WithResource(res),
 		),
 		loggerProvider: loggerProvider,
 		logOutput:      cfg.LogOutput,
 		fileMetadata:   resourceMetadata(res),
+		counters:       counters,
 	}, nil
 }
 
@@ -224,6 +276,12 @@ func normalizeAndValidateConfig(cfg *Config) error {
 	}
 	if cfg.LogBatchTimeout < 0 {
 		return errors.New("telemetry: log batch timeout must be positive")
+	}
+	if cfg.LogQueueSize == 0 {
+		cfg.LogQueueSize = defaultLogQueueSize
+	}
+	if cfg.LogQueueSize < 0 {
+		return errors.New("telemetry: log queue size must be positive")
 	}
 	if cfg.Environment == "" {
 		cfg.Environment = "development"
@@ -322,6 +380,31 @@ func (r *Runtime) NewWriter(ctx context.Context, cfg WriterConfig) (log.Writer, 
 type noopWriter struct{}
 
 func (noopWriter) Write(context.Context, string, ...slog.Attr) error { return nil }
+
+type countingLogExporter struct {
+	delegate sdklog.Exporter
+	errors   *atomic.Uint64
+}
+
+func (e countingLogExporter) Export(ctx context.Context, records []sdklog.Record) error {
+	err := e.delegate.Export(ctx, records)
+	if err != nil {
+		e.errors.Add(1)
+	}
+	return err
+}
+
+func (e countingLogExporter) Shutdown(ctx context.Context) error {
+	return e.delegate.Shutdown(ctx)
+}
+
+func (e countingLogExporter) ForceFlush(ctx context.Context) error {
+	err := e.delegate.ForceFlush(ctx)
+	if err != nil {
+		e.errors.Add(1)
+	}
+	return err
+}
 
 // Setup creates a Runtime using legacy endpoint-based output selection and
 // installs it globally.

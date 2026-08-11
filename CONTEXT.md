@@ -168,6 +168,12 @@ _Avoid_: 重试逻辑（本仓库只记录元数据，不执行重试）
 堆栈记录策略：must（构造点必记）/ optional（按需）/ none（不记），按 error.type 前缀生效，控制体积。
 _Avoid_: 一律记堆栈（会让高频类别体积失控）
 
+**堆栈边界（StackConfig）**:
+为 stacktrace 设置最大 UTF-8 字节数、路径策略（full/base/redacted）与 ErrorType 覆盖。超限使用稳定截断标记并输出 `app.stacktrace_truncated=true`；`runtime.panic` 不得被降为 none。
+
+**Subject / Actor**:
+Subject 是事件关联的用户与租户，输出为 `user.id` / `app.tenant_id`；Actor 是安全或审计动作的执行者，输出为 `app.actor_user_id` / `app.actor_role`。可信认证上下文通过 `IdentityExtractor` 注入，非空值优先于事件载荷；二者都不是 Metric 维度。
+
 **输入摘要（Input Summary）**:
 非法输入的关键字段名 / 哈希 / 截断文本，由接入方提取并经 `httperr.WithInputSummary`
 挂到 ctx，供错误收口的 `InputGuard` 读取；只记 `app.*` 摘要，不落原始 body。

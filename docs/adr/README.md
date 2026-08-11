@@ -26,6 +26,8 @@
 | [0009](0009-event-name-fact-and-error-code.md) | EventName 使用领域事实，BizError / SystemError 统一 app.error_code | Accepted | 2026-08-11 |
 | [0010](0010-strict-error-construction.md) | 严格错误构造与 SCOPE.OPERATION.REASON / domain.reason | Accepted | 2026-08-11 |
 | [0011](0011-telemetry-runtime-explicit-output.md) | Telemetry Runtime 隔离全局状态并显式选择日志出口 | Accepted | 2026-08-11 |
+| [0012](0012-subject-actor-context-and-privacy.md) | Subject / Actor 可信上下文与隐私边界 | Accepted | 2026-08-11 |
+| [0013](0013-bounded-stack-policy.md) | 有界 StackPolicy 与路径治理 | Accepted | 2026-08-11 |
 
 ## 模板
 

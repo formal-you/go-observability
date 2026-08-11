@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"net"
 	"time"
 )
@@ -39,7 +40,7 @@ type EventMetadata struct {
 	LatencyMS int64
 }
 
-// Subject 标识事件关联的用户与租户。
+// Subject 标识事件关联的用户与租户，输出为 user.id 与 app.tenant_id。
 type Subject struct {
 	UserID   string
 	TenantID string
@@ -49,6 +50,30 @@ type Subject struct {
 type Actor struct {
 	UserID string
 	Role   string
+}
+
+// IdentityContext 聚合可信认证上下文中的 Subject 与 Actor。
+// Subject 表示事件关联主体；Actor 只用于 SecurityEvent / AuditEvent 的执行者。
+type IdentityContext struct {
+	Subject Subject
+	Actor   Actor
+}
+
+type identityContextKey struct{}
+
+// WithIdentityContext 把已认证的 Subject / Actor 放入 context。
+// 该值应由认证或授权边界创建，不应直接信任客户端提交的事件属性。
+func WithIdentityContext(ctx context.Context, identity IdentityContext) context.Context {
+	return context.WithValue(ctx, identityContextKey{}, identity)
+}
+
+// IdentityContextFromContext 返回由 WithIdentityContext 保存的可信身份上下文。
+func IdentityContextFromContext(ctx context.Context) (IdentityContext, bool) {
+	if ctx == nil {
+		return IdentityContext{}, false
+	}
+	identity, ok := ctx.Value(identityContextKey{}).(IdentityContext)
+	return identity, ok
 }
 
 // Resource 标识事件关联的领域资源。

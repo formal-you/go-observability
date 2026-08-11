@@ -148,7 +148,7 @@ go-observability/
        ├─ KindSystem / 普通 error → ErrorEvent（Result=error，Level=LevelOf(err)）
        └─ StackMust 类别在 errs.NewSystem 构造点自动采集堆栈（runtime/db/redis/mq/http 前缀，
            runtime.context_cancelled 降为 optional 不自动采集）；投影仅渲染已采集的 StackTrace；
-           默认策略可用 errs.SetStackPolicy 按 error.type 前缀覆盖（最长前缀优先，空=库默认）
+           默认策略可用 errs.SetStackConfig 按 error.type 前缀覆盖，并限制大小与路径；旧 SetStackPolicy 仅兼容
   -> 进入 4.1 同一条 Emit 管线写出
 ```
 

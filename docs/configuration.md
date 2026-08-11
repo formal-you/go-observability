@@ -27,6 +27,9 @@ semconv 升级将作为独立变更，同步验证 schema URL、API、Resource �
 | `TraceBatchTimeout` | `5s` | span 批量导出间隔 |
 | `MetricExportInterval` | `15s` | metric 周期导出间隔 |
 | `LogBatchTimeout` | `1s` | log 批量导出间隔 |
+| `LogQueueSize` | `2048` | OTLP Log BatchProcessor 有界队列容量；满队列时由 OTel SDK 记录 dropped log records 诊断 |
+| `TraceExporter` | 空 | 注入公开 `sdktrace.SpanExporter`，用于测试或自定义 Trace 出口；空值使用 OTLP |
+| `MetricReader` | 空 | 注入公开 `sdkmetric.Reader`，用于测试或自定义 Metric 出口；空值使用 OTLP 周期 Reader |
 | `Resource` | 自动构建 | 自定义 OpenTelemetry Resource |
 
 ```go
@@ -114,6 +117,7 @@ writer, err := providers.NewWriter(ctx, telemetry.WriterConfig{FilePath: "logs/e
 logger := log.NewLogger(w,
 	log.WithMinLevel(log.LevelInfo),
 	log.WithTraceExtractor(otelutil.NewTraceExtractor()), // 事件未显式带 trace/span 时自动补全
+	log.WithIdentityExtractor(log.ContextIdentityExtractor{}),
 	log.WithMasker(log.FieldMasker{Keys: []string{"app.phone"}}),
 	log.WithBaseMetadata(log.EventMetadata{Level: log.LevelInfo}),
 	log.WithErrorHandler(func(ctx context.Context, msg string, attrs []slog.Attr, err error) {
@@ -128,6 +132,7 @@ logger := log.NewLogger(w,
 | MinLevel | 不过滤 | `WithMinLevel` 接受 DEBUG/INFO/WARN/ERROR；提高级别会同时丢弃低级别语义事件及其 AccessEvent，需明确接受关联不完整 |
 | TraceExtractor | 不补全链路 | 配 `WithTraceExtractor`（如 `middleware/trace.NewTraceExtractor`），事件未显式带 trace/span 时自动补全 |
 | Masker | 不脱敏 | 维护业务 PII 键清单并在写出前脱敏 |
+| IdentityExtractor | 不补全身份 | 在认证边界注入 `IdentityContext`；可信非空值覆盖事件伪造字段 |
 | BaseMetadata | 不补全 | 注入服务内稳定的公共元数据 |
 | ErrorHandler | 写入错误不可见 | 接入独立、不会递归使用同一 Writer 的告警路径 |
 
@@ -141,6 +146,15 @@ log.WithSampler(log.NewEventTypeKeepSampler(
 ```
 
 `EventKeepSampler` 仍用于按 `order.`、`payment.` 等领域前缀保留事件；旧的类别前缀配置仅作兼容，不建议继续用于新代码。
+
+`Subject` 输出为 `user.id` 与 `app.tenant_id`；`Actor` 输出为 `app.actor_user_id` 与
+`app.actor_role`，只自动注入 Security/Audit。身份字段不进入 Metrics 维度。`FieldMasker{}`
+的内置键覆盖 password、token、authorization、cookie、证件号、手机号和常见 request body；
+生产接入仍必须显式配置 Masker，并补充组织特有键。
+
+堆栈治理使用 `errs.SetStackConfig`。开发默认上限 64 KiB + full path，生产建议
+`errs.ProductionStackConfig()`（16 KiB + base path）；超限记录 `app.stacktrace_truncated=true`，
+panic 不允许被配置为 none。
 
 Gin 中间件应按 `Trace -> AccessLog -> Recover -> 其他链尾中间件` 注册。AccessLog 包在 Recover、ErrorResponse、SecurityLog、AuditLog 外层，才能在它们完成后读取最终响应状态；健康检查使用 `AccessConfig.SkipPaths` 排除。
 
