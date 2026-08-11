@@ -1,5 +1,5 @@
-// Package log_test 外部黑盒测试：EventKeepSampler 推荐策略在 Logger 管线的端到端效果。
-// 期望来自公开事件语义与推荐采样策略，不读取实现内部。
+// Package log_test 外部黑盒测试：EventKeepSampler 显式高流量策略在 Logger 管线的端到端效果。
+// 期望来自公开事件语义与可选采样契约，不读取实现内部。
 package log_test
 
 import (
@@ -21,7 +21,7 @@ func (w *recordingWriter) Write(_ context.Context, msg string, _ ...slog.Attr) e
 	return nil
 }
 
-// TestEventKeepSamplerPolicyBlackBox 按推荐策略验证：业务成功全量、access 失败恒保留、
+// TestEventKeepSamplerPolicyBlackBox 按显式高流量策略验证：业务成功全量、access 失败恒保留、
 // access 成功被采样丢弃（Fallback Ratio=0 保证确定性）。
 func TestEventKeepSamplerPolicyBlackBox(t *testing.T) {
 	w := &recordingWriter{}

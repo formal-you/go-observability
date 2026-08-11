@@ -40,11 +40,6 @@ func main() {
 	}
 	defer closeWriter(ctx, w)
 	logger := log.NewLogger(w,
-		log.WithSampler(log.NewEventKeepSampler(
-			[]string{"business.", "error.", "security.", "audit.", "probe."},
-			// 演示保持全量以便输出可复现；生产建议 0.1（access 成功按比例采样）。
-			log.NewResultKeepSampler(1),
-		)),
 		log.WithTraceExtractor(otelutil.NewTraceExtractor()),
 		log.WithMasker(log.FieldMasker{}),
 	)

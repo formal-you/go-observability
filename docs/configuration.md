@@ -52,11 +52,7 @@ defer func() {
 
 ```go
 logger := log.NewLogger(w,
-	log.WithSampler(log.NewEventKeepSampler(
-		[]string{"business.", "error.", "security.", "audit.", "probe."},
-		log.NewResultKeepSampler(0.1), // access 成功按比例采样，失败恒保留
-	)),
-	log.WithTraceExtractor(tracemw.NewTraceExtractor()), // 事件未显式带 trace/span 时自动补全（middleware/trace）
+	log.WithTraceExtractor(otelutil.NewTraceExtractor()), // 事件未显式带 trace/span 时自动补全
 	log.WithMasker(log.FieldMasker{Keys: []string{"app.phone"}}),
 	log.WithBaseMetadata(log.EventMetadata{Level: log.LevelInfo}),
 	log.WithErrorHandler(func(ctx context.Context, msg string, attrs []slog.Attr, err error) {
@@ -67,11 +63,22 @@ logger := log.NewLogger(w,
 
 | 选项 | 默认行为 | 生产建议 |
 | --- | --- | --- |
-| Sampler | 全量日志事件 | 推荐 `NewEventKeepSampler`：业务/错误/安全/审计/探测全量，access 成功按比例采样、失败恒保留（非法入参构造期 panic） |
+| Sampler | 全量日志事件 | 保持默认可保证每个 HTTP 语义事件都有对应 AccessEvent；仅在已有网关全量 access 或明确接受关联不完整时显式采样 |
 | TraceExtractor | 不补全链路 | 配 `WithTraceExtractor`（如 `middleware/trace.NewTraceExtractor`），事件未显式带 trace/span 时自动补全 |
 | Masker | 不脱敏 | 维护业务 PII 键清单并在写出前脱敏 |
 | BaseMetadata | 不补全 | 注入服务内稳定的公共元数据 |
 | ErrorHandler | 写入错误不可见 | 接入独立、不会递归使用同一 Writer 的告警路径 |
+
+高流量场景可显式启用以下策略：business/error/security/audit/probe 全量，access 失败恒保留、成功按比例保留。启用后，成功 BusinessEvent 不再保证一定存在对应 AccessEvent。
+
+```go
+log.WithSampler(log.NewEventKeepSampler(
+	[]string{"business.", "error.", "security.", "audit.", "probe."},
+	log.NewResultKeepSampler(0.1),
+))
+```
+
+Gin 中间件应按 `Trace -> AccessLog -> Recover -> 其他链尾中间件` 注册。AccessLog 包在 Recover、ErrorResponse、SecurityLog、AuditLog 外层，才能在它们完成后读取最终响应状态；健康检查使用 `AccessConfig.SkipPaths` 排除。
 
 ## 头部与尾部采样
 

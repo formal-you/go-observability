@@ -218,13 +218,15 @@ log 包以标准库 `log/slog` 为属性载体。OTel 依赖集中在转换、Wr
 
 `TraceSampleRatio` 是 SDK 头部采样。Collector 无法恢复 SDK 已丢弃的 trace；需要按错误或延迟执行 `tail_sampling` 时，应先让 SDK 完整导出，再由 Collector 决策。
 
-## 🎚️ 推荐日志采样策略
+## 🎚️ 默认全量与可选采样
 
-日志条数由应用侧控制，默认每条都写。按运维最佳实践推荐：
+日志条数由应用侧控制。`NewLogger` 未配置 `WithSampler` 时每条都写，这是推荐默认：
 
+- **HTTP 访问事件（access.\*）**：除明确跳过的健康检查外全量保留，保证每个 HTTP 来源的 business / error / security / audit 事件都有对应请求全貌。
 - **业务 / 错误 / 安全 / 审计 / 探测事件**：全量保留（业务成功也是交易记录，不能丢）。
-- **访问事件（access.\*）**：高频且心跳/轮询占大头，成功按比例采样、失败（`failed` 等）恒保留。
 - **心跳 / 健康检查**：确定性噪音，用 `SkipPaths`（ginlog）或接入层短路直接排除，不进入概率采样。
+
+高流量服务只有在已有网关全量 access，或明确接受关联日志不完整时，才应显式启用成功 access 采样；失败结果仍由 `ResultKeepSampler` 强制保留：
 
 ```go
 log.WithSampler(log.EventKeepSampler{

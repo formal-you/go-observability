@@ -48,9 +48,10 @@ func (s ResultKeepSampler) Sample(_ context.Context, attrs []slog.Attr) bool {
 }
 
 // EventKeepSampler 按 event.name 前缀强制保留事件，其余事件委托 Fallback 判定。
-// 适合"业务全量 + 访问采样"策略：命中 KeepPrefixes 的事件（如 business./error./
+// 适合显式选择的高流量"业务全量 + 访问采样"策略：命中 KeepPrefixes 的事件（如 business./error./
 // security./audit./probe.）恒保留，未命中的高频事件（如 access.http.request）交给
-// Fallback 按结果/比例采样。event.name 缺失或为空时按未命中处理（安全降级）。
+// Fallback 按结果/比例采样。启用后成功业务事件不再保证有对应 AccessEvent；event.name
+// 缺失或为空时按未命中处理（安全降级）。
 type EventKeepSampler struct {
 	// KeepPrefixes 命中任一前缀的 event.name 恒保留；空列表时全部交给 Fallback。
 	KeepPrefixes []string

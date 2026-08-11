@@ -6,8 +6,8 @@
 | --- | --- | --- |
 | [`minimal`](minimal/) | `go run ./example/minimal` | 不依赖框架的最小 JSONL 示例 |
 | [`errorhandler`](errorhandler/) | `go run ./example/errorhandler` | 用失败 Writer 演示 `WithErrorHandler` 观察写入错误 |
-| [`blackbox`](blackbox/) | `go run ./example/blackbox` | 黑盒样例：access/business/error 三类事件 JSON 日志，含系统错误堆栈 |
-| [`main.go`](main.go) | `go run ./example` | Gin 全链路中间件（trace/recover/ginlog/metrics/errresp） |
+| [`blackbox`](blackbox/) | `go run ./example/blackbox` | 真实 OTel span + Gin 请求的 JSONL/OTLP 语义黑盒测试 |
+| [`main.go`](main.go) | `go run ./example` | Gin 全链路中间件（trace/access/recover/metrics/errresp） |
 | [`nethttp`](nethttp/) | `go run ./example/nethttp` | 标准库 HTTP 全链路（trace/metrics/nethttp 收口 + access 模板） |
 | [`metrics`](metrics/) | `go run ./example/metrics` | 使用方自定义业务指标（服务端 RED 见 middleware/metrics） |
 | [`mall`](mall/) | `go test ./example/mall` | 领域事件名和扩展字段注册表 |

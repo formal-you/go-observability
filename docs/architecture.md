@@ -135,6 +135,8 @@ go-observability/
 
 - `msg` 即 `event_type`；`attrs` 是完整扁平字段（公共 metadata + payload）。
 - Logger 构造后配置只读，无需加锁；`Writer` / `Sampler` / `Masker` 需自行满足并发契约（服务端 Writer 必须支持多 goroutine 并发写）。
+- `NewLogger` 默认不配置 Sampler，所有事件全量写出。HTTP 接入推荐保持该默认，确保每个 HTTP 来源的 Business / Error / Security / Audit 事件都有同 trace/request 的 AccessEvent；显式启用 access 成功采样即表示接入方接受该关联不再完整。
+- Gin 注册顺序为 `Trace -> AccessLog -> Recover -> 其他链尾中间件`：AccessLog 必须包在 Recover / ErrorResponse / SecurityLog / AuditLog 外层，才能在 2xx、4xx、5xx 与 panic 收口后记录最终响应。健康检查由 `SkipPaths` 排除，不进入概率采样。
 
 ### 4.2 错误投影（`errs` → 事件）
 

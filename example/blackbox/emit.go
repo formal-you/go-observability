@@ -2,167 +2,226 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"net"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/formal-you/go-observability/errs"
 	log "github.com/formal-you/go-observability/log"
+	ginmw "github.com/formal-you/go-observability/middleware/gin"
+	"github.com/formal-you/go-observability/middleware/httperr"
 )
 
-// emitAll 生成覆盖 access / business / error 三类事件的日志，写入指定 Logger。
-// 顺序固定：main.go 与 blackbox_test.go 共用，测试按行号逐行断言 JSON 结构。
-func emitAll(ctx context.Context, l *log.Logger) {
-	// 0: access——HTTP 请求成功
-	l.Emit(ctx, log.AccessEvent{
-		EventMetadata: log.EventMetadata{
-			Level:     log.LevelInfo,
-			TraceID:   "949058d5c20153624d52da3358038026",
-			SpanID:    "bba473e9b3034af6",
-			RequestID: "req-1001",
-			LatencyMS: 12,
-		},
-		Data: log.AccessPayload{
-			EventName: log.EventNameAccessHTTPRequest,
-			HTTP: log.HTTPInfo{
-				Method:     "GET",
-				Route:      "/api/v1/products/:id",
-				URLPath:    "/api/v1/products/42",
-				StatusCode: 200,
-				ClientIP:   net.ParseIP("127.0.0.1"),
-				UserAgent:  "blackbox/1.0",
+const (
+	requestBusinessSuccess = "req-business-success"
+	requestBusinessFailed  = "req-business-failed"
+	requestSystemError     = "req-system-error"
+	requestPanic           = "req-panic"
+)
+
+// scenarioTrace 保存一次黑盒场景的真实 OTel span 标识，供人工联调和测试关联日志。
+type scenarioTrace struct {
+	TraceID string
+	SpanID  string
+}
+
+// scenarioReport 汇总场景对应的 trace/span；请求按 request_id、后台任务按场景名索引。
+type scenarioReport struct {
+	mu     sync.Mutex
+	traces map[string]scenarioTrace
+}
+
+func newScenarioReport() *scenarioReport {
+	return &scenarioReport{traces: make(map[string]scenarioTrace)}
+}
+
+func (r *scenarioReport) record(name string, sc trace.SpanContext) {
+	if !sc.IsValid() {
+		return
+	}
+	r.mu.Lock()
+	r.traces[name] = scenarioTrace{TraceID: sc.TraceID().String(), SpanID: sc.SpanID().String()}
+	r.mu.Unlock()
+}
+
+func (r *scenarioReport) snapshot() map[string]scenarioTrace {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make(map[string]scenarioTrace, len(r.traces))
+	for name, value := range r.traces {
+		out[name] = value
+	}
+	return out
+}
+
+// emitAll 通过真实 Gin 请求生成 HTTP 语义事件，再补充两个无 AccessEvent 的后台错误。
+func emitAll(ctx context.Context, logger *log.Logger, tracer trace.Tracer) (*scenarioReport, error) {
+	report := newScenarioReport()
+	engine := newScenarioEngine(logger, tracer, report)
+
+	requests := []struct {
+		method    string
+		path      string
+		requestID string
+		want      int
+	}{
+		{http.MethodPost, "/api/v1/orders/ORD-1001/pay", requestBusinessSuccess, http.StatusOK},
+		{http.MethodPost, "/api/v1/orders", requestBusinessFailed, http.StatusConflict},
+		{http.MethodPost, "/api/v1/admin/users/u-2002/role", requestSystemError, http.StatusInternalServerError},
+		{http.MethodGet, "/api/v1/panic", requestPanic, http.StatusInternalServerError},
+	}
+	for _, item := range requests {
+		req := httptest.NewRequest(item.method, item.path, nil).WithContext(ctx)
+		req.Header.Set("X-Request-ID", item.requestID)
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+		if rec.Code != item.want {
+			return nil, fmt.Errorf("%s %s status=%d, want %d", item.method, item.path, rec.Code, item.want)
+		}
+	}
+
+	emitBackgroundErrors(ctx, logger, tracer, report)
+	return report, nil
+}
+
+func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenarioReport) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	requestID := func(c *gin.Context) string { return c.GetHeader("X-Request-ID") }
+	engine.Use(
+		ginmw.Trace(ginmw.TraceConfig{Tracer: tracer}),
+		captureScenarioTrace(report),
+		ginmw.AccessLog(ginmw.AccessConfig{Logger: logger}),
+		ginmw.Recover(ginmw.RecoverConfig{Logger: logger, GetRequestID: requestID}),
+		ginmw.ErrorResponse(ginmw.ErrorConfig{
+			Logger:       logger,
+			GetRequestID: requestID,
+			InputGuard:   blackboxInputGuard,
+		}),
+	)
+
+	engine.POST("/api/v1/orders/:id/pay", func(c *gin.Context) {
+		pauseForLatency()
+		logger.Emit(c.Request.Context(), log.BusinessEvent{
+			EventMetadata: log.EventMetadata{
+				Timestamp: time.Now(),
+				Level:     log.LevelInfo,
+				RequestID: requestID(c),
 			},
-			Result: log.ResultSuccess,
-		},
-	})
-
-	// 1: access——HTTP 请求失败（404）
-	l.Emit(ctx, log.AccessEvent{
-		EventMetadata: log.EventMetadata{
-			Level:     log.LevelWarn,
-			TraceID:   "949058d5c20153624d52da3358038026",
-			SpanID:    "c5e0c0b0a1b2c3d4",
-			RequestID: "req-1002",
-			LatencyMS: 3,
-		},
-		Data: log.AccessPayload{
-			EventName: log.EventNameAccessHTTPRequest,
-			HTTP: log.HTTPInfo{
-				Method:     "GET",
-				URLPath:    "/nope",
-				StatusCode: 404,
-				ClientIP:   net.ParseIP("127.0.0.1"),
-				UserAgent:  "blackbox/1.0",
+			Data: log.BusinessPayload{
+				EventName: log.NewEventName("business", "order", "paid"),
+				Result:    log.ResultSuccess,
+				ExtraAttrs: []slog.Attr{
+					slog.String("app.order_id", c.Param("id")),
+					slog.Int64("app.amount_cents", 9900),
+				},
 			},
-			Result: log.ResultFailed,
-		},
+		})
+		c.JSON(http.StatusOK, gin.H{"status": "paid"})
 	})
 
-	// 2: business——业务成功（订单支付）
-	l.Emit(ctx, log.BusinessEvent{
-		EventMetadata: log.EventMetadata{Level: log.LevelInfo},
-		Data: log.BusinessPayload{
-			EventName: log.NewEventName("business", "order", "paid"),
-			Result:    log.ResultSuccess,
-			ExtraAttrs: []slog.Attr{
-				slog.String("app.order_id", "ORD-20260811-0001"),
-				slog.Float64("app.amount", 99.0),
+	engine.POST("/api/v1/orders", func(c *gin.Context) {
+		pauseForLatency()
+		ginmw.Abort(c, errs.NewBusiness(
+			"ORDER.CREATE.STOCK_INSUFFICIENT",
+			errs.ErrorType("business.order.stock_insufficient"),
+			"商品库存不足",
+		))
+	})
+
+	engine.POST("/api/v1/admin/users/:id/role", func(c *gin.Context) {
+		pauseForLatency()
+		ctx := httperr.WithInputSummary(c.Request.Context(), httperr.InputSummary{
+			Fields:    []string{"role"},
+			Hash:      "sha256:9f2c8d4a",
+			Truncated: `{"role":"admin"}`,
+		})
+		c.Request = c.Request.WithContext(ctx)
+		ginmw.Abort(c, errs.NewSystem(errs.TypeDBQueryTimeout, "update user role: database timeout"))
+	})
+
+	engine.GET("/api/v1/panic", func(*gin.Context) {
+		pauseForLatency()
+		panic("runtime error: invalid memory address")
+	})
+	return engine
+}
+
+func captureScenarioTrace(report *scenarioReport) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		report.record(c.GetHeader("X-Request-ID"), trace.SpanContextFromContext(c.Request.Context()))
+		c.Next()
+	}
+}
+
+func blackboxInputGuard(ctx context.Context, req *http.Request, _ error, _ httperr.InputSummary) []log.EventPayload {
+	if req.Header.Get("X-Request-ID") != requestSystemError {
+		return nil
+	}
+	securityMetadata := httperr.EventMetadataFromContext(ctx)
+	securityMetadata.Level = log.LevelWarn
+	securityMetadata.RequestID = requestSystemError
+	auditMetadata := securityMetadata
+	auditMetadata.Level = log.LevelInfo
+	return []log.EventPayload{
+		log.SecurityEvent{
+			EventMetadata: securityMetadata,
+			Data: log.SecurityPayload{
+				EventName:         log.EventNameSecurityInputAnomaly,
+				Subject:           log.Subject{UserID: "u-1001"},
+				SecurityEventType: "input.bypass",
+				FailureReason:     "非法输入穿透校验触发系统错误",
+				ActionTaken:       "blocked",
+				RiskScore:         85,
+				Result:            log.ResultBlocked,
 			},
 		},
-	})
-
-	// 3: business——业务拒绝（库存不足，三段式业务码）
-	l.Emit(ctx, log.BusinessEvent{
-		EventMetadata: log.EventMetadata{Level: log.LevelWarn},
-		Data: log.BusinessPayload{
-			EventName:       log.NewEventName("business", "order", "create"),
-			ErrorType:       "business.order.stock_insufficient",
-			BusinessCode:    "ORDER.CREATE.STOCK_INSUFFICIENT",
-			BusinessMessage: "商品库存不足",
-			Source:          log.Source{Function: "order.Create", Filepath: "internal/order/create.go", Line: 42},
-			Result:          log.ResultBlocked,
+		log.AuditEvent{
+			EventMetadata: auditMetadata,
+			Data: log.AuditPayload{
+				EventName:      log.EventNameAuditInputAnomaly,
+				Action:         "user.role.update",
+				Actor:          log.Actor{UserID: "u-1001", Role: "operator"},
+				Resource:       log.Resource{Type: "user", ID: "u-2002"},
+				AuditEventType: "input.anomaly",
+				TargetUserID:   "u-2002",
+				ChangedFields:  []string{"role"},
+				Reason:         "高风险输入触发敏感资源操作",
+				Result:         log.ResultBlocked,
+			},
 		},
-	})
+	}
+}
 
-	// 4: business——参数校验失败（errs.NewValidation → EventFromError 投影）
-	l.Emit(ctx, log.EventFromError(
-		log.NewEventName("business", "user", "register"),
-		errs.NewValidation("用户名为空"),
-		log.EventMetadata{},
-	))
-
-	// 5: error——非预期系统错误：DB 连接失败（StackMust → 自动采集堆栈；可重试未耗尽 → WARN）
-	l.Emit(ctx, log.EventFromError(
-		log.NewEventName("error", "db", "connection"),
-		errs.NewSystem(errs.TypeDBConnectionError,
-			"dial tcp 127.0.0.1:5432: connect: connection refused",
-			errs.WithUpstream("postgres"),
-			errs.WithRetry(1, false)),
-		log.EventMetadata{},
-	))
-
-	// 6: error——MQ 发布失败（重试耗尽 → ERROR）
-	l.Emit(ctx, log.EventFromError(
+func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.Tracer, report *scenarioReport) {
+	mqCtx, mqSpan := tracer.Start(ctx, "background mq publish")
+	report.record("background-mq", mqSpan.SpanContext())
+	logger.Emit(mqCtx, log.EventFromError(
 		log.NewEventName("error", "mq", "publish"),
 		errs.NewSystem(errs.TypeMQPublishFailed,
-			"publish order.created to topic order-events: deadline exceeded",
+			"publish order.created: deadline exceeded",
 			errs.WithUpstream("kafka"),
 			errs.WithRetry(3, true)),
 		log.EventMetadata{},
 	))
+	mqSpan.End()
 
-	// 7: error——运行时 panic（recover 场景，StackMust → 自动采集堆栈）
-	l.Emit(ctx, log.EventFromError(
-		log.EventNameErrorRuntimePanic,
-		errs.NewSystem(errs.TypeRuntimePanic,
-			"runtime error: invalid memory address or nil pointer dereference"),
-		log.EventMetadata{},
-	))
-
-	// 8: error——锁冲突（StackOptional → 不自动采集堆栈，作为对比项）
-	l.Emit(ctx, log.EventFromError(
+	lockCtx, lockSpan := tracer.Start(ctx, "background lock conflict")
+	report.record("background-lock", lockSpan.SpanContext())
+	logger.Emit(lockCtx, log.EventFromError(
 		log.NewEventName("error", "lock", "conflict"),
-		errs.NewSystem(errs.TypeLockConflict,
-			"acquire lock order:pay:42 conflict"),
+		errs.NewSystem(errs.TypeLockConflict, "acquire lock order:pay:42 conflict"),
 		log.EventMetadata{},
 	))
+	lockSpan.End()
+}
 
-	// 9: security——高风险非法输入穿透校验触发系统错误（SIEM 视角，可直连安全聚合）
-	l.Emit(ctx, log.SecurityEvent{
-		EventMetadata: log.EventMetadata{Level: log.LevelWarn},
-		Data: log.SecurityPayload{
-			EventName:         log.EventNameSecurityInputAnomaly,
-			Subject:           log.Subject{UserID: "u-1001"},
-			SecurityEventType: "input.bypass",
-			FailureReason:     "非法输入穿透校验触发系统错误",
-			ActionTaken:       "blocked",
-			RiskScore:         85,
-			Result:            log.ResultBlocked,
-			ExtraAttrs: []slog.Attr{
-				slog.Any("app.input_field", []string{"order_id", "amount"}),
-				slog.String("app.input_hash", "sha256:3f4a1c2b"),
-				slog.String("app.input_truncated", `{"order_id":"...","amount":-1}`),
-			},
-		},
-	})
-
-	// 10: audit——非法输入涉及高权限/敏感资源变更（可追责审计留痕）
-	l.Emit(ctx, log.AuditEvent{
-		EventMetadata: log.EventMetadata{Level: log.LevelInfo},
-		Data: log.AuditPayload{
-			EventName:      log.EventNameAuditInputAnomaly,
-			Action:         "user.role.update",
-			Actor:          log.Actor{UserID: "u-1001", Role: "operator"},
-			Resource:       log.Resource{Type: "user", ID: "u-2002"},
-			AuditEventType: "input.anomaly",
-			TargetUserID:   "u-2002",
-			ChangedFields:  []string{"role"},
-			Reason:         "高风险输入触发敏感资源操作",
-			Result:         log.ResultBlocked,
-			ExtraAttrs: []slog.Attr{
-				slog.Any("app.input_field", []string{"role"}),
-				slog.String("app.input_hash", "sha256:9f2c8d4a"),
-				slog.String("app.input_truncated", `{"role":"admin"}`),
-			},
-		},
-	})
+func pauseForLatency() {
+	time.Sleep(2 * time.Millisecond)
 }

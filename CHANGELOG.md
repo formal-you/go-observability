@@ -34,6 +34,7 @@
 - Error / Security / Audit payload 新增 `ExtraAttrs`（canonical 键守卫 + 保留键过滤）；新增框架级事件名 `security.input.anomaly` / `audit.input.anomaly` 与键 `app.input_field` / `app.input_hash` / `app.input_truncated`。
 
 ### Changed
+- 默认运维建议改为 HTTP AccessEvent 全量保留（健康检查用 `SkipPaths` 排除）；成功 access 概率采样保留为使用方显式选择，并明确会放弃完整的跨事件 access 关联。
 - 升级 OpenTelemetry 依赖至 otel v1.45.0 / log v0.21.0（破坏性 API：log 包移除 `Value`/`KeyValue`，`attrkv` 迁移到 `attribute` 包）；Go 要求升至 1.26。
 
 - `errs` 堆栈策略可配置：新增 `errs.SetStackPolicy`，使用方可按 `error.type` 前缀覆盖默认策略（最长前缀优先，空 map = 库内置默认）；`NewSystem` 构造采集与 `error_project` 事件渲染均跟随同一策略。
@@ -49,6 +50,7 @@
 
 ### Fixed
 
+- 黑盒样例改用真实 OTel span + Gin 请求验证 access/business/error/security/audit 关联，并修复重复运行追加旧 JSONL、timestamp 键序断言与 Gin panic 缺 AccessEvent。
 - OTLP LogRecord 顶层字段不再重复写入 attributes。
 - 测试使用临时目录并关闭 Writer，避免仓库内残留测试产物。
 - 修正文档中的 JSONL 输出路径、示例运行目录和头部/尾部采样说明。
