@@ -21,6 +21,7 @@
 | [0004](0004-eventtype-as-logrecord-body.md) | msg/event_type 映射 OTel LogRecord.Body，事件字段进属性 | Accepted | 2026-08-11 |
 | [0005](0005-error-middleware-httperr-core.md) | 错误收口中间件抽取 httperr 契约核心 + 框架薄壳 | Accepted | 2026-08-11 |
 | [0006](0006-middleware-framework-grouped.md) | 中间件按框架体系分组（gin / http / grpc / kratos） | Accepted | 2026-08-11 |
+| [0007](0007-security-audit-events-for-bypassed-input.md) | 非法输入触发系统错误的事件记录策略（Security / Audit 候选方案） | Proposed | 2026-08-11 |
 
 ## 模板
 
