@@ -16,6 +16,7 @@
 | [samber-comparison.md](samber-comparison.md) | 评估与 samber slog 生态的取舍 |
 | [release-checklist.md](release-checklist.md) | 首次公开发布和后续发版 |
 | [todo.md](todo.md) | 非代码待办与飞书项目管理迁移准备 |
+| [reports/](reports/README.md) | 查看 Issue 验收、性能和 mutation 基线证据 |
 | [go-observability-architecture.drawio](go-observability-architecture.drawio) | 可编辑架构图 |
 
 可复制的部署配置位于 [`example/config`](../example/config/)；本地 LGTM 栈位于 [`observability`](../observability/)；分信号模板位于 [`observability/templates`](../observability/templates/)。
