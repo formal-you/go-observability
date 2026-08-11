@@ -17,23 +17,33 @@ import (
 	httpmw "github.com/formal-you/go-observability/middleware/http"
 	"github.com/formal-you/go-observability/middleware/otelutil"
 	"github.com/formal-you/go-observability/telemetry"
-	"github.com/formal-you/go-observability/writer/file"
 )
 
 func main() {
 	ctx := context.Background()
 
-	// 三信号装配（trace/metric 经全局 provider；日志示例直接写 JSONL，离线可跑）。
-	providers, err := telemetry.SetupFromEnvironment(ctx, telemetry.Config{
-		ServiceName: "nethttp-demo", ServiceVersion: "0.1.0", Environment: "dev",
+	endpoint := telemetry.EndpointFromEnvironment()
+	output := telemetry.LogOutputFile
+	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" {
+		output = telemetry.LogOutputOTLP
+	}
+	providers, err := telemetry.NewRuntime(ctx, telemetry.Config{
+		Enabled: telemetry.EnabledFromEnvironment(), ServiceName: "nethttp-demo", ServiceVersion: "0.1.0", Environment: "dev",
+		Endpoint: endpoint, LogOutput: output,
 	})
 	if err != nil {
 		slog.Error("init telemetry", "err", err)
 		os.Exit(1)
 	}
+	restore := providers.InstallGlobal()
+	defer restore()
 	defer func() { _ = providers.Shutdown(ctx) }()
 
-	w, err := file.New("logs/nethttp-events.jsonl")
+	writerCfg := telemetry.WriterConfig{FilePath: "logs/nethttp-events.jsonl"}
+	if output == telemetry.LogOutputOTLP {
+		writerCfg = telemetry.WriterConfig{}
+	}
+	w, err := providers.NewWriter(ctx, writerCfg)
 	if err != nil {
 		slog.Error("init log writer", "err", err)
 		os.Exit(1)

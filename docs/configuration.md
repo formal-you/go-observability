@@ -2,6 +2,8 @@
 
 配置分三层：应用代码负责事件、Logger 和 `telemetry.Config`；进程环境负责启用状态与 OTLP 地址；Collector 和存储由部署平台维护。本库不读取 YAML 配置文件，仓库中的 YAML 只作为可复制模板。
 
+新代码使用 `telemetry.NewRuntime`，显式设置 `Config.LogOutput`，再调用 `InstallGlobal` 和 `NewWriter`。构造 Runtime 不修改进程全局 OTel 状态；应用应保存并调用恢复函数。`Setup*`、`NewLogWriter` 仅用于兼容旧接入。
+
 ## OTel 版本边界
 
 截至 2026-08-11，官网分别发布 OpenTelemetry Specification `1.60.0` 和 Semantic
@@ -19,7 +21,8 @@ semconv 升级将作为独立变更，同步验证 schema URL、API、Resource �
 | `Environment` | `development` | 写入 `deployment.environment.name` |
 | `Region` / `Instance` | 省略 | `Region` 写入低基数 `region`；`Instance` 写入 `service.instance.id` |
 | `Endpoint` | 环境变量或 `127.0.0.1:4317` | OTLP gRPC endpoint，可用 `host:port` 或 URL |
-| `Enabled` | `SetupFromEnvironment` 从环境读取 | `false` 返回空 Providers |
+| `Enabled` | 应用或 `EnabledFromEnvironment` 设置 | `false` 返回不含 Provider 的 Runtime |
+| `LogOutput` | 无 | 必填，选择 `file` / `otlp` / `stdout` / `none` |
 | `TraceSampleRatio` | `0.1` | SDK 头部采样比例，范围 `(0, 1]` |
 | `TraceBatchTimeout` | `5s` | span 批量导出间隔 |
 | `MetricExportInterval` | `15s` | metric 周期导出间隔 |
@@ -27,15 +30,19 @@ semconv 升级将作为独立变更，同步验证 schema URL、API、Resource �
 | `Resource` | 自动构建 | 自定义 OpenTelemetry Resource |
 
 ```go
-providers, err := telemetry.SetupFromEnvironment(ctx, telemetry.Config{
+providers, err := telemetry.NewRuntime(ctx, telemetry.Config{
+	Enabled:         true,
 	ServiceName:     "order-api",
 	ServiceVersion:  "0.1.0",
 	Environment:     "production",
+	LogOutput:       telemetry.LogOutputOTLP,
 	TraceSampleRatio: 1.0,
 })
 if err != nil {
 	return err
 }
+restore := providers.InstallGlobal()
+defer restore()
 defer func() {
 	if err := providers.Shutdown(context.Background()); err != nil {
 		slog.Error("shutdown telemetry", "err", err)
@@ -43,16 +50,16 @@ defer func() {
 }()
 ```
 
-`SetupFromEnvironment` 会安装全局 Trace、Metric、Log Provider 和 W3C Trace Context/Baggage propagator。`ServiceName` 在 file-only 与 OTLP 模式均必填。库类型不负责监听配置变化；运行中修改需由应用重建并安全切换 Provider。
+`NewRuntime` 不安装全局 Provider；`InstallGlobal` 才安装 Runtime 中非空的 Provider 和 W3C Trace Context/Baggage propagator。`ServiceName` 在 file-only 与 OTLP 模式均必填。库类型不负责监听配置变化；运行中修改需由应用重建并安全切换 Provider。
 
 ### 小单体 File-Only
 
-不部署 Collector 的单体应用可使用 `telemetry.SetupFile`。它不连接任何 OTLP
+不部署 Collector 的单体应用可使用 `telemetry.NewFileRuntime`。它不连接任何 OTLP
 exporter，只在进程内生成合法 TraceID/SpanID，并把服务身份扁平写入每条 JSONL；完整
 Trace 树不会被保存，需链路查询时再使用 OTLP/Tempo 装配。
 
 ```go
-providers, err := telemetry.SetupFile(telemetry.Config{
+providers, err := telemetry.NewFileRuntime(telemetry.Config{
 	ServiceName: "mall-monolith",
 	ServiceVersion: "1.0.0",
 	Environment: "production",
@@ -62,7 +69,9 @@ if err != nil {
 	return err
 }
 defer providers.Shutdown(ctx)
-writer, err := providers.NewLogWriter(ctx, "logs/events.jsonl")
+restore := providers.InstallGlobal()
+defer restore()
+writer, err := providers.NewWriter(ctx, telemetry.WriterConfig{FilePath: "logs/events.jsonl"})
 ```
 
 文件中的规范服务身份键为 `service.name`、`service.version`、`service.instance.id` 和
@@ -72,7 +81,7 @@ writer, err := providers.NewLogWriter(ctx, "logs/events.jsonl")
 需要本地文件轮转时，在应用配置层读取参数并传给 file Writer：
 
 ```go
-writer, err := providers.NewLogWriter(ctx, "logs/events.jsonl",
+writer, err := providers.NewWriter(ctx, telemetry.WriterConfig{FilePath: "logs/events.jsonl", FileOptions: []file.Option{
 	file.WithRotation(file.RotationConfig{
 		MaxSizeMB: 100,
 		MaxBackups: 10,
@@ -80,7 +89,7 @@ writer, err := providers.NewLogWriter(ctx, "logs/events.jsonl",
 		Compress: true,
 		LocalTime: true,
 	}),
-)
+}})
 ```
 
 轮转由文件大小触发；`MaxBackups=0`、`MaxAgeDays=0` 分别表示不按数量、天数清理。
@@ -88,12 +97,14 @@ writer, err := providers.NewLogWriter(ctx, "logs/events.jsonl",
 
 ## 日志出口
 
-`providers.NewLogWriter(ctx, "logs/events.jsonl")` 的选择规则：
+`Runtime.NewWriter` 的选择规则：
 
-- `Setup` 时显式设置 `Config.Endpoint`，或 `SetupFromEnvironment` 当时读取到 `OTEL_EXPORTER_OTLP_ENDPOINT`，且 telemetry 已启用：复用 Provider 写 OTLP。
-- 其他情况：写当前工作目录下的 JSONL 路径。
+- `LogOutputOTLP`：复用 Runtime 的 LoggerProvider，WriterConfig 必须为空。
+- `LogOutputFile`：要求 `WriterConfig.FilePath`，并注入 Resource 服务身份。
+- `LogOutputStdout`：使用 stdout Writer，可传 `StdoutOptions`。
+- `LogOutputNone`：返回 no-op Writer，不能传其他 Writer 配置。
 
-出口选择在 Setup 时固化；后续修改环境变量不会改变已有 `Providers` 的 endpoint 或日志出口，需要重新 Setup 后再切换。
+出口由 `Config.LogOutput` 固化；后续修改环境变量不会改变已有 Runtime，需要重新构造后再切换。
 
 应用应检查构造错误，配置 `log.WithErrorHandler` 观察异步写入失败，并关闭实现了 `Close(context.Context)` 的 Writer。需要同时写多个出口（如 stdout + 文件 + OTLP）时，用 `log.NewMultiWriter(writers...)` 组合 Writer，任一失败不阻断其余。完整代码见 [README](../README.md) 和 [`example/main.go`](../example/main.go)。
 

@@ -24,15 +24,20 @@ import (
 
 func main() {
 	ctx := context.Background()
-	p, err := telemetry.SetupFromEnvironment(ctx, telemetry.Config{
+	p, err := telemetry.NewRuntime(ctx, telemetry.Config{
+		Enabled:        telemetry.EnabledFromEnvironment(),
 		ServiceName:    "metrics-demo",
 		ServiceVersion: "0.1.0",
 		Environment:    "dev",
+		Endpoint:       telemetry.EndpointFromEnvironment(),
+		LogOutput:      telemetry.LogOutputNone,
 	})
 	if err != nil {
 		slog.Error("telemetry setup", "err", err)
 		os.Exit(1)
 	}
+	restore := p.InstallGlobal()
+	defer restore()
 	defer func() { _ = p.Shutdown(ctx) }()
 
 	// 使用方命名空间：任意 instrument 名；与库事件模型无关。

@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutlog"
 	otelog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
+	"go.opentelemetry.io/otel/sdk/resource"
 
 	"github.com/formal-you/go-observability/internal/attrkv"
 )
@@ -25,11 +26,17 @@ type Option func(*options)
 
 type options struct {
 	output io.Writer
+	res    *resource.Resource
 }
 
 // WithOutput 设置输出目标；默认 os.Stdout。
 func WithOutput(w io.Writer) Option {
 	return func(o *options) { o.output = w }
+}
+
+// WithResource sets the Resource attached to emitted records.
+func WithResource(res *resource.Resource) Option {
+	return func(o *options) { o.res = res }
 }
 
 // New 创建 stdout Writer。
@@ -42,7 +49,11 @@ func New(ctx context.Context, opts ...Option) (*Writer, error) {
 	if err != nil {
 		return nil, err
 	}
-	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter)))
+	providerOpts := []sdklog.LoggerProviderOption{sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter))}
+	if o.res != nil {
+		providerOpts = append(providerOpts, sdklog.WithResource(o.res))
+	}
+	provider := sdklog.NewLoggerProvider(providerOpts...)
 	return &Writer{logger: provider.Logger("go-observability"), provider: provider}, nil
 }
 

@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -21,18 +22,28 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// 三信号装配：全局安装 trace、metric、log provider。
-	providers, err := telemetry.SetupFromEnvironment(ctx, telemetry.Config{
+	endpoint := telemetry.EndpointFromEnvironment()
+	output := telemetry.LogOutputFile
+	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" {
+		output = telemetry.LogOutputOTLP
+	}
+	// 三信号装配：Runtime 构造与全局安装显式分开。
+	providers, err := telemetry.NewRuntime(ctx, telemetry.Config{
+		Enabled:        telemetry.EnabledFromEnvironment(),
 		ServiceName:    "go-observability",
 		ServiceVersion: "0.1.0",
 		Environment:    "dev",
 		Region:         os.Getenv("GO_OBSERVABILITY_REGION"),
 		Instance:       os.Getenv("GO_OBSERVABILITY_INSTANCE"),
+		Endpoint:       endpoint,
+		LogOutput:      output,
 	})
 	if err != nil {
 		slog.Error("init telemetry", "err", err)
 		os.Exit(1)
 	}
+	restore := providers.InstallGlobal()
+	defer restore()
 	defer func() { _ = providers.Shutdown(ctx) }()
 
 	w, err := newLogWriter(ctx, providers)
@@ -80,8 +91,13 @@ func mustBusinessError(cfg errs.BusinessErrorConfig) errs.BizError {
 // newLogWriter 优先 OTLP（OTEL_EXPORTER_OTLP_ENDPOINT），否则写入当前工作目录的 logs/events.jsonl。
 // OTLP 路径注入 telemetry 的 Resource 与 LoggerProvider，三信号共享同一份资源与装配。
 func newLogWriter(ctx context.Context, p *telemetry.Providers) (log.Writer, error) {
-	// 出口决策由 SetupFromEnvironment 固化，NewLogWriter 复用该决策。
-	return p.NewLogWriter(ctx, filepath.Join("logs", "events.jsonl"))
+	if p == nil {
+		return nil, errors.New("nil telemetry runtime")
+	}
+	if p.LoggerProvider() != nil {
+		return p.NewWriter(ctx, telemetry.WriterConfig{})
+	}
+	return p.NewWriter(ctx, telemetry.WriterConfig{FilePath: filepath.Join("logs", "events.jsonl")})
 }
 
 // closeWriter 关闭实现了 Close(ctx) 的 writer。

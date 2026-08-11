@@ -1,10 +1,193 @@
 package telemetry
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"log/slog"
 	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/log/global"
+	"go.opentelemetry.io/otel/propagation"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
+	"github.com/formal-you/go-observability/writer/file"
+	stdoutwriter "github.com/formal-you/go-observability/writer/stdout"
 )
+
+func TestNewRuntimeDoesNotInstallGlobals(t *testing.T) {
+	oldTrace := otel.GetTracerProvider()
+	oldMeter := otel.GetMeterProvider()
+	oldLogger := global.GetLoggerProvider()
+	oldPropagator := otel.GetTextMapPropagator()
+	r, err := NewRuntime(context.Background(), Config{
+		Enabled: true, ServiceName: "svc", LogOutput: LogOutputNone,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Shutdown(context.Background())
+	if otel.GetTracerProvider() != oldTrace || otel.GetMeterProvider() != oldMeter || global.GetLoggerProvider() != oldLogger || !reflect.DeepEqual(otel.GetTextMapPropagator(), oldPropagator) {
+		t.Fatal("NewRuntime must not modify OpenTelemetry globals")
+	}
+}
+
+func TestNewRuntimeValidation(t *testing.T) {
+	customResource := resourceForConfig(Config{ServiceName: "resource-only"})
+	tests := []Config{
+		{Enabled: true, LogOutput: LogOutputFile},
+		{Enabled: true, LogOutput: LogOutputFile, Resource: customResource},
+		{Enabled: true, ServiceName: "svc"},
+		{Enabled: true, ServiceName: "svc", LogOutput: "invalid"},
+	}
+	for _, cfg := range tests {
+		if _, err := NewRuntime(context.Background(), cfg); err == nil {
+			t.Errorf("NewRuntime(%+v) error = nil", cfg)
+		}
+	}
+	r, err := NewRuntime(context.Background(), Config{})
+	if err != nil || r == nil || r.Resource() != nil {
+		t.Fatalf("disabled runtime = %#v, %v", r, err)
+	}
+}
+
+func TestInstallGlobalRestoresInLIFOOrder(t *testing.T) {
+	oldTrace := otel.GetTracerProvider()
+	oldMeter := otel.GetMeterProvider()
+	oldLogger := global.GetLoggerProvider()
+	oldPropagator := otel.GetTextMapPropagator()
+	baseTrace := sdktrace.NewTracerProvider()
+	baseMeter := sdkmetric.NewMeterProvider()
+	baseLogger := sdklog.NewLoggerProvider()
+	basePropagator := propagation.TraceContext{}
+	otel.SetTracerProvider(baseTrace)
+	otel.SetMeterProvider(baseMeter)
+	global.SetLoggerProvider(baseLogger)
+	otel.SetTextMapPropagator(basePropagator)
+	t.Cleanup(func() {
+		global.SetLoggerProvider(oldLogger)
+		otel.SetMeterProvider(oldMeter)
+		otel.SetTracerProvider(oldTrace)
+		otel.SetTextMapPropagator(oldPropagator)
+		_ = baseLogger.Shutdown(context.Background())
+		_ = baseMeter.Shutdown(context.Background())
+		_ = baseTrace.Shutdown(context.Background())
+	})
+
+	r1, err := NewRuntime(context.Background(), Config{Enabled: true, ServiceName: "one", LogOutput: LogOutputNone, TraceBatchTimeout: time.Hour, MetricExportInterval: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2, err := NewRuntime(context.Background(), Config{Enabled: true, ServiceName: "two", LogOutput: LogOutputNone, TraceBatchTimeout: time.Hour, MetricExportInterval: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore1 := r1.InstallGlobal()
+	if otel.GetTracerProvider() != r1.tracerProvider || global.GetLoggerProvider() != baseLogger {
+		t.Fatalf("first runtime was not installed: got trace=%T/%p want=%T/%p, logger got=%T want=%T", otel.GetTracerProvider(), otel.GetTracerProvider(), r1.tracerProvider, r1.tracerProvider, global.GetLoggerProvider(), baseLogger)
+	}
+	restore2 := r2.InstallGlobal()
+	restore2()
+	restore2()
+	if otel.GetTracerProvider() != r1.tracerProvider || otel.GetMeterProvider() != r1.meterProvider || global.GetLoggerProvider() != baseLogger {
+		t.Fatal("second restore did not return to first runtime")
+	}
+	restore1()
+	if otel.GetTracerProvider() != baseTrace || otel.GetMeterProvider() != baseMeter || global.GetLoggerProvider() != baseLogger || otel.GetTextMapPropagator() != basePropagator {
+		t.Fatal("first restore did not return to base globals")
+	}
+	_ = r2.Shutdown(context.Background())
+	_ = r1.Shutdown(context.Background())
+}
+
+func TestNewWriterFileInjectsResourceMetadata(t *testing.T) {
+	r, err := NewFileRuntime(Config{ServiceName: "mall", ServiceVersion: "1.2.3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Shutdown(context.Background())
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	w, err := r.NewWriter(context.Background(), WriterConfig{FilePath: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write(context.Background(), "business", slog.String("event.name", "order.payment.succeeded")); err != nil {
+		t.Fatal(err)
+	}
+	if closer, ok := w.(interface{ Close(context.Context) error }); ok {
+		if err := closer.Close(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(data), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["service.name"] != "mall" || got["service.version"] != "1.2.3" {
+		t.Fatalf("resource metadata = %v", got)
+	}
+}
+
+func TestNewWriterStdoutUsesResourceAndOutput(t *testing.T) {
+	r := &Runtime{resource: resourceForConfig(Config{ServiceName: "stdout-svc", Environment: "test"}), logOutput: LogOutputStdout}
+	var buf bytes.Buffer
+	w, err := r.NewWriter(context.Background(), WriterConfig{StdoutOptions: []stdoutwriter.Option{stdoutwriter.WithOutput(&buf)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write(context.Background(), "access"); err != nil {
+		t.Fatal(err)
+	}
+	if closer, ok := w.(interface{ Close(context.Context) error }); ok {
+		if err := closer.Close(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out := buf.String(); !strings.Contains(out, "stdout-svc") || !strings.Contains(out, "access") {
+		t.Fatalf("stdout output missing resource or event: %s", out)
+	}
+}
+
+func TestNewWriterRejectsMismatchedConfiguration(t *testing.T) {
+	dummyFileOption := file.WithResourceMetadata(file.ResourceMetadata{})
+	tests := []struct {
+		runtime *Runtime
+		cfg     WriterConfig
+	}{
+		{&Runtime{logOutput: LogOutputFile}, WriterConfig{}},
+		{&Runtime{logOutput: LogOutputFile}, WriterConfig{FilePath: "x", StdoutOptions: []stdoutwriter.Option{stdoutwriter.WithOutput(&bytes.Buffer{})}}},
+		{&Runtime{logOutput: LogOutputOTLP, loggerProvider: sdklog.NewLoggerProvider()}, WriterConfig{FilePath: "x"}},
+		{&Runtime{logOutput: LogOutputStdout}, WriterConfig{FileOptions: []file.Option{dummyFileOption}}},
+		{&Runtime{logOutput: LogOutputNone}, WriterConfig{FilePath: "x"}},
+	}
+	for _, tt := range tests {
+		if _, err := tt.runtime.NewWriter(context.Background(), tt.cfg); err == nil {
+			t.Errorf("NewWriter(%q, %+v) error = nil", tt.runtime.logOutput, tt.cfg)
+		}
+	}
+}
+
+func TestNewWriterNoneIsNoop(t *testing.T) {
+	w, err := (&Runtime{logOutput: LogOutputNone}).NewWriter(context.Background(), WriterConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write(context.Background(), "ignored", slog.String("key", "value")); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestSetupDisabled(t *testing.T) {
 	ctx := context.Background()
@@ -23,6 +206,24 @@ func TestSetupDisabled(t *testing.T) {
 	}
 	if err := p.Shutdown(ctx); err != nil {
 		t.Errorf("disabled setup 的 Shutdown 应返回 nil, got %v", err)
+	}
+}
+
+func TestSetupDisabledRetainsLegacyFileWriter(t *testing.T) {
+	ctx := context.Background()
+	r, err := Setup(ctx, Config{Enabled: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "disabled.jsonl")
+	w, err := r.NewLogWriter(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if closer, ok := w.(interface{ Close(context.Context) error }); ok {
+		if err := closer.Close(ctx); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

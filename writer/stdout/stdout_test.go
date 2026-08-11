@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/resource"
 )
 
 func TestWriterEmitsToOutput(t *testing.T) {
@@ -22,6 +25,24 @@ func TestWriterEmitsToOutput(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "access") {
 		t.Errorf("输出应包含事件类型: %s", out)
+	}
+}
+
+func TestWriterEmitsResource(t *testing.T) {
+	var buf bytes.Buffer
+	res := resource.NewSchemaless(attribute.String("service.name", "stdout-service"))
+	w, err := New(context.Background(), WithOutput(&buf), WithResource(res))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write(context.Background(), "business"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if out := buf.String(); !strings.Contains(out, "stdout-service") {
+		t.Fatalf("输出缺少 Resource: %s", out)
 	}
 }
 

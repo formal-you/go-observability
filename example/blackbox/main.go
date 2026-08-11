@@ -79,7 +79,7 @@ func writeConfiguredFileSample(ctx context.Context, cfg blackboxConfig) (*scenar
 	if err != nil {
 		return nil, err
 	}
-	providers, err := telemetry.SetupFile(telemetry.Config{
+	providers, err := telemetry.NewFileRuntime(telemetry.Config{
 		ServiceName:    cfg.Service.Name,
 		ServiceVersion: cfg.Service.Version,
 		Environment:    cfg.Service.Environment,
@@ -88,12 +88,14 @@ func writeConfiguredFileSample(ctx context.Context, cfg blackboxConfig) (*scenar
 	if err != nil {
 		return nil, fmt.Errorf("初始化 file-only telemetry: %w", err)
 	}
+	restore := providers.InstallGlobal()
 	var fileOpts []file.Option
 	if cfg.Logs.Rotation.Enabled {
 		fileOpts = append(fileOpts, file.WithRotation(cfg.Logs.Rotation.fileConfig()))
 	}
-	w, err := providers.NewLogWriter(ctx, cfg.Logs.OutputPath, fileOpts...)
+	w, err := providers.NewWriter(ctx, telemetry.WriterConfig{FilePath: cfg.Logs.OutputPath, FileOptions: fileOpts})
 	if err != nil {
+		restore()
 		_ = providers.Shutdown(ctx)
 		return nil, fmt.Errorf("创建 file writer: %w", err)
 	}
@@ -103,6 +105,7 @@ func writeConfiguredFileSample(ctx context.Context, cfg blackboxConfig) (*scenar
 	)
 	report, emitErr := emitAll(ctx, logger, providers.Tracer(cfg.Service.Name))
 	closeErr := closeLogWriter(ctx, w)
+	restore()
 	traceErr := providers.Shutdown(ctx)
 	if err := errors.Join(emitErr, closeErr, traceErr); err != nil {
 		return nil, err
@@ -115,13 +118,14 @@ func runOTLPMode(ctx context.Context, endpoint string, cfg blackboxConfig) error
 	if err != nil {
 		return err
 	}
-	providers, err := telemetry.Setup(ctx, telemetry.Config{
+	providers, err := telemetry.NewRuntime(ctx, telemetry.Config{
 		Enabled:           true,
 		ServiceName:       cfg.Service.Name,
 		ServiceVersion:    cfg.Service.Version,
 		Environment:       cfg.Service.Environment,
 		Instance:          cfg.Service.InstanceID,
 		Endpoint:          endpoint,
+		LogOutput:         telemetry.LogOutputOTLP,
 		TraceSampleRatio:  1,
 		TraceBatchTimeout: 100 * time.Millisecond,
 		LogBatchTimeout:   100 * time.Millisecond,
@@ -129,8 +133,10 @@ func runOTLPMode(ctx context.Context, endpoint string, cfg blackboxConfig) error
 	if err != nil {
 		return fmt.Errorf("初始化 telemetry: %w", err)
 	}
-	w, err := providers.NewLogWriter(ctx, cfg.Logs.OutputPath)
+	restore := providers.InstallGlobal()
+	w, err := providers.NewWriter(ctx, telemetry.WriterConfig{})
 	if err != nil {
+		restore()
 		_ = providers.Shutdown(ctx)
 		return fmt.Errorf("创建 OTLP writer: %w", err)
 	}
@@ -140,6 +146,7 @@ func runOTLPMode(ctx context.Context, endpoint string, cfg blackboxConfig) error
 	)
 	report, emitErr := emitAll(ctx, logger, providers.Tracer(cfg.Service.Name))
 	closeErr := closeLogWriter(ctx, w)
+	restore()
 	shutdownErr := providers.Shutdown(ctx)
 	if err := errors.Join(emitErr, closeErr, shutdownErr); err != nil {
 		return err
