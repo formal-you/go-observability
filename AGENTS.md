@@ -48,7 +48,7 @@
 - log/ 子包：`types.go`（枚举 + EventName 常量注册表）、`keys.go`（属性键常量）、`metadata.go`、`payload.go`（六类载荷）、`events.go`（六类事件结构体）、`normalize.go`（归一化 / 保留键）、`log.go`（Logger / Writer / 采样 / 脱敏接口）。
 - `internal/attrkv/`：slog.Attr ↔ OTel 转换 + Record 顶层字段映射（唯一核心映射层）。
 - `writer/{otlp,stdout,file}/`：后端 Writer（装配层，可替换）。
-- `middleware/httperr/`：框架无关错误契约核心（Kind→状态码、安全 reason/message/metadata、扁平响应体、span 元数据）；`middleware/ginlog/`、`middleware/errresp/`、`middleware/recover/`：Gin 集成（errresp/recover 为 httperr 薄壳）；`middleware/nethttp/`：net/http 错误收口（httperr 薄壳）；`middleware/kratos/`：kratos v3 传输适配；`middleware/metrics/`、`middleware/trace/`：HTTP/gRPC 指标与链路；net/http 示例见 example/nethttp。
+- `middleware/httperr/`：框架无关错误契约核心（Kind→状态码、安全 reason/message/metadata、扁平响应体、span 元数据）；`middleware/otelutil/`：框架无关 OTel 工具（链路注入/提取、TraceExtractor）；`middleware/gin/`（ginmw）：Gin 体系——AccessLog/ErrorResponse/Recover/Trace/Metrics/Abort；`middleware/http/`（httpmw）：net/http 体系——ErrorResponse/Recover/SetError/Trace/Metrics；`middleware/grpc/`（grpcmw）：gRPC 体系——Trace/Metrics 拦截器；`middleware/kratos/`：kratos v3 传输适配；`middleware/internal/mwutil/`：内部共享底层工具；net/http 示例见 example/nethttp。
 - `errs/`：错误体系，零外部依赖；`error_project.go` 投影。
 - `telemetry/`：对外公开的三信号装配与环境变量出口选择。
 - `ResultKeepSampler` / `FieldMasker`：可选采样与脱敏实现；NewLogger 不自动挂载。

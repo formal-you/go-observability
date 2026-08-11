@@ -24,7 +24,7 @@
 | OTel 映射 | `internal/attrkv` | `slog.Attr` ↔ OTel 值转换 + LogRecord 顶层字段映射（唯一核心映射层） |
 | endpoint 校验 | `internal/otlpendpoint` | OTLP gRPC endpoint 统一校验与规范化（host:port / http(s) URL） |
 | 三信号装配 | `telemetry` | 创建并关闭 Trace / Metric / Log Provider，选择日志出口 |
-| HTTP/gRPC 集成 | `middleware/httperr`（契约核心）、`middleware/ginlog`、`middleware/errresp`、`middleware/recover`、`middleware/nethttp`、`middleware/kratos` | 框架无关错误契约核心（httperr）+ Gin/net/http/kratos 薄适配壳：access 日志、panic 收口与统一错误响应；kratos v3 见 `middleware/kratos`（HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter） |
+| HTTP/gRPC 集成 | `middleware/httperr`（契约核心）、`middleware/otelutil`（OTel 工具）、`middleware/gin`、`middleware/http`、`middleware/grpc`、`middleware/kratos` | 按框架体系分组：gin（Gin）、http（net/http）、grpc（gRPC）各含错误收口/access/链路/指标；kratos v3 见 `middleware/kratos`（HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter） |
 
 依赖方向：`errs` 与 `log/` 互不依赖对方实现（log 包经 `EventFromError` 消费 `errs.AppError` 接口，`errs` 不依赖 log 包）；`middleware` 依赖 log 包与 `errs`（ginlog 只依赖 log 包，errresp/recover 还依赖 `errs`）；`writer/*`、`telemetry` 依赖 log 包与 `internal/*`。
 
@@ -74,13 +74,14 @@ go-observability/
 │   ├── stdout/stdout.go         # stdoutlog exporter 包装（本地演示）
 │   └── otlp/otlp.go             # OTLP gRPC Writer（BatchProcessor；可注入外部 LoggerProvider）
 │
-├── middleware/
+├── middleware/               # 按框架体系分组（gin / http / grpc / kratos），共享契约与工具独立成包
 │   ├── httperr/httperr.go       # 框架无关错误契约核心：Kind→状态码、安全 reason/message/metadata、扁平响应体、span 元数据
-│   ├── ginlog/ginlog.go         # Gin access 事件中间件（status→level/result 映射、trace/request 提取）
-│   ├── errresp/errresp.go       # Gin 显式错误收口（httperr 薄壳：c.Errors → 事件 + 响应）
-│   ├── recover/recover.go       # Gin panic 收口（httperr 薄壳：SystemErrorFromPanic → 事件 + 500）
-│   ├── nethttp/nethttp.go       # net/http 显式错误 + panic 收口（httperr 薄壳）
-│   └── kratos/kratos.go         # kratos v3 适配：HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter（httperr 契约 + kratos 原生错误双识别）
+│   ├── otelutil/otelutil.go     # 框架无关 OTel 工具：链路注入/提取、TraceExtractor
+│   ├── gin/                     # Gin 体系：AccessLog / ErrorResponse / Recover / Trace / Metrics / Abort
+│   ├── http/                    # net/http 体系：ErrorResponse / Recover / SetError / Trace / Metrics
+│   ├── grpc/                    # gRPC 体系：Trace / Metrics unary 拦截器
+│   ├── kratos/                  # kratos v3 适配：HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter（httperr 契约 + kratos 原生错误双识别）
+│   └── internal/mwutil/         # 内部共享底层工具（状态码记录、路由/RPC 解析、span 收尾、直方图）
 │
 ├── telemetry/
 │   └── telemetry.go             # 三信号 Provider 装配 + Shutdown + NewLogWriter 出口选择

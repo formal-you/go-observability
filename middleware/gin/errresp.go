@@ -1,16 +1,11 @@
-// Package errresp 提供 Gin 统一错误收口中间件。
+// ginmw：显式错误收口（httperr 契约核心的 Gin 适配）。
+// 职责：在链尾读取 c.Errors，经 httperr 映射状态码/响应体与 span 元数据，
+// 经 log.EventFromError 投影错误事件后写出；handler 只需调用 Abort 挂载错误。
 //
-// 职责：在链尾读取 c.Errors，经 httperr 契约核心（状态码/响应体/span 元数据）映射，
-// 经 log.EventFromError 投影错误事件后写出，避免 handler 各自维护响应格式与字段映射；
-// handler 只需调用 Abort 挂载错误，不自行决定状态码与响应体。
-//
-// 与 recovermw 的边界：本中间件只处理显式挂载到 c.Errors 的错误；recover 捕获
-// panic 后直接渲染 500 并中止（不写 c.Errors）。两者组合时，panic 会跳过
-// 本中间件 c.Next() 之后的代码，因此一个请求最多一个错误出口。
-//
-// 依赖方向：本包是 httperr 核心的 Gin 适配壳——只依赖根 log 包、errs、httperr 与 gin，
-// 不承载错误映射逻辑（AGENTS.md 允许 middleware 层使用 OTel）。
-package errresp
+// 与 Recover 的边界：本中间件只处理显式挂载到 c.Errors 的错误；Recover 捕获 panic
+// 后直接渲染 500 并中止（不写 c.Errors）。两者组合时，panic 会跳过本中间件
+// c.Next() 之后的代码，因此一个请求最多一个错误出口。
+package ginmw
 
 import (
 	"github.com/gin-gonic/gin"
@@ -20,9 +15,9 @@ import (
 	"github.com/formal-you/go-observability/middleware/httperr"
 )
 
-// Config 中间件配置。
-type Config struct {
-	// Logger 必填：写出错误事件的 Logger；为空时 Middleware panic（配置错误应尽早暴露）。
+// ErrorConfig 配置显式错误收口中间件。
+type ErrorConfig struct {
+	// Logger 必填：写出错误事件的 Logger；为空时 panic（配置错误应尽早暴露）。
 	Logger *log.Logger
 
 	// EventName 错误事件名；空值默认 log.EventNameErrorHTTPRequest。
@@ -41,13 +36,13 @@ type Config struct {
 	ResponseProjector httperr.Projector
 }
 
-// Middleware 返回收口显式业务/系统错误的 Gin 中间件。
+// ErrorResponse 返回收口显式业务/系统错误的 Gin 中间件。
 // 它在 handler 外层注册，于 c.Next() 后读取 c.Errors.Last()：
 // 无错误直接放行；有错误则按 errs.Kind 映射状态码与响应体，经 log.EventFromError
 // 投影并写出错误事件，再 AbortWithStatusJSON 终止请求。
-func Middleware(cfg Config) gin.HandlerFunc {
+func ErrorResponse(cfg ErrorConfig) gin.HandlerFunc {
 	if cfg.Logger == nil {
-		panic("errresp: Logger 不能为空")
+		panic("ginmw: Logger 不能为空")
 	}
 	eventName := cfg.EventName
 	if eventName == "" {

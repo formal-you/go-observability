@@ -1,4 +1,4 @@
-package ginlog
+package ginmw
 
 import (
 	"context"
@@ -13,39 +13,12 @@ import (
 	"github.com/formal-you/go-observability/log"
 )
 
-type captureWriter struct {
-	msgs      []string
-	attrsList [][]slog.Attr
-}
-
-func (w *captureWriter) Write(_ context.Context, msg string, attrs ...slog.Attr) error {
-	w.msgs = append(w.msgs, msg)
-	w.attrsList = append(w.attrsList, attrs)
-	return nil
-}
-
-func attrMap(attrs []slog.Attr) map[string]any {
-	m := make(map[string]any, len(attrs))
-	for _, a := range attrs {
-		m[a.Key] = a.Value
-	}
-	return m
-}
-
-func keysOf(m map[string]any) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-func TestMiddlewareWritesAccessEvent(t *testing.T) {
+func TestAccessLogWritesAccessEvent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{Logger: logger}))
+	r.Use(AccessLog(AccessConfig{Logger: logger}))
 	r.GET("/api/v1/products/:id", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"id": c.Param("id")})
 	})
@@ -73,12 +46,12 @@ func TestMiddlewareWritesAccessEvent(t *testing.T) {
 	}
 }
 
-func TestMiddlewareSkipPaths(t *testing.T) {
+func TestAccessLogSkipPaths(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{Logger: logger, SkipPaths: map[string]bool{"/healthz": true}}))
+	r.Use(AccessLog(AccessConfig{Logger: logger, SkipPaths: map[string]bool{"/healthz": true}}))
 	r.GET("/healthz", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -90,12 +63,12 @@ func TestMiddlewareSkipPaths(t *testing.T) {
 	}
 }
 
-func TestMiddlewareStatusMapping(t *testing.T) {
+func TestAccessLogStatusMapping(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{Logger: logger}))
+	r.Use(AccessLog(AccessConfig{Logger: logger}))
 	r.GET("/boom", func(c *gin.Context) { c.AbortWithStatus(http.StatusInternalServerError) })
 
 	req := httptest.NewRequest(http.MethodGet, "/boom", nil)
@@ -111,12 +84,12 @@ func TestMiddlewareStatusMapping(t *testing.T) {
 	}
 }
 
-func TestMiddlewareTraceFromOTelSpan(t *testing.T) {
+func TestAccessLogTraceFromOTelSpan(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{Logger: logger}))
+	r.Use(AccessLog(AccessConfig{Logger: logger}))
 	r.GET("/ping", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	tid, err := trace.TraceIDFromHex("0123456789abcdef0123456789abcdef")
@@ -164,14 +137,14 @@ func TestDefaultLevelForStatus(t *testing.T) {
 	}
 }
 
-// TestMiddlewareStatus503IsWarn 端到端验证 503 请求的 access 事件 level=WARN、
+// TestAccessLogStatus503IsWarn 端到端验证 503 请求的 access 事件 level=WARN、
 // result=failed（B3 Q4：503 记 WARN 而非 ERROR，避免重试噪音淹没告警）。
-func TestMiddlewareStatus503IsWarn(t *testing.T) {
+func TestAccessLogStatus503IsWarn(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{Logger: logger}))
+	r.Use(AccessLog(AccessConfig{Logger: logger}))
 	r.GET("/unavailable", func(c *gin.Context) { c.AbortWithStatus(http.StatusServiceUnavailable) })
 
 	req := httptest.NewRequest(http.MethodGet, "/unavailable", nil)

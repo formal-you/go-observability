@@ -14,9 +14,8 @@ import (
 
 	"github.com/formal-you/go-observability/errs"
 	log "github.com/formal-you/go-observability/log"
-	"github.com/formal-you/go-observability/middleware/metrics"
-	nethttpmw "github.com/formal-you/go-observability/middleware/nethttp"
-	tracemw "github.com/formal-you/go-observability/middleware/trace"
+	httpmw "github.com/formal-you/go-observability/middleware/http"
+	"github.com/formal-you/go-observability/middleware/otelutil"
 	"github.com/formal-you/go-observability/telemetry"
 	"github.com/formal-you/go-observability/writer/file"
 )
@@ -46,7 +45,7 @@ func main() {
 			// 演示保持全量以便输出可复现；生产建议 0.1（access 成功按比例采样）。
 			log.NewResultKeepSampler(1),
 		)),
-		log.WithTraceExtractor(tracemw.NewTraceExtractor()),
+		log.WithTraceExtractor(otelutil.NewTraceExtractor()),
 		log.WithMasker(log.FieldMasker{}),
 	)
 
@@ -57,17 +56,17 @@ func main() {
 	})
 	mux.HandleFunc("POST /api/v1/orders", func(rw http.ResponseWriter, _ *http.Request) {
 		// 显式错误统一收口：SetError 挂载，nethttp.ErrorResponse 决定状态码/响应体并写错误事件。
-		nethttpmw.SetError(rw, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "business.order.stock_insufficient", "库存不足"))
+		httpmw.SetError(rw, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "business.order.stock_insufficient", "库存不足"))
 	})
 
 	// 链顺序：trace（server span）→ recover（panic 收口）→ accessLog（接入方模板）
 	// → metrics（http.server.request.duration）→ errorResponse（显式错误收口）。
 	var handler http.Handler = mux
-	handler = tracemw.NewHTTPMiddleware(tracemw.Config{})(handler)
-	handler = nethttpmw.Recover(nethttpmw.Config{Logger: logger})(handler)
+	handler = httpmw.Trace(httpmw.TraceConfig{})(handler)
+	handler = httpmw.Recover(httpmw.ErrorConfig{Logger: logger})(handler)
 	handler = accessLog(logger)(handler)
-	handler = metrics.NewHTTPMiddleware(metrics.Config{})(handler)
-	handler = nethttpmw.ErrorResponse(nethttpmw.Config{Logger: logger})(handler)
+	handler = httpmw.Metrics(httpmw.MetricsConfig{})(handler)
+	handler = httpmw.ErrorResponse(httpmw.ErrorConfig{Logger: logger})(handler)
 
 	slog.Info("listen :8081")
 	if err := http.ListenAndServe(":8081", handler); err != nil {

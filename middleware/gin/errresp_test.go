@@ -1,9 +1,8 @@
-package errresp
+package ginmw
 
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,64 +13,16 @@ import (
 
 	"github.com/formal-you/go-observability/errs"
 	"github.com/formal-you/go-observability/log"
-	recovermw "github.com/formal-you/go-observability/middleware/recover"
 )
 
-// captureWriter 捕获 Logger 写出的 msg 与扁平 attrs，用于断言中间件发出的事件形状。
-type captureWriter struct {
-	msgs      []string
-	attrsList [][]slog.Attr
-}
-
-func (w *captureWriter) Write(_ context.Context, msg string, attrs ...slog.Attr) error {
-	w.msgs = append(w.msgs, msg)
-	w.attrsList = append(w.attrsList, attrs)
-	return nil
-}
-
-func attrMap(attrs []slog.Attr) map[string]any {
-	m := make(map[string]any, len(attrs))
-	for _, a := range attrs {
-		m[a.Key] = a.Value
-	}
-	return m
-}
-
-func attrString(t *testing.T, attrs map[string]any, key, want string) {
-	t.Helper()
-	v, ok := attrs[key].(slog.Value)
-	if !ok {
-		t.Errorf("缺少属性 %s（实际: %v）", key, keysOf(attrs))
-		return
-	}
-	if got := v.String(); got != want {
-		t.Errorf("%s = %v, want %s", key, got, want)
-	}
-}
-
-func keysOf(m map[string]any) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-func doRequest(r *gin.Engine, path string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodGet, path, nil)
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, req)
-	return rec
-}
-
-// TestMiddlewareBusinessErrorWritesEventAndResponse 验证业务拒绝（KindBusiness）：
+// TestErrorResponseBusinessErrorWritesEventAndResponse 验证业务拒绝（KindBusiness）：
 // 状态码 409、响应体透传业务码与消息、事件投影为 business 事件（WARN / failed）。
-func TestMiddlewareBusinessErrorWritesEventAndResponse(t *testing.T) {
+func TestErrorResponseBusinessErrorWritesEventAndResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{
+	r.Use(ErrorResponse(ErrorConfig{
 		Logger:       logger,
 		GetRequestID: func(*gin.Context) string { return "req-biz-1" },
 	}))
@@ -115,14 +66,14 @@ func TestMiddlewareBusinessErrorWritesEventAndResponse(t *testing.T) {
 	attrString(t, attrs, "request_id", "req-biz-1")
 }
 
-// TestMiddlewareValidationErrorWritesEventAndResponse 验证参数校验（KindValidation）：
+// TestErrorResponseValidationErrorWritesEventAndResponse 验证参数校验（KindValidation）：
 // 状态码 400、响应体 VALIDATION_ERROR、事件投影为 business 事件。
-func TestMiddlewareValidationErrorWritesEventAndResponse(t *testing.T) {
+func TestErrorResponseValidationErrorWritesEventAndResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
 	r.GET("/orders", func(c *gin.Context) {
 		Abort(c, errs.NewValidation("order id is required"))
 	})
@@ -149,14 +100,14 @@ func TestMiddlewareValidationErrorWritesEventAndResponse(t *testing.T) {
 	attrString(t, attrs, "level", "WARN")
 }
 
-// TestMiddlewareSystemErrorHidesMessage 验证系统错误（KindSystem）：
+// TestErrorResponseSystemErrorHidesMessage 验证系统错误（KindSystem）：
 // 状态码 500、响应体固定 SYS_ERROR 消息不泄露内部细节、事件投影为 error 事件（ERROR）。
-func TestMiddlewareSystemErrorHidesMessage(t *testing.T) {
+func TestErrorResponseSystemErrorHidesMessage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
 	r.GET("/orders/:id", func(c *gin.Context) {
 		Abort(c, errs.NewSystem(errs.TypeDBQueryTimeout, "dial tcp 10.0.0.1:3306: timeout"))
 	})
@@ -191,14 +142,14 @@ func TestMiddlewareSystemErrorHidesMessage(t *testing.T) {
 	attrString(t, attrs, "level", "ERROR")
 }
 
-// TestMiddlewareNilErrorFallback 验证 Abort(nil)：nil 被替换为固定内部错误
+// TestAbortNilFallback 验证 Abort(nil)：nil 被替换为固定内部错误
 // （error.unknown → 500 SYS_ERROR），避免 gin c.Error(nil) panic。
-func TestMiddlewareNilErrorFallback(t *testing.T) {
+func TestAbortNilFallback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
 	r.GET("/orders/:id", func(c *gin.Context) {
 		Abort(c, nil)
 	})
@@ -222,13 +173,13 @@ func TestMiddlewareNilErrorFallback(t *testing.T) {
 	attrString(t, attrs, "level", "ERROR")
 }
 
-// TestMiddlewareNoErrorPassthrough 验证无错误时中间件直接放行：不改响应、不写事件。
-func TestMiddlewareNoErrorPassthrough(t *testing.T) {
+// TestErrorResponseNoErrorPassthrough 验证无错误时中间件直接放行：不改响应、不写事件。
+func TestErrorResponseNoErrorPassthrough(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
 	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 
 	rec := doRequest(r, "/ok")
@@ -244,14 +195,14 @@ func TestMiddlewareNoErrorPassthrough(t *testing.T) {
 	}
 }
 
-// TestMiddlewareFillsTraceAndSpanFromContext 验证从请求 context 的 span context
+// TestErrorResponseFillsTraceAndSpanFromContext 验证从请求 context 的 span context
 // 提取 trace_id / span_id 补充到事件 metadata。
-func TestMiddlewareFillsTraceAndSpanFromContext(t *testing.T) {
+func TestErrorResponseFillsTraceAndSpanFromContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
 	r.GET("/orders/:id", func(c *gin.Context) {
 		Abort(c, errs.NewBusiness("ORDER.NOT_FOUND", "business.not_found", "order not found"))
 	})
@@ -278,15 +229,15 @@ func TestMiddlewareFillsTraceAndSpanFromContext(t *testing.T) {
 	attrString(t, attrs, "span_id", "0123456789abcdef")
 }
 
-// TestMiddlewareWithRecoverNoDoubleWrite 验证与 recovermw 组合：panic 时只有
+// TestErrorResponseWithRecoverNoDoubleWrite 验证与 Recover 组合：panic 时只有
 // recover 写错误事件（error.runtime.panic），errresp 不双写。
-func TestMiddlewareWithRecoverNoDoubleWrite(t *testing.T) {
+func TestErrorResponseWithRecoverNoDoubleWrite(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(recovermw.Middleware(recovermw.Config{Logger: logger}))
-	r.Use(Middleware(Config{Logger: logger}))
+	r.Use(Recover(RecoverConfig{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
 	r.GET("/boom", func(c *gin.Context) { panic("boom") })
 
 	rec := doRequest(r, "/boom")
@@ -301,13 +252,13 @@ func TestMiddlewareWithRecoverNoDoubleWrite(t *testing.T) {
 	attrString(t, attrs, "event.name", "error.runtime.panic")
 }
 
-// TestMiddlewareCustomStatusForError 验证 Config.StatusForError 可整体覆盖状态码映射。
-func TestMiddlewareCustomStatusForError(t *testing.T) {
+// TestErrorResponseCustomStatusForError 验证 StatusForError 可整体覆盖状态码映射。
+func TestErrorResponseCustomStatusForError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{
+	r.Use(ErrorResponse(ErrorConfig{
 		Logger:         logger,
 		StatusForError: func(error) int { return http.StatusTeapot },
 	}))
@@ -322,13 +273,13 @@ func TestMiddlewareCustomStatusForError(t *testing.T) {
 	}
 }
 
-// TestMiddlewareCustomEventName 验证 Config.EventName 可覆盖默认事件名。
-func TestMiddlewareCustomEventName(t *testing.T) {
+// TestErrorResponseCustomEventName 验证 EventName 可覆盖默认事件名。
+func TestErrorResponseCustomEventName(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{
+	r.Use(ErrorResponse(ErrorConfig{
 		Logger:    logger,
 		EventName: log.NewEventName("error", "http", "custom"),
 	}))
@@ -345,14 +296,14 @@ func TestMiddlewareCustomEventName(t *testing.T) {
 	attrString(t, attrs, "event.name", "error.http.custom")
 }
 
-// TestResponseProjectorOverride 验证 ResponseProjector 可注入自定义契约形状：
+// TestErrorResponseProjectorOverride 验证 ResponseProjector 可注入自定义契约形状：
 // 状态码与响应体由投影决定，错误事件仍照常写出。
-func TestResponseProjectorOverride(t *testing.T) {
+func TestErrorResponseProjectorOverride(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	engine := gin.New()
-	engine.Use(Middleware(Config{
+	engine.Use(ErrorResponse(ErrorConfig{
 		Logger: logger,
 		ResponseProjector: func(err error, _ string) (int, any) {
 			return http.StatusUnauthorized, gin.H{"error": gin.H{"code": "invalid_credentials", "message": err.Error()}}

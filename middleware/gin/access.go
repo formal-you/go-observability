@@ -1,7 +1,7 @@
-// Package ginlog 提供 Gin 中间件：为每个请求生成 AccessEvent 并交给 log.Logger 写出。
-// 每条请求同步 Emit；批量导出由 SDK 的 log batch processor 控制（Collector 侧另有 batch
-// 二次凑批），本中间件只负责事件组装与写出。
-package ginlog
+// Package ginmw 提供 Gin 框架体系的中间件：access 日志、显式错误收口、panic 收口、
+// server span 与请求指标。错误契约核心来自 middleware/httperr；本包只做 Gin 适配。
+// 其他框架体系见 middleware/http（net/http）与 middleware/grpc（gRPC）。
+package ginmw
 
 import (
 	"net"
@@ -14,8 +14,8 @@ import (
 	"github.com/formal-you/go-observability/log"
 )
 
-// Config 中间件配置。
-type Config struct {
+// AccessConfig 配置 access 日志中间件。
+type AccessConfig struct {
 	// Logger 必填：写出 access 事件的 Logger。
 	Logger *log.Logger
 
@@ -48,7 +48,7 @@ func defaultRequestID(c *gin.Context) string {
 }
 
 func defaultTraceContext(c *gin.Context) log.TraceContext {
-	// 优先取 OTel span（otelgin 中间件注入）；无有效 span 时回退到 gin context 值。
+	// 优先取 OTel span（trace 中间件注入）；无有效 span 时回退到 gin context 值。
 	sc := trace.SpanFromContext(c.Request.Context()).SpanContext()
 	if sc.IsValid() {
 		return log.TraceContext{TraceID: sc.TraceID().String(), SpanID: sc.SpanID().String()}
@@ -60,7 +60,6 @@ func defaultUserID(c *gin.Context) string { return c.GetString("user_id") }
 
 // defaultLevelForStatus 映射 HTTP 状态码的缺省级别：
 // 2xx-3xx=INFO；4xx=WARN；503=WARN（暂时不可用、调用方可重试）；其余 5xx=ERROR。
-// 调用方可通过 Config.LevelForStatus 整体覆盖。
 func defaultLevelForStatus(status int) log.Level {
 	switch {
 	case status == http.StatusServiceUnavailable:
@@ -81,11 +80,11 @@ func defaultResultForStatus(status int) log.Result {
 	return log.ResultSuccess
 }
 
-// Middleware 返回记录 access 事件的 Gin 中间件。
+// AccessLog 返回记录 access 事件的 Gin 中间件。
 // Logger 为空时 panic（配置错误应尽早暴露）。
-func Middleware(cfg Config) gin.HandlerFunc {
+func AccessLog(cfg AccessConfig) gin.HandlerFunc {
 	if cfg.Logger == nil {
-		panic("ginlog: Logger 不能为空")
+		panic("ginmw: Logger 不能为空")
 	}
 	getRequestID := cfg.GetRequestID
 	if getRequestID == nil {

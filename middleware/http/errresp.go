@@ -1,11 +1,14 @@
-// Package nethttp 提供 net/http 的统一错误收口中间件，与 Gin 版 errresp/recover 对齐：
+// Package httpmw 提供 net/http 框架体系的中间件：显式错误收口、panic 收口、
+// server span 与请求指标。错误契约核心来自 middleware/httperr；本包只做 net/http 适配。
+// 其他框架体系见 middleware/gin（Gin）与 middleware/grpc（gRPC）。
+//
 // ErrorResponse 在链尾读取 SetError 挂载的错误并渲染，Recover 捕获 panic 后渲染；
 // 两者都先写出错误事件（error.http.request / error.runtime.panic），状态码与响应体
 // 经 httperr 契约核心处理，可由 ResponseProjector 注入（默认扁平 {code,message,request_id?}）。
 //
 // Logger 为 nil 时只渲染响应体、不写事件：net/http 中间件允许应用未装配 logger 时
-// 离线运行（与 errresp 的 panic-on-nil 策略不同，net/http 侧更常见无 logger 场景）。
-package nethttp
+// 离线运行（与 ginmw 的 panic-on-nil 策略不同，net/http 侧更常见无 logger 场景）。
+package httpmw
 
 import (
 	"encoding/json"
@@ -16,8 +19,8 @@ import (
 	"github.com/formal-you/go-observability/middleware/httperr"
 )
 
-// Config 中间件配置。
-type Config struct {
+// ErrorConfig 配置显式错误收口与 panic 收口中间件。
+type ErrorConfig struct {
 	// Logger 写出错误事件；nil 时只渲染响应体、不写事件。
 	Logger *log.Logger
 
@@ -60,7 +63,7 @@ func SetError(w http.ResponseWriter, err error) {
 // ErrorResponse 返回在链尾收口显式错误的中间件：读取 SetError 挂载的错误，经
 // log.EventFromError 写出错误事件后，按 ResponseProjector 渲染响应体。
 // handler 只负责挂载错误，不自行决定状态码与响应体。
-func ErrorResponse(cfg Config) func(http.Handler) http.Handler {
+func ErrorResponse(cfg ErrorConfig) func(http.Handler) http.Handler {
 	eventName := cfg.EventName
 	if eventName == "" {
 		eventName = log.EventNameErrorHTTPRequest
@@ -93,10 +96,10 @@ func ErrorResponse(cfg Config) func(http.Handler) http.Handler {
 	}
 }
 
-// Recover 返回捕获 handler panic 的中间件：构造 errs.SystemError（runtime.panic +
-// 必记堆栈），写出 error.runtime.panic 事件后按 ResponseProjector 渲染响应，避免
-// panic 外泄到 net/http 层。
-func Recover(cfg Config) func(http.Handler) http.Handler {
+// Recover 返回捕获 handler panic 的中间件：经 httperr.SystemErrorFromPanic 构造非预期
+// 系统错误（runtime.panic + 必记堆栈），写出 error.runtime.panic 事件后按
+// ResponseProjector 渲染响应，避免 panic 外泄到 net/http 层。
+func Recover(cfg ErrorConfig) func(http.Handler) http.Handler {
 	eventName := cfg.EventName
 	if eventName == "" {
 		eventName = log.EventNameErrorRuntimePanic

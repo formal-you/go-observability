@@ -1,10 +1,8 @@
-// Package recovermw 提供 Gin panic 收口中间件。
-// 职责：捕获 handler 中的 panic，经 httperr.SystemErrorFromPanic 构造非预期系统错误
-// （runtime.panic + 必记堆栈），提取 span 填充 trace/span 后作为 ErrorEvent 写出到
-// log.Logger，再以统一错误响应（500 SYS_ERROR）终止请求，避免 panic 外泄到 Gin/http 层。
-// 依赖方向：本包是 httperr 核心的 Gin 适配壳——只依赖根 log 包、errs、httperr 与 gin，
-// 不承载错误映射逻辑。
-package recovermw
+// ginmw：panic 收口（httperr 契约核心的 Gin 适配）。
+// 捕获 handler 中的 panic，经 httperr.SystemErrorFromPanic 构造非预期系统错误
+// （runtime.panic + 必记堆栈），提取 span 填充 trace/span 后作为 ErrorEvent 写出，
+// 再以统一错误响应（500 SYS_ERROR）终止请求，避免 panic 外泄到 Gin/http 层。
+package ginmw
 
 import (
 	"github.com/gin-gonic/gin"
@@ -14,9 +12,9 @@ import (
 	"github.com/formal-you/go-observability/middleware/httperr"
 )
 
-// Config 中间件配置。
-type Config struct {
-	// Logger 必填：写出 ErrorEvent 的 Logger；为空时 Middleware panic（配置错误应尽早暴露）。
+// RecoverConfig 配置 panic 收口中间件。
+type RecoverConfig struct {
+	// Logger 必填：写出 ErrorEvent 的 Logger；为空时 panic（配置错误应尽早暴露）。
 	Logger *log.Logger
 
 	// EventName 错误事件名；空值默认 log.EventNameErrorRuntimePanic。
@@ -33,14 +31,14 @@ type Config struct {
 	ResponseProjector httperr.Projector
 }
 
-// Middleware 返回收口 Gin handler panic 的中间件。
+// Recover 返回收口 Gin handler panic 的中间件。
 // 它 defer recover 捕获 panic：经 httperr.SystemErrorFromPanic 构造 SystemError
 // （error.type + panic 值消息 + 必记堆栈 + 代码位置），从请求 context 的 span context
 // 填充 trace_id/span_id，写出 ErrorEvent，再 AbortWithStatusJSON 返回统一 500 响应；
 // recover 到 nil（无 panic）时直接放行，中间件自身不会把 panic 外泄。
-func Middleware(cfg Config) gin.HandlerFunc {
+func Recover(cfg RecoverConfig) gin.HandlerFunc {
 	if cfg.Logger == nil {
-		panic("recovermw: Logger 不能为空")
+		panic("ginmw: Logger 不能为空")
 	}
 	eventName := cfg.EventName
 	if eventName == "" {

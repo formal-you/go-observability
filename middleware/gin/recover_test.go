@@ -1,4 +1,4 @@
-package recovermw
+package ginmw
 
 import (
 	"context"
@@ -14,52 +14,12 @@ import (
 	"github.com/formal-you/go-observability/log"
 )
 
-// captureWriter 捕获 Logger 写出的 msg 与扁平 attrs，用于断言中间件发出的事件形状。
-type captureWriter struct {
-	msgs      []string
-	attrsList [][]slog.Attr
-}
-
-func (w *captureWriter) Write(_ context.Context, msg string, attrs ...slog.Attr) error {
-	w.msgs = append(w.msgs, msg)
-	w.attrsList = append(w.attrsList, attrs)
-	return nil
-}
-
-func attrMap(attrs []slog.Attr) map[string]any {
-	m := make(map[string]any, len(attrs))
-	for _, a := range attrs {
-		m[a.Key] = a.Value
-	}
-	return m
-}
-
-func keysOf(m map[string]any) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-func attrString(t *testing.T, attrs map[string]any, key, want string) {
-	t.Helper()
-	v, ok := attrs[key].(slog.Value)
-	if !ok {
-		t.Errorf("缺少属性 %s（实际: %v）", key, keysOf(attrs))
-		return
-	}
-	if got := v.String(); got != want {
-		t.Errorf("%s = %v, want %s", key, got, want)
-	}
-}
-
-func TestMiddlewareCatchesPanicAndEmitsErrorEvent(t *testing.T) {
+func TestRecoverCatchesPanicAndEmitsErrorEvent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{
+	r.Use(Recover(RecoverConfig{
 		Logger:       logger,
 		GetRequestID: func(*gin.Context) string { return "req-panic-1" },
 	}))
@@ -96,16 +56,14 @@ func TestMiddlewareCatchesPanicAndEmitsErrorEvent(t *testing.T) {
 	}
 }
 
-// TestMiddlewareNilRecoverPassthrough 验证 recover() 返回 nil 时中间件直接放行：
+// TestRecoverNilPassthrough 验证 recover() 返回 nil 时中间件直接放行：
 // handler 正常返回（无 panic）时 defer 中 recover() 为 nil，不写错误事件、不改响应。
-// 注意：Go 1.21+ 的 panic(nil) 会转为非 nil 的 *runtime.PanicNilError，
-// 因此本仓库 Go 1.21+ 下无法用 panic(nil) 触发 nil 分支，只能以正常返回路径覆盖。
-func TestMiddlewareNilRecoverPassthrough(t *testing.T) {
+func TestRecoverNilPassthrough(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{Logger: logger}))
+	r.Use(Recover(RecoverConfig{Logger: logger}))
 	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 
 	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
@@ -123,12 +81,12 @@ func TestMiddlewareNilRecoverPassthrough(t *testing.T) {
 	}
 }
 
-func TestMiddlewareFillsTraceAndSpanFromContext(t *testing.T) {
+func TestRecoverFillsTraceAndSpanFromContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(Middleware(Config{Logger: logger}))
+	r.Use(Recover(RecoverConfig{Logger: logger}))
 	r.GET("/boom", func(c *gin.Context) { panic("boom") })
 
 	tid, err := trace.TraceIDFromHex("0123456789abcdef0123456789abcdef")
@@ -153,14 +111,14 @@ func TestMiddlewareFillsTraceAndSpanFromContext(t *testing.T) {
 	attrString(t, attrs, "span_id", "0123456789abcdef")
 }
 
-// TestResponseProjectorOverride 验证 recover 的 ResponseProjector 可注入自定义
+// TestRecoverProjectorOverride 验证 Recover 的 ResponseProjector 可注入自定义
 // panic 响应形状（状态码与响应体由投影决定），错误事件仍照常写出。
-func TestResponseProjectorOverride(t *testing.T) {
+func TestRecoverProjectorOverride(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	engine := gin.New()
-	engine.Use(Middleware(Config{
+	engine.Use(Recover(RecoverConfig{
 		Logger: logger,
 		ResponseProjector: func(_ error, _ string) (int, any) {
 			return http.StatusInternalServerError, gin.H{"error": gin.H{"code": "internal_error", "message": "internal server error"}}
@@ -177,7 +135,7 @@ func TestResponseProjectorOverride(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode body: %v", err)
 	}
-	if body["error"]["code"] != "internal_error" {
+	if body["error"]["code"] != "internal_error" || body["error"]["message"] == "" {
 		t.Fatalf("body = %#v, want nested internal_error", body)
 	}
 	if len(w.msgs) != 1 || w.msgs[0] != "error" {
