@@ -77,8 +77,8 @@ go-observability/
 ├── middleware/               # 按框架体系分组（gin / http / grpc / kratos），共享契约与工具独立成包
 │   ├── httperr/httperr.go       # 框架无关错误契约核心：Kind→状态码、安全 reason/message/metadata、扁平响应体、span 元数据
 │   ├── otelutil/otelutil.go     # 框架无关 OTel 工具：链路注入/提取、TraceExtractor
-│   ├── gin/                     # Gin 体系：AccessLog / ErrorResponse / Recover / Trace / Metrics / Abort
-│   ├── http/                    # net/http 体系：ErrorResponse / Recover / SetError / Trace / Metrics
+│   ├── gin/                     # Gin 体系：AccessLog / ErrorResponse / Recover / SecurityLog / AuditLog / Trace / Metrics / Abort
+│   ├── http/                    # net/http 体系：ErrorResponse / Recover / SetError / SetSecurity / SetAudit / SecurityLog / AuditLog / Trace / Metrics
 │   ├── grpc/                    # gRPC 体系：Trace / Metrics unary 拦截器
 │   ├── kratos/                  # kratos v3 适配：HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter（httperr 契约 + kratos 原生错误双识别）
 │   └── internal/mwutil/         # 内部共享底层工具（状态码记录、路由/RPC 解析、span 收尾、直方图）
@@ -160,6 +160,11 @@ go-observability/
 并配置 `InputGuard`——收口在写出 ErrorEvent 后调用 guard，按风险分级/命中规则补发
 `SecurityEvent`（安全聚合 / SIEM）与 `AuditEvent`（合规审计），与错误事件并存，
 共享同一 ctx（trace/span 自动关联）。输入只记 app.* 摘要，不落原始 body（配合 FieldMasker）。
+
+除错误路径的 `InputGuard` 外，Security / Audit 事件另有独立中间件（与 access / error 同级）：
+`ginmw.SecurityLog` / `httpmw.SecurityLog`（经 `SetSecurity` 挂载安全判定载荷后链尾写出
+SecurityEvent，缺省 WARN）与 `ginmw.AuditLog` / `httpmw.AuditLog`（经 `SetAudit` 挂载审计
+载荷后链尾写出 AuditEvent，缺省 INFO）。两者都从 ctx 关联 trace/span，未挂载载荷时直接放行。
 
 ## 5. 双投影：同一事件两种出口
 

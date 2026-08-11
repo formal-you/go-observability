@@ -247,9 +247,11 @@ go-observability/
 │   ├── 🖥️ stdout/              # 标准输出 Writer
 │   └── 📡 otlp/                # OTLP gRPC Log Writer
 ├── ⚙️ telemetry/               # Trace、Metric、Log Provider 装配
-├── 🔌 middleware/
-│   ├── ginlog/                 # Gin access 日志
-│   └── recover/                # Gin panic 恢复与错误事件
+├── 🔌 middleware/               # 按框架体系分组（gin / http / grpc / kratos）
+│   ├── gin/                    # Gin：access / error / recover / security / audit / trace / metrics
+│   ├── http/                   # net/http：error / recover / security / audit / trace / metrics
+│   ├── grpc/                   # gRPC：trace / metrics 拦截器
+│   └── kratos/                 # kratos v3 传输适配
 ├── 🧪 example/                 # minimal、Gin、net/http、Metric、领域事件示例
 ├── 📊 observability/           # Collector、Loki、Tempo、Mimir、Grafana 参考栈
 └── 📚 docs/                    # 接入、配置、架构、安全与发布文档
@@ -375,4 +377,3 @@ go test ./...
   <strong>🔭 让每一条事件都有稳定语义，让每一次故障都有可追踪上下文。</strong><br>
   <sub>go-observability · semantic events for Go services</sub>
 </p>
-
