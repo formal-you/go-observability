@@ -135,3 +135,32 @@ func TestLoggerTraceExtractorDoesNotOverride(t *testing.T) {
 		t.Errorf("事件显式设置的 span_id 不应被覆盖，实际: %v", got)
 	}
 }
+
+func TestLoggerMinLevel(t *testing.T) {
+	w := &captureWriter{}
+	l := NewLogger(w, WithMinLevel(LevelWarn))
+	l.Emit(context.Background(), BusinessEvent{
+		EventMetadata: EventMetadata{Level: LevelInfo},
+		Data:          BusinessPayload{EventName: EventName("business.order.paid"), Result: ResultSuccess},
+	})
+	l.Emit(context.Background(), ErrorEvent{
+		EventMetadata: EventMetadata{Level: LevelError},
+		Data: ErrorPayload{
+			EventName: EventNameErrorDBTimeout,
+			ErrorType: "db.timeout",
+			Result:    ResultError,
+		},
+	})
+	if len(w.msgs) != 1 || w.msgs[0] != "error" {
+		t.Fatalf("WARN 最低级别应丢弃 INFO、保留 ERROR，实际 %v", w.msgs)
+	}
+}
+
+func TestWithMinLevelRejectsInvalidLevel(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("非法最低级别应 panic")
+		}
+	}()
+	_ = WithMinLevel(Level("NOTICE"))
+}

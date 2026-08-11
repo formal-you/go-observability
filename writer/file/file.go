@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -12,13 +14,15 @@ import (
 	"time"
 
 	"github.com/formal-you/go-observability/log"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // Writer 实现 log.Writer：把事件以 JSON 行追加写入文件。
 type Writer struct {
 	mu       sync.Mutex
-	file     *os.File
+	file     io.WriteCloser
 	metadata ResourceMetadata
+	rotation *RotationConfig
 }
 
 // ResourceMetadata 描述写入每条 JSONL 的进程级服务身份。
@@ -30,12 +34,27 @@ type ResourceMetadata struct {
 	DeploymentEnvironmentName string
 }
 
+// RotationConfig 控制基于文件大小的日志轮转。MaxSizeMB 必须大于零；
+// MaxBackups/MaxAgeDays 为零表示不按该维度删除旧文件。
+type RotationConfig struct {
+	MaxSizeMB  int
+	MaxBackups int
+	MaxAgeDays int
+	Compress   bool
+	LocalTime  bool
+}
+
 // Option 配置文件 Writer。
 type Option func(*Writer)
 
 // WithResourceMetadata 让 Writer 在每条 JSONL 中注入不可被事件属性覆盖的服务身份。
 func WithResourceMetadata(metadata ResourceMetadata) Option {
 	return func(w *Writer) { w.metadata = metadata }
+}
+
+// WithRotation 启用文件轮转；轮转文件与当前文件位于同一目录。
+func WithRotation(config RotationConfig) Option {
+	return func(w *Writer) { w.rotation = &config }
 }
 
 // New 创建文件 Writer；自动创建父目录，append 模式。可选的 ResourceMetadata
@@ -46,15 +65,43 @@ func New(path string, opts ...Option) (*Writer, error) {
 			return nil, err
 		}
 	}
+	w := &Writer{}
+	for _, opt := range opts {
+		opt(w)
+	}
+	if w.rotation != nil {
+		if err := validateRotation(*w.rotation); err != nil {
+			return nil, err
+		}
+		w.file = &lumberjack.Logger{
+			Filename:   path,
+			MaxSize:    w.rotation.MaxSizeMB,
+			MaxBackups: w.rotation.MaxBackups,
+			MaxAge:     w.rotation.MaxAgeDays,
+			Compress:   w.rotation.Compress,
+			LocalTime:  w.rotation.LocalTime,
+		}
+		return w, nil
+	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, err
 	}
-	w := &Writer{file: f}
-	for _, opt := range opts {
-		opt(w)
-	}
+	w.file = f
 	return w, nil
+}
+
+func validateRotation(config RotationConfig) error {
+	if config.MaxSizeMB <= 0 {
+		return fmt.Errorf("file: rotation max size must be positive")
+	}
+	if config.MaxBackups < 0 {
+		return fmt.Errorf("file: rotation max backups must not be negative")
+	}
+	if config.MaxAgeDays < 0 {
+		return fmt.Errorf("file: rotation max age must not be negative")
+	}
+	return nil
 }
 
 // Write 把事件写为一行 JSON（扁平字段 + msg=event_type）。
@@ -178,4 +225,8 @@ func marshalLine(msg string, attrs []slog.Attr, metadata ResourceMetadata) ([]by
 }
 
 // Close 关闭文件。
-func (w *Writer) Close(_ context.Context) error { return w.file.Close() }
+func (w *Writer) Close(_ context.Context) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.file.Close()
+}

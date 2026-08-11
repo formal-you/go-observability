@@ -16,6 +16,8 @@
 - `errs` 错误分类、错误事件投影、Gin access、recover 与统一错误收口（`errresp`）中间件，以及框架级事件名 `error.http.request`。
 - 公开 `telemetry` 包，提供 Trace、Metric、Log Provider 装配、环境变量入口和统一关闭。
 - 新增 `telemetry.SetupFile` 与 file Writer 服务元数据选项：无需 Collector 即可生成可关联的本地 trace/span，并在每条 JSONL 中写入规范 Resource 身份和 timestamp。
+- file Writer 新增大小轮转、备份数量、保留天数与压缩选项；Logger 新增 `WithMinLevel` 最低级别过滤。
+- blackbox 新增可实际读取的 YAML 配置模板，覆盖服务身份、最低级别、输出路径、覆盖策略、文件轮转和 OTLP endpoint。
 - `ResultKeepSampler`、`FieldMasker` 与写入错误回调。
 - 新增 `EventKeepSampler`：按 `event.name` 前缀全量保留（business./error./security./audit./probe.），其余事件委托 Fallback（如 `ResultKeepSampler`）采样——落地"业务全量 + 访问采样"策略。
 - 新增 `CONTEXT.md` 项目术语表：统一「采样」「批量导出间隔」「事件模型」及 OTel Trace / Metric / Log / Error 专业术语，避免沟通误导。

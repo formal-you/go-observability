@@ -70,7 +70,7 @@ go-observability/
 │       └── endpoint_test.go
 │
 ├── writer/                      # 写出后端（实现 log 包 Writer，可替换）
-│   ├── file/file.go             # JSONL 文件 Writer（append，并发安全，含 Close）
+│   ├── file/file.go             # JSONL 文件 Writer（append/轮转，并发安全，含 Close）
 │   ├── stdout/stdout.go         # stdoutlog exporter 包装（本地演示）
 │   └── otlp/otlp.go             # OTLP gRPC Writer（BatchProcessor；可注入外部 LoggerProvider）
 │

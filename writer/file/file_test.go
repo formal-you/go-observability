@@ -156,3 +156,43 @@ func TestWriterOmitsEmptyOptionalMetadata(t *testing.T) {
 		t.Fatalf("空 service.instance.id 应省略: %v", record)
 	}
 }
+
+func TestWriterRotation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	w, err := New(path, WithRotation(RotationConfig{
+		MaxSizeMB:  1,
+		MaxBackups: 2,
+		MaxAgeDays: 1,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := strings.Repeat("x", 600*1024)
+	for range 2 {
+		if err := w.Write(context.Background(), "business", slog.String("app.payload", payload)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := w.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	backups, err := filepath.Glob(filepath.Join(filepath.Dir(path), "events-*.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(backups) != 1 {
+		t.Fatalf("轮转备份数=%d, want 1: %v", len(backups), backups)
+	}
+}
+
+func TestWriterRejectsInvalidRotation(t *testing.T) {
+	for _, config := range []RotationConfig{
+		{},
+		{MaxSizeMB: 1, MaxBackups: -1},
+		{MaxSizeMB: 1, MaxAgeDays: -1},
+	} {
+		if _, err := New(filepath.Join(t.TempDir(), "events.jsonl"), WithRotation(config)); err == nil {
+			t.Errorf("RotationConfig=%+v 应报错", config)
+		}
+	}
+}

@@ -274,7 +274,9 @@ go-observability/
 exporter，只生成本地有效 trace/span 用于日志关联，并把 `service.name`、
 `service.version`、`service.instance.id`、`deployment.environment.name` 写入每条 JSONL。
 完整 Trace 树不会落盘；需要 Tempo 查询时再切换到 OTLP 模式。配置模板见
-[`example/config/file-only.example.json`](example/config/file-only.example.json)。
+[`example/config/file-only.example.yaml`](example/config/file-only.example.yaml)。
+带最低级别、输出路径和文件轮转的可运行配置见
+[`example/blackbox/config.example.yaml`](example/blackbox/config.example.yaml)。
 
 主示例通过环境变量选择出口：
 

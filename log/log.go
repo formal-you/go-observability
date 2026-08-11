@@ -79,6 +79,7 @@ type loggerOptions struct {
 	sampler        Sampler
 	masker         Masker
 	traceExtractor TraceExtractor
+	minLevel       Level
 }
 
 // WithErrorHandler 配置 Writer 写入失败时的观察函数。
@@ -117,8 +118,20 @@ func WithTraceExtractor(extractor TraceExtractor) Option {
 	}
 }
 
+// WithMinLevel 配置最低写出级别。DEBUG、INFO、WARN、ERROR 依次递增；
+// 空值表示不过滤，非法值会在构造 Logger 时 panic。
+func WithMinLevel(level Level) Option {
+	if level != "" && levelRank(level) < 0 {
+		panic("log: 最低日志级别必须是 DEBUG、INFO、WARN 或 ERROR")
+	}
+	return func(options *loggerOptions) {
+		options.minLevel = level
+	}
+}
+
 // Logger 写出语义日志事件：归一化 attrs 已由事件自身完成，
-// 本层顺序执行 默认 metadata 补全 → 脱敏 → 采样 → Writer.Write → 错误观察。
+// 本层顺序执行 默认 metadata/trace 补全 → 最低级别过滤 → 脱敏 → 采样
+// → Writer.Write → 错误观察。
 type Logger struct {
 	writer  Writer
 	options loggerOptions
@@ -145,6 +158,9 @@ func (l *Logger) Emit(ctx context.Context, ev EventPayload) {
 	if l.options.traceExtractor != nil {
 		attrs = fillTraceContext(attrs, l.options.traceExtractor.ExtractTraceContext(ctx))
 	}
+	if l.options.minLevel != "" && !atLeastLevel(attrs, l.options.minLevel) {
+		return
+	}
 	if l.options.masker != nil {
 		attrs = l.options.masker.Mask(ctx, attrs)
 	}
@@ -153,6 +169,33 @@ func (l *Logger) Emit(ctx context.Context, ev EventPayload) {
 	}
 	if err := l.writer.Write(ctx, msg, attrs...); err != nil && l.options.errorHandler != nil {
 		l.options.errorHandler(ctx, msg, attrs, err)
+	}
+}
+
+func atLeastLevel(attrs []slog.Attr, minimum Level) bool {
+	for _, attr := range attrs {
+		if attr.Key != string(KeyLevel) {
+			continue
+		}
+		rank := levelRank(Level(attr.Value.String()))
+		return rank < 0 || rank >= levelRank(minimum)
+	}
+	// 缺省级别按 INFO 处理，与 OTLP Severity 的缺省行为一致。
+	return levelRank(LevelInfo) >= levelRank(minimum)
+}
+
+func levelRank(level Level) int {
+	switch level {
+	case LevelDebug:
+		return 0
+	case LevelInfo:
+		return 1
+	case LevelWarn:
+		return 2
+	case LevelError:
+		return 3
+	default:
+		return -1
 	}
 }
 

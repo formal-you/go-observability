@@ -15,63 +15,93 @@ import (
 	log "github.com/formal-you/go-observability/log"
 	"github.com/formal-you/go-observability/middleware/otelutil"
 	"github.com/formal-you/go-observability/telemetry"
+	"github.com/formal-you/go-observability/writer/file"
 )
 
 const blackboxServiceName = "go-observability-blackbox"
 
 func main() {
 	mode := flag.String("mode", "file", "输出模式：file 或 otlp")
-	endpoint := flag.String("endpoint", "127.0.0.1:4317", "OTLP gRPC endpoint（仅 otlp 模式）")
+	configPath := flag.String("config", filepath.Join("example", "blackbox", "config.example.yaml"), "应用 YAML 配置文件路径")
+	endpoint := flag.String("endpoint", "", "覆盖配置中的 OTLP gRPC endpoint（仅 otlp 模式）")
 	flag.Parse()
 
-	if err := run(context.Background(), *mode, *endpoint); err != nil {
+	if err := run(context.Background(), *mode, *endpoint, *configPath); err != nil {
 		fmt.Fprintln(os.Stderr, "blackbox:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, mode, endpoint string) error {
+func run(ctx context.Context, mode, endpoint, configPath string) error {
+	cfg, err := loadBlackboxConfig(configPath)
+	if err != nil {
+		return err
+	}
 	switch mode {
 	case "file":
-		return runFileMode(ctx)
+		return runFileMode(ctx, cfg)
 	case "otlp":
-		return runOTLPMode(ctx, endpoint)
+		if endpoint == "" {
+			endpoint = cfg.OTLP.Endpoint
+		}
+		if endpoint == "" {
+			return errors.New("OTLP 模式要求配置 otlp.endpoint 或传入 -endpoint")
+		}
+		return runOTLPMode(ctx, endpoint, cfg)
 	default:
 		return fmt.Errorf("不支持 mode=%q（可选 file/otlp）", mode)
 	}
 }
 
-func runFileMode(ctx context.Context) error {
-	path := filepath.Join("example", "blackbox", "sample.jsonl")
-	report, err := writeFileSample(ctx, path)
+func runFileMode(ctx context.Context, cfg blackboxConfig) error {
+	report, err := writeConfiguredFileSample(ctx, cfg)
 	if err != nil {
 		return err
 	}
-	fmt.Println("written:", path)
+	fmt.Println("written:", cfg.Logs.OutputPath)
 	printTraceReport(report)
 	return nil
 }
 
 func writeFileSample(ctx context.Context, path string) (*scenarioReport, error) {
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("清理旧样例: %w", err)
+	cfg := defaultBlackboxConfig()
+	cfg.Logs.OutputPath = path
+	return writeConfiguredFileSample(ctx, cfg)
+}
+
+func writeConfiguredFileSample(ctx context.Context, cfg blackboxConfig) (*scenarioReport, error) {
+	if cfg.Logs.OverwriteOnStart {
+		if err := os.Remove(cfg.Logs.OutputPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("清理旧样例: %w", err)
+		}
+	}
+	level, err := configuredLevel(cfg.Logs.Level)
+	if err != nil {
+		return nil, err
 	}
 	providers, err := telemetry.SetupFile(telemetry.Config{
-		ServiceName:    blackboxServiceName,
-		ServiceVersion: "dev",
-		Environment:    "local",
-		Instance:       "blackbox-local",
+		ServiceName:    cfg.Service.Name,
+		ServiceVersion: cfg.Service.Version,
+		Environment:    cfg.Service.Environment,
+		Instance:       cfg.Service.InstanceID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("初始化 file-only telemetry: %w", err)
 	}
-	w, err := providers.NewLogWriter(ctx, path)
+	var fileOpts []file.Option
+	if cfg.Logs.Rotation.Enabled {
+		fileOpts = append(fileOpts, file.WithRotation(cfg.Logs.Rotation.fileConfig()))
+	}
+	w, err := providers.NewLogWriter(ctx, cfg.Logs.OutputPath, fileOpts...)
 	if err != nil {
 		_ = providers.Shutdown(ctx)
 		return nil, fmt.Errorf("创建 file writer: %w", err)
 	}
-	logger := log.NewLogger(w, log.WithTraceExtractor(otelutil.NewTraceExtractor()))
-	report, emitErr := emitAll(ctx, logger, providers.Tracer(blackboxServiceName))
+	logger := log.NewLogger(w,
+		log.WithMinLevel(level),
+		log.WithTraceExtractor(otelutil.NewTraceExtractor()),
+	)
+	report, emitErr := emitAll(ctx, logger, providers.Tracer(cfg.Service.Name))
 	closeErr := closeLogWriter(ctx, w)
 	traceErr := providers.Shutdown(ctx)
 	if err := errors.Join(emitErr, closeErr, traceErr); err != nil {
@@ -80,12 +110,17 @@ func writeFileSample(ctx context.Context, path string) (*scenarioReport, error) 
 	return report, nil
 }
 
-func runOTLPMode(ctx context.Context, endpoint string) error {
+func runOTLPMode(ctx context.Context, endpoint string, cfg blackboxConfig) error {
+	level, err := configuredLevel(cfg.Logs.Level)
+	if err != nil {
+		return err
+	}
 	providers, err := telemetry.Setup(ctx, telemetry.Config{
 		Enabled:           true,
-		ServiceName:       blackboxServiceName,
-		ServiceVersion:    "dev",
-		Environment:       "local",
+		ServiceName:       cfg.Service.Name,
+		ServiceVersion:    cfg.Service.Version,
+		Environment:       cfg.Service.Environment,
+		Instance:          cfg.Service.InstanceID,
 		Endpoint:          endpoint,
 		TraceSampleRatio:  1,
 		TraceBatchTimeout: 100 * time.Millisecond,
@@ -94,13 +129,16 @@ func runOTLPMode(ctx context.Context, endpoint string) error {
 	if err != nil {
 		return fmt.Errorf("初始化 telemetry: %w", err)
 	}
-	w, err := providers.NewLogWriter(ctx, filepath.Join("example", "blackbox", "sample.jsonl"))
+	w, err := providers.NewLogWriter(ctx, cfg.Logs.OutputPath)
 	if err != nil {
 		_ = providers.Shutdown(ctx)
 		return fmt.Errorf("创建 OTLP writer: %w", err)
 	}
-	logger := log.NewLogger(w, log.WithTraceExtractor(otelutil.NewTraceExtractor()))
-	report, emitErr := emitAll(ctx, logger, providers.Tracer(blackboxServiceName))
+	logger := log.NewLogger(w,
+		log.WithMinLevel(level),
+		log.WithTraceExtractor(otelutil.NewTraceExtractor()),
+	)
+	report, emitErr := emitAll(ctx, logger, providers.Tracer(cfg.Service.Name))
 	closeErr := closeLogWriter(ctx, w)
 	shutdownErr := providers.Shutdown(ctx)
 	if err := errors.Join(emitErr, closeErr, shutdownErr); err != nil {

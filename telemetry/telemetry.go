@@ -341,11 +341,13 @@ func (p *Providers) LoggerProvider() *sdklog.LoggerProvider {
 	return p.loggerProvider
 }
 
-// NewLogWriter 返回按环境选择的日志 Writer。
+// NewLogWriter 返回按环境选择的日志 Writer。fileOpts 仅在选择本地 JSONL 时生效；
+// OTLP 出口会忽略这些文件专属选项。Providers 的 ResourceMetadata 最后注入，调用方
+// 不能通过 fileOpts 覆盖进程级服务身份。
 // Setup 时显式配置 endpoint（含 SetupFromEnvironment 读取到环境变量）且 Providers
 // 已启用 → OTLP Writer（复用本进程的 Resource 与 LoggerProvider）；否则写本地 JSONL。
 // 未启用（空 Providers）时走 file Writer，保证本地离线可核对。
-func (p *Providers) NewLogWriter(ctx context.Context, jsonlPath string) (log.Writer, error) {
+func (p *Providers) NewLogWriter(ctx context.Context, jsonlPath string, fileOpts ...file.Option) (log.Writer, error) {
 	if p != nil && p.useOTLPLogs && p.LoggerProvider() != nil {
 		opts := []otlp.Option{otlp.WithLoggerProvider(p.LoggerProvider())}
 		if res := p.Resource(); res != nil {
@@ -357,7 +359,8 @@ func (p *Providers) NewLogWriter(ctx context.Context, jsonlPath string) (log.Wri
 	if p != nil {
 		metadata = p.fileMetadata
 	}
-	return file.New(jsonlPath, file.WithResourceMetadata(metadata))
+	fileOpts = append(fileOpts, file.WithResourceMetadata(metadata))
+	return file.New(jsonlPath, fileOpts...)
 }
 
 // EnabledFromEnvironment 从 OTEL_SDK_DISABLED 读取启用开关。

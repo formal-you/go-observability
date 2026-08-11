@@ -5,11 +5,25 @@
 ## 本地 JSONL
 
 ```powershell
-go run ./example/blackbox
+go run ./example/blackbox -config "example/blackbox/config.example.yaml"
 go test ./example/blackbox -v
 ```
 
-程序覆盖写入 `example/blackbox/sample.jsonl`（每行一个 JSON 对象，`*.jsonl` 已忽略），并打印各 request_id / 后台场景对应的 trace_id。
+程序读取 [`config.example.yaml`](config.example.yaml)，写入配置指定的 JSONL 路径，并打印各 request_id / 后台场景对应的 trace_id。配置属于 blackbox 应用层，使用严格 YAML 解析后映射到 `telemetry.Config`、`log.WithMinLevel` 和 `file.WithRotation`；核心库不会自动寻找配置文件。
+
+| 配置 | 作用 |
+| --- | --- |
+| `service.*` | 服务名、版本、实例和环境，注入每条 file 日志 |
+| `logs.level` | 最低写出级别：`DEBUG` / `INFO` / `WARN` / `ERROR` |
+| `logs.output_path` | JSONL 输出路径 |
+| `logs.overwrite_on_start` | 启动时清理当前文件，保证黑盒结果不累计 |
+| `logs.rotation.max_size_mb` | 单个日志文件的最大大小 |
+| `logs.rotation.max_backups` | 最多保留的轮转备份数量，`0` 表示不按数量清理 |
+| `logs.rotation.max_age_days` | 备份保留天数，`0` 表示不按天数清理 |
+| `logs.rotation.compress` | 是否 gzip 压缩旧日志 |
+| `otlp.endpoint` | OTLP 模式的 Collector gRPC 地址，可被 `-endpoint` 覆盖 |
+
+`overwrite_on_start=true` 是为了让黑盒测试可重复验收；常驻生产进程通常设为 `false`，由轮转策略控制文件大小和保留周期。
 
 ## 场景与事件
 
@@ -29,7 +43,7 @@ go test ./example/blackbox -v
 Collector、Tempo、Loki、Grafana 已启动时运行：
 
 ```powershell
-go run ./example/blackbox -mode otlp -endpoint "127.0.0.1:4317"
+go run ./example/blackbox -mode otlp -config "example/blackbox/config.example.yaml"
 ```
 
 OTLP 模式固定 `TraceSampleRatio=1`、`service.name=go-observability-blackbox`，退出前关闭 Provider 以刷新批次。Loki/Grafana 查询：
@@ -42,4 +56,4 @@ OTLP 模式固定 `TraceSampleRatio=1`、`service.name=go-observability-blackbox
 
 ## 字段顺序
 
-file/stdout 固定为 `timestamp? -> level -> msg -> trace/span/request/latency -> event.name -> payload -> app.result`。测试按相对位置断言，timestamp 省略或存在都不会误报。
+file/stdout 固定为 `timestamp -> level -> msg -> service metadata -> trace/span/request/latency -> event.name -> payload -> app.result`。黑盒测试会锁定 timestamp 首列及关键字段相对位置。

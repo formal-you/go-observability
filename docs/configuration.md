@@ -66,8 +66,25 @@ writer, err := providers.NewLogWriter(ctx, "logs/events.jsonl")
 ```
 
 文件中的规范服务身份键为 `service.name`、`service.version`、`service.instance.id` 和
-`deployment.environment.name`。`example/config/file-only.example.json` 只是配置模板，
-不会被库自动读取；应用需自行解析 JSON/YAML 后映射到 `telemetry.Config`。
+`deployment.environment.name`。`example/config/file-only.example.yaml` 只是配置模板，
+不会被库自动读取；应用需自行解析 YAML 后映射到 `telemetry.Config`。
+
+需要本地文件轮转时，在应用配置层读取参数并传给 file Writer：
+
+```go
+writer, err := providers.NewLogWriter(ctx, "logs/events.jsonl",
+	file.WithRotation(file.RotationConfig{
+		MaxSizeMB: 100,
+		MaxBackups: 10,
+		MaxAgeDays: 30,
+		Compress: true,
+		LocalTime: true,
+	}),
+)
+```
+
+轮转由文件大小触发；`MaxBackups=0`、`MaxAgeDays=0` 分别表示不按数量、天数清理。
+应用仍需结合磁盘容量制定至少一个有限保留条件。
 
 ## 日志出口
 
@@ -84,6 +101,7 @@ writer, err := providers.NewLogWriter(ctx, "logs/events.jsonl")
 
 ```go
 logger := log.NewLogger(w,
+	log.WithMinLevel(log.LevelInfo),
 	log.WithTraceExtractor(otelutil.NewTraceExtractor()), // 事件未显式带 trace/span 时自动补全
 	log.WithMasker(log.FieldMasker{Keys: []string{"app.phone"}}),
 	log.WithBaseMetadata(log.EventMetadata{Level: log.LevelInfo}),
@@ -96,6 +114,7 @@ logger := log.NewLogger(w,
 | 选项 | 默认行为 | 生产建议 |
 | --- | --- | --- |
 | Sampler | 全量日志事件 | 保持默认可保证每个 HTTP 语义事件都有对应 AccessEvent；仅在已有网关全量 access 或明确接受关联不完整时显式采样 |
+| MinLevel | 不过滤 | `WithMinLevel` 接受 DEBUG/INFO/WARN/ERROR；提高级别会同时丢弃低级别语义事件及其 AccessEvent，需明确接受关联不完整 |
 | TraceExtractor | 不补全链路 | 配 `WithTraceExtractor`（如 `middleware/trace.NewTraceExtractor`），事件未显式带 trace/span 时自动补全 |
 | Masker | 不脱敏 | 维护业务 PII 键清单并在写出前脱敏 |
 | BaseMetadata | 不补全 | 注入服务内稳定的公共元数据 |
