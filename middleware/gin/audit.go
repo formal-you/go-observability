@@ -15,6 +15,12 @@ type AuditConfig struct {
 	// Logger 必填：写出 AuditEvent 的 Logger；为空时 panic（配置错误应尽早暴露）。
 	Logger *log.Logger
 
+	// Describe 审计描述函数：AuditLog 在链尾（handler 完成后）调用，返回非 nil 即写出
+	// AuditEvent（nil=不记录）。接入方在此组装动作/actor/资源/before/after/结果；
+	// 在链尾调用可读取 handler 完成后的最终状态。Describe 为空时回退读取
+	// SetAudit 挂载的载荷（深层代码判定场景）。
+	Describe func(c *gin.Context) *log.AuditPayload
+
 	// GetRequestID 从请求提取 request_id 补到事件 metadata；可选，未提供则不输出该字段。
 	GetRequestID func(c *gin.Context) string
 
@@ -42,12 +48,15 @@ func AuditLog(cfg AuditConfig) gin.HandlerFunc {
 	}
 	return func(c *gin.Context) {
 		c.Next()
-		v, ok := c.Get(auditPayloadKey)
-		if !ok {
-			return
+		var payload *log.AuditPayload
+		if cfg.Describe != nil {
+			payload = cfg.Describe(c)
+		} else if v, ok := c.Get(auditPayloadKey); ok {
+			if p, ok := v.(log.AuditPayload); ok {
+				payload = &p
+			}
 		}
-		payload, ok := v.(log.AuditPayload)
-		if !ok {
+		if payload == nil {
 			return
 		}
 		md := httperr.EventMetadataFromContext(c.Request.Context())
@@ -55,6 +64,6 @@ func AuditLog(cfg AuditConfig) gin.HandlerFunc {
 		if cfg.GetRequestID != nil {
 			md.RequestID = cfg.GetRequestID(c)
 		}
-		cfg.Logger.Emit(c.Request.Context(), log.AuditEvent{EventMetadata: md, Data: payload})
+		cfg.Logger.Emit(c.Request.Context(), log.AuditEvent{EventMetadata: md, Data: *payload})
 	}
 }

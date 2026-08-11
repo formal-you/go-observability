@@ -162,9 +162,10 @@ go-observability/
 共享同一 ctx（trace/span 自动关联）。输入只记 app.* 摘要，不落原始 body（配合 FieldMasker）。
 
 除错误路径的 `InputGuard` 外，Security / Audit 事件另有独立中间件（与 access / error 同级）：
-`ginmw.SecurityLog` / `httpmw.SecurityLog`（经 `SetSecurity` 挂载安全判定载荷后链尾写出
-SecurityEvent，缺省 WARN）与 `ginmw.AuditLog` / `httpmw.AuditLog`（经 `SetAudit` 挂载审计
-载荷后链尾写出 AuditEvent，缺省 INFO）。两者都从 ctx 关联 trace/span，未挂载载荷时直接放行。
+`ginmw.SecurityLog` / `httpmw.SecurityLog` 的 `Decide` 由认证/授权中间件提供——链尾自动调用
+并写出 SecurityEvent（缺省 WARN）；`ginmw.AuditLog` / `httpmw.AuditLog` 的 `Describe` 在链尾
+组装并写出 AuditEvent（缺省 INFO）。两者都从 ctx 关联 trace/span，返回 nil 或未挂载载荷时
+直接放行；深层代码判定场景可回退用 `SetSecurity` / `SetAudit` 挂载。
 
 ## 5. 双投影：同一事件两种出口
 
@@ -222,3 +223,4 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 改动后的本地验证：`gofmt -w <改动文件>` → `go build ./...` → `go vet ./...` → `go test ./...`（本机低内存组合：`$env:GOMAXPROCS=1; $env:GOGC=30`）。
 
 完整示例见 [`example/mall`](../example/mall/)；可编辑架构图见 [go-observability-architecture.drawio](go-observability-architecture.drawio)。
+

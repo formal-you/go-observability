@@ -15,6 +15,12 @@ type SecurityConfig struct {
 	// Logger 必填：写出 SecurityEvent 的 Logger；为空时 panic（配置错误应尽早暴露）。
 	Logger *log.Logger
 
+	// Decide 认证/授权中间件提供的判定函数：SecurityLog 在链尾调用，返回非 nil 即写出
+	// SecurityEvent（nil=不记录）。判定逻辑（登录校验/鉴权/风控命中）由接入方实现，
+	// 库只负责把判定结果写成事件；Decide 返回的 payload 自带 event.name、结果与
+	// app.* 字段。Decide 为空时回退读取 SetSecurity 挂载的载荷（深层代码判定场景）。
+	Decide func(c *gin.Context) *log.SecurityPayload
+
 	// GetRequestID 从请求提取 request_id 补到事件 metadata；可选，未提供则不输出该字段。
 	GetRequestID func(c *gin.Context) string
 
@@ -43,12 +49,15 @@ func SecurityLog(cfg SecurityConfig) gin.HandlerFunc {
 	}
 	return func(c *gin.Context) {
 		c.Next()
-		v, ok := c.Get(securityPayloadKey)
-		if !ok {
-			return
+		var payload *log.SecurityPayload
+		if cfg.Decide != nil {
+			payload = cfg.Decide(c)
+		} else if v, ok := c.Get(securityPayloadKey); ok {
+			if p, ok := v.(log.SecurityPayload); ok {
+				payload = &p
+			}
 		}
-		payload, ok := v.(log.SecurityPayload)
-		if !ok {
+		if payload == nil {
 			return
 		}
 		md := httperr.EventMetadataFromContext(c.Request.Context())
@@ -56,6 +65,6 @@ func SecurityLog(cfg SecurityConfig) gin.HandlerFunc {
 		if cfg.GetRequestID != nil {
 			md.RequestID = cfg.GetRequestID(c)
 		}
-		cfg.Logger.Emit(c.Request.Context(), log.SecurityEvent{EventMetadata: md, Data: payload})
+		cfg.Logger.Emit(c.Request.Context(), log.SecurityEvent{EventMetadata: md, Data: *payload})
 	}
 }
