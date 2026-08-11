@@ -222,11 +222,15 @@ log 包以标准库 `log/slog` 为属性载体。OTel 依赖集中在转换、Wr
 
 日志条数由应用侧控制。`NewLogger` 未配置 `WithSampler` 时每条都写，这是推荐默认：
 
-- **HTTP 访问事件（access.\*）**：除明确跳过的健康检查外全量保留，保证每个 HTTP 来源的 business / error / security / audit 事件都有对应请求全貌。
-- **业务 / 错误 / 安全 / 审计 / 探测事件**：全量保留（业务成功也是交易记录，不能丢）。
+- **HTTP 访问事件（access.\*）**：除明确跳过的健康检查外，每个请求恰好保留一条，无论结果是 2xx、4xx、5xx 还是 panic。
+- **HTTP 事件关联**：HTTP 来源的 business（包括 success / failed）、error、security、audit 事件必须能通过同一 `trace_id` / `request_id` 找到该请求的 AccessEvent；一个请求中的多个业务事件仍只对应一条 AccessEvent。
+- **后台事件边界**：MQ 消费、定时任务等非 HTTP 来源事件独立记录，不伪造 AccessEvent。
+- **业务 / 错误 / 安全 / 审计 / 探测事件**：事件一旦产生就全量保留；业务成功同样是有效运营记录。
 - **心跳 / 健康检查**：确定性噪音，用 `SkipPaths`（ginlog）或接入层短路直接排除，不进入概率采样。
 
-高流量服务只有在已有网关全量 access，或明确接受关联日志不完整时，才应显式启用成功 access 采样；失败结果仍由 `ResultKeepSampler` 强制保留：
+AccessEvent 记录 method、path、status、latency 等请求事实，BusinessEvent 记录领域动作与结果，两者不是重复日志。即使业务结果为 success，运营仍需要 AccessEvent 计算请求量、成功率、延迟和容量，并在 trace 被采样时保留可检索的请求全貌。
+
+高流量服务只有在已有网关全量 access，或明确接受成功请求的事件关联不完整时，才应显式启用 access 采样；一旦启用，就不再保证每个 HTTP 语义事件都有 AccessEvent。失败结果仍由 `ResultKeepSampler` 强制保留：
 
 ```go
 log.WithSampler(log.EventKeepSampler{

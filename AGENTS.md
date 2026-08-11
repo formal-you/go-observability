@@ -26,6 +26,10 @@
 7. 零值省略：字符串/数值零值省略；布尔不省略（false 对 retryable/result 语义明确）。
 8. samber 生态只允许出现在 `example/` 与 `docs/samber-comparison.md`，核心包保持零外部依赖。
 9. 能力归属：库承载所有通用可复用能力（错误分类/投影、HTTP/gRPC/Gin 收口中间件、三信号装配），并通过配置或注入点（如 `ResponseProjector`）允许接入方自定义契约；接入方不得在应用侧镜像库中间件，契约差异一律经库的注入点表达。
+10. HTTP AccessEvent 完整性：默认 Logger 不配置 Sampler；除 `SkipPaths` 明确排除的请求外，每个 HTTP 请求必须恰好记录一条 AccessEvent，覆盖 2xx、4xx、5xx 与 panic。
+   - HTTP 来源的 BusinessEvent（success / failed）、ErrorEvent、SecurityEvent、AuditEvent 必须与该 AccessEvent 共享 `trace_id` / `request_id`；同一请求的多个语义事件仍只对应一条 AccessEvent。
+   - MQ 消费、定时任务等非 HTTP 来源事件独立记录，不得伪造 AccessEvent。
+   - 接入方可显式使用 `WithSampler` 采样 access；启用后必须在接入文档与测试中声明“不保证每个 HTTP 语义事件都有 AccessEvent”。ProbeEvent 的产生频率由探测逻辑控制，已产生的 ProbeEvent 全量保留。
 
 ## 开发流程
 
