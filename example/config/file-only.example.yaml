@@ -1,0 +1,9 @@
+# 小单体 file-only 配置结构示意。应用自行解析后映射到 telemetry.Config。
+service:
+  name: mall-monolith
+  version: "1.0.0"
+  instance_id: shop-server-01
+  environment: production
+
+logs:
+  path: logs/events.jsonl

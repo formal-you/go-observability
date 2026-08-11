@@ -7,16 +7,19 @@
 ### Added
 
 - 六类类型化事件、`Logger` / `Writer` 接口，以及 JSONL、stdout、OTLP Writer。
-- `AccessPayload` 新增 `RPCInfo`（semconv `rpc.*`）与框架级事件名 `access.rpc.request` / `error.rpc.request`，支持 gRPC 传输层访问/错误事件。
+- `AccessPayload` 新增 `RPCInfo`（semconv `rpc.*`）与框架级事件名 `rpc.request.completed` / `rpc.request.failed`，支持 gRPC 传输层访问/错误事件。
 - `errresp` 与 `recover` 中间件新增 `ResponseProjector` 配置：响应体与状态码可注入（默认保持扁平 `{code,message,request_id?}`），接入方可按自身 HTTP 契约投影。
 - 新增 `middleware/nethttp`：net/http 版统一错误收口（`ErrorResponse`/`Recover`/`SetError`，支持 `ResponseProjector`；Logger 为 nil 时只渲染不写事件）。
 - 新增 `middleware/metrics`：HTTP（net/http/Gin）与 gRPC 服务器指标中间件（`http.server.request.duration` / `rpc.server.duration`，semconv 1.41.0，默认全局 Meter，可注入）。
 - 新增 `middleware/trace`：HTTP（net/http/Gin）与 gRPC 服务器链路中间件（server span 注入 request context，日志事件自动关联 trace_id/span_id，semconv 1.41.0，默认全局 Tracer，可注入）。
 - `middleware/trace` 补全链路能力：HTTP/Gin/gRPC 入口提取上游传播上下文（traceparent/tracestate，接续调用方链路），新增 `InjectHTTPHeaders` / `InjectGRPCMetadata` 出口注入 helper。
-- `errs` 错误分类、错误事件投影、Gin access、recover 与统一错误收口（`errresp`）中间件，以及框架级事件名 `error.http.request`。
+- `errs` 错误分类、错误事件投影、Gin access、recover 与统一错误收口（`errresp`）中间件，以及框架级 HTTP 请求事实事件名。
 - 公开 `telemetry` 包，提供 Trace、Metric、Log Provider 装配、环境变量入口和统一关闭。
+- 新增 `telemetry.SetupFile` 与 file Writer 服务元数据选项：无需 Collector 即可生成可关联的本地 trace/span，并在每条 JSONL 中写入规范 Resource 身份和 timestamp。
+- file Writer 新增大小轮转、备份数量、保留天数与压缩选项；Logger 新增 `WithMinLevel` 最低级别过滤。
+- blackbox 新增可实际读取的 YAML 配置模板，覆盖服务身份、最低级别、输出路径、覆盖策略、文件轮转和 OTLP endpoint。
 - `ResultKeepSampler`、`FieldMasker` 与写入错误回调。
-- 新增 `EventKeepSampler`：按 `event.name` 前缀全量保留（business./error./security./audit./probe.），其余事件委托 Fallback（如 `ResultKeepSampler`）采样——落地"业务全量 + 访问采样"策略。
+- 新增 `EventTypeKeepSampler`：按 `msg` / EventType 全量保留业务、错误、安全、审计和探测事件，其余事件委托 Fallback（如 `ResultKeepSampler`）采样；`EventKeepSampler` 保留用于领域前缀与旧配置兼容。
 - 新增 `CONTEXT.md` 项目术语表：统一「采样」「批量导出间隔」「事件模型」及 OTel Trace / Metric / Log / Error 专业术语，避免沟通误导。
 - `TraceExtractor` 接线：新增 `WithTraceExtractor` 与 `middleware/trace.NewTraceExtractor`，事件未显式携带 trace_id/span_id 时自动补全（不覆盖已设值）。
 - 新增采样器构造器 `NewResultKeepSampler` / `NewEventKeepSampler`：非法入参构造期 panic，消除零值陷阱。
@@ -29,7 +32,15 @@
 
 - 新增 `middleware/kratos`：go-kratos v3 传输层适配——`ErrorEncoder`（HTTP 错误编码）与 `GRPCErrorMapper`（gRPC status 映射，reason/error.type 写入 `errdetails.ErrorInfo`），errs.AppError / kratos 原生错误双识别、system 与普通错误不透传内部细节；`ErrorLog` 错误事件日志 filter 复用 `log.EventFromError`。
 
+- 新增 `SecurityLog` / `AuditLog` 中间件（gin + net/http）：`Decide` / `Describe` 拉取式——认证/授权中间件提供判定，链尾自动写出 SecurityEvent / AuditEvent（缺省 WARN / INFO，`Config.Level` 可覆盖）；`SetSecurity` / `SetAudit` 保留为深层代码判定的回退路径。
+- 新增错误路径安全/审计注入点：`httperr.InputGuard` 与 `InputSummary`（`httperr.WithInputSummary`）——非法输入穿透校验触发系统错误时错误事件唯一，可按应用规则补发 Security / Audit 事件（ADR-0007 方案 D）。
+- Error / Security / Audit payload 新增 `ExtraAttrs`（canonical 键守卫 + 保留键过滤）；新增框架级事实名 `input.threat.detected` / `input.anomaly.recorded` 与键 `app.input_field` / `app.input_hash` / `app.input_truncated`。
+
 ### Changed
+- `event.name` 从重复 `msg` 的「类别.模块.操作」调整为「领域.对象.事实」，并禁止六类 EventType 作为首段；HTTP 错误出口按错误 Kind 默认选择 `http.request.rejected` / `http.request.failed`。
+- BizError 与 SystemError 的稳定具体错误码统一投影到 `app.error_code`；旧 `app.business_code` / `app.operation` 不再输出，旧 Go 字段仅保留源码兼容输入。
+- 默认运维建议改为 HTTP AccessEvent 全量保留（健康检查用 `SkipPaths` 排除）；成功 access 概率采样保留为使用方显式选择，并明确会放弃完整的跨事件 access 关联。
+- Resource 输出键修正为 `service.instance.id` / `deployment.environment.name`；`Environment` 默认值统一为 `development`。
 - 升级 OpenTelemetry 依赖至 otel v1.45.0 / log v0.21.0（破坏性 API：log 包移除 `Value`/`KeyValue`，`attrkv` 迁移到 `attribute` 包）；Go 要求升至 1.26。
 
 - `errs` 堆栈策略可配置：新增 `errs.SetStackPolicy`，使用方可按 `error.type` 前缀覆盖默认策略（最长前缀优先，空 map = 库内置默认）；`NewSystem` 构造采集与 `error_project` 事件渲染均跟随同一策略。
@@ -45,6 +56,7 @@
 
 ### Fixed
 
+- 黑盒样例改用真实 OTel span + Gin 请求验证 access/business/error/security/audit 关联，并修复重复运行追加旧 JSONL、timestamp 键序断言与 Gin panic 缺 AccessEvent。
 - OTLP LogRecord 顶层字段不再重复写入 attributes。
 - 测试使用临时目录并关闭 Writer，避免仓库内残留测试产物。
 - 修正文档中的 JSONL 输出路径、示例运行目录和头部/尾部采样说明。
@@ -55,5 +67,6 @@
 - 修复 `FieldMasker` 未递归处理 map、slice 与 `LogValuer` 导致的嵌套敏感字段泄漏。
 - 修复指针及 `%w` 包装错误丢失 retry、source、stack、upstream 信息，并为 typed-nil error 提供安全兜底。
 - 阻止 `BusinessPayload.ExtraAttrs` 覆盖身份、资源、业务、代码位置、`event.name` 与 `app.result` 等 canonical 字段。
+- `writer/file` JSONL 输出改为固定规范字段顺序（timestamp → level → msg → 链路/延迟 → event.name → 事件字段 → app.result 收尾），消除同一字段（尤其 `app.result`）在不同事件间相对位置漂移。
 
 尚未创建首个版本标签，链接定义将在正式发布时补充。

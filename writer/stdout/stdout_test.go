@@ -39,7 +39,7 @@ func TestWriteStripsRecordFields(t *testing.T) {
 	if err := w.Write(context.Background(), "access",
 		slog.Time("timestamp", ts),
 		slog.String("level", "WARN"),
-		slog.String("event.name", "access.http.request"),
+		slog.String("event.name", "http.request.completed"),
 		slog.String("trace_id", "949058d5c20153624d52da3358038026"),
 		slog.String("span_id", "bba473e9b3034af6"),
 		slog.String("http.request.method", "GET"),
@@ -50,8 +50,8 @@ func TestWriteStripsRecordFields(t *testing.T) {
 	if !strings.Contains(out, `"SeverityText":"WARN"`) {
 		t.Errorf("输出缺少 SeverityText=WARN: %s", out)
 	}
-	if !strings.Contains(out, `"EventName":"access.http.request"`) {
-		t.Errorf("输出缺少 EventName=access.http.request: %s", out)
+	if !strings.Contains(out, `"EventName":"http.request.completed"`) {
+		t.Errorf("输出缺少 EventName=http.request.completed: %s", out)
 	}
 	for _, reserved := range []string{`"Key":"level"`, `"Key":"timestamp"`, `"Key":"event.name"`, `"Key":"trace_id"`, `"Key":"span_id"`} {
 		if strings.Contains(out, reserved) {

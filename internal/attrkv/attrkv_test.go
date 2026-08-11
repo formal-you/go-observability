@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	corelog "github.com/formal-you/go-observability"
+	corelog "github.com/formal-you/go-observability/log"
 	"go.opentelemetry.io/otel/attribute"
 	otelog "go.opentelemetry.io/otel/log"
 )
@@ -24,7 +24,7 @@ func TestSeverityMapping(t *testing.T) {
 	for _, c := range cases {
 		attrs := []slog.Attr{
 			slog.String("level", c.level),
-			slog.String("event.name", "access.http.request"),
+			slog.String("event.name", "http.request.completed"),
 		}
 		sev, text := Severity(attrs)
 		if text != c.want {
@@ -165,9 +165,13 @@ func TestRecordFieldsExtraction(t *testing.T) {
 	attrs := []slog.Attr{
 		slog.Time("timestamp", ts),
 		slog.String("level", "WARN"),
-		slog.String("event.name", "access.http.request"),
+		slog.String("event.name", "http.request.completed"),
 		slog.String("trace_id", "949058d5c20153624d52da3358038026"),
 		slog.String("span_id", "bba473e9b3034af6"),
+		slog.String("service.name", "forged"),
+		slog.String("service.version", "forged"),
+		slog.String("service.instance.id", "forged"),
+		slog.String("deployment.environment.name", "forged"),
 		slog.String("http.request.method", "GET"),
 		slog.Int("http.response.status_code", 404),
 	}
@@ -181,8 +185,8 @@ func TestRecordFieldsExtraction(t *testing.T) {
 	if rec.SeverityText() != "WARN" {
 		t.Errorf("SeverityText = %q, want WARN", rec.SeverityText())
 	}
-	if rec.EventName() != "access.http.request" {
-		t.Errorf("EventName = %q, want access.http.request", rec.EventName())
+	if rec.EventName() != "http.request.completed" {
+		t.Errorf("EventName = %q, want http.request.completed", rec.EventName())
 	}
 	if len(rest) != 2 {
 		t.Fatalf("rest = %d attrs, want 2: %v", len(rest), rest)
@@ -199,7 +203,7 @@ func TestRecordFieldsExtraction(t *testing.T) {
 func TestRecordDefaults(t *testing.T) {
 	before := time.Now()
 	rec, rest := Record("business", []slog.Attr{
-		slog.String("event.name", "business.order.paid"),
+		slog.String("event.name", "order.payment.succeeded"),
 		slog.String("app.result", "success"),
 	})
 	after := time.Now()
@@ -209,8 +213,8 @@ func TestRecordDefaults(t *testing.T) {
 	if rec.Severity() != otelog.SeverityInfo || rec.SeverityText() != "INFO" {
 		t.Errorf("Severity = %v/%q, want INFO", rec.Severity(), rec.SeverityText())
 	}
-	if rec.EventName() != "business.order.paid" {
-		t.Errorf("EventName = %q, want business.order.paid", rec.EventName())
+	if rec.EventName() != "order.payment.succeeded" {
+		t.Errorf("EventName = %q, want order.payment.succeeded", rec.EventName())
 	}
 	if len(rest) != 1 || rest[0].Key != "app.result" {
 		t.Fatalf("rest = %v, want 仅 app.result", rest)

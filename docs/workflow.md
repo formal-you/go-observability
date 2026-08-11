@@ -3,18 +3,22 @@
 ## 变更步骤
 
 1. 用 Issue 或变更说明写清用户问题、兼容性影响和验收条件。
-2. 先补能复现行为的测试，再做最小实现。
+2. 按 [正式测试契约](testing.md) 先补独立黑盒测试，再做最小实现与白盒边界测试。
 3. 更新受影响的 README、配置样例和 CHANGELOG。
 4. 运行格式化、静态检查、测试和差异检查。
 5. 按可独立说明的批次提交 Git commit；多批次工作应保留多次提交记录。
 
-```bash
-gofmt -w .
+```powershell
+gofmt -w <modified-go-files>
+$env:GOMAXPROCS=1
+$env:GOGC=30
+go build ./...
 go vet ./...
 go test ./...
-go test -race ./...
 git diff --check
 ```
+
+资源允许时额外运行 `go test -race ./...`。`--help` 或仅 build 不能替代相关测试与全量测试。
 
 ## 兼容性规则
 
@@ -29,3 +33,10 @@ git diff --check
 - README 示例可编译，命令注明运行目录并同时照顾 PowerShell 与 bash。
 - 新增链接能解析到仓库内文件；外部服务尚未上线时明确写“发布准备中”。
 - Writer、Provider 等资源在示例和测试中被正确关闭。
+
+## Git 门禁
+
+- 每次完成的变更都必须创建 commit；一次提交聚焦一个可说明的逻辑变更。
+- 使用 `git add <explicit-paths>` 显式暂存本次文件，禁止 `git add .` / `git add -A`，避免混入用户改动。
+- 提交信息使用 Conventional Commits（`feat:` / `fix:` / `docs:` / `refactor:`）。
+- 不 push、不 force push，除非用户明确要求。

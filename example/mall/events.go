@@ -5,21 +5,21 @@ package mall
 import (
 	"log/slog"
 
-	log "github.com/formal-you/go-observability"
+	log "github.com/formal-you/go-observability/log"
 )
 
-// 业务事件名（B4 核心 10；不埋 order.rejected）。
+// 业务事实名（领域.对象.事实；粗分类由 BusinessEvent/msg 承载）。
 const (
-	EventOrderCreated   log.EventName = "business.order.created"
-	EventOrderPaid      log.EventName = "business.order.paid"
-	EventOrderCancelled log.EventName = "business.order.cancelled"
-	EventRefundCreated  log.EventName = "business.refund.created"
-	EventRefundSuccess  log.EventName = "business.refund.success"
-	EventCartAdded      log.EventName = "business.cart.added"
-	EventProductViewed  log.EventName = "business.product.viewed"
-	EventUserLogin      log.EventName = "business.user.login"
-	EventUserRegistered log.EventName = "business.user.registered"
-	EventCouponRedeemed log.EventName = "business.coupon.redeemed"
+	EventOrderCreated   log.EventName = "order.lifecycle.created"
+	EventOrderPaid      log.EventName = "order.payment.succeeded"
+	EventOrderCancelled log.EventName = "order.lifecycle.cancelled"
+	EventRefundCreated  log.EventName = "refund.lifecycle.created"
+	EventRefundSuccess  log.EventName = "refund.processing.succeeded"
+	EventCartAdded      log.EventName = "cart.item.added"
+	EventProductViewed  log.EventName = "product.detail.viewed"
+	EventUserLogin      log.EventName = "user.session.started"
+	EventUserRegistered log.EventName = "user.account.registered"
+	EventCouponRedeemed log.EventName = "coupon.redemption.succeeded"
 )
 
 // AllBusinessEvents 返回 B4 清单全集（测试/文档枚举用）。

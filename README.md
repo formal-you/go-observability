@@ -48,6 +48,7 @@
 | 🧨 | **错误投影** | 普通 error、值/指针错误和 `%w` 链都能稳定提取 |
 | 🛡️ | **日志治理** | 可注入 Sampler、递归 Masker、写入错误回调 |
 | 🚚 | **三种 Writer** | file、stdout、OTLP gRPC 共享同一套事件模型 |
+| 🛡️ | **Security / Audit 中间件** | `SecurityLog` / `AuditLog`（gin + net/http）把认证/授权判定与审计留痕自动写成事件 |
 | 📡 | **统一 telemetry** | Trace、Metric、Log Provider、Resource 与 Shutdown 集中装配 |
 | 🧰 | **可运行参考栈** | Gin、net/http、Metric 示例与本地 LGTM 环境 |
 
@@ -64,7 +65,7 @@ go run ./example/minimal
 得到一条可直接检索的 JSONL 事件：
 
 ```json
-{"app.result":"success","event.name":"business.order.paid","level":"INFO","msg":"business"}
+{"timestamp":"2026-08-11T15:00:00Z","level":"INFO","msg":"business","service.name":"mall-monolith","deployment.environment.name":"development","trace_id":"...","span_id":"...","event.name":"order.payment.succeeded","app.result":"success"}
 ```
 
 切换到 OTLP Writer 后，`severity`、`EventName`、`timestamp` 和 span context 会进入 OTel LogRecord 顶层；业务属性继续保持结构化，不会退化成拼接字符串。
@@ -124,7 +125,7 @@ logger := log.NewLogger(w,
 logger.Emit(ctx, log.BusinessEvent{
     EventMetadata: log.EventMetadata{Level: log.LevelInfo},
     Data: log.BusinessPayload{
-        EventName: log.NewEventName("business", "order", "paid"),
+        EventName: log.NewEventName("order", "payment", "succeeded"),
         Result:    log.ResultSuccess,
     },
 })
@@ -155,15 +156,15 @@ if err := w.Close(ctx); err != nil {
 | 🩺 | `ProbeEvent` | 健康检查与运行状态 | readiness、liveness、依赖探测 |
 
 ```text
-事件名三段式结构
+事件名三段式结构（`msg` 已承载粗分类）
 
-access.http.request
+http.request.completed
    │      │      └── 动作 action
    │      └───────── 对象 object
    └──────────────── 领域 domain
 ```
 
-框架级事件名由核心包维护；`business.*` 领域事件由接入方自建注册表。公共语义保持稳定，同时不会把电商、支付等领域概念硬塞进通用库。
+`event.name` 使用「领域.对象.事实」三段式，首段不得是 `access` / `business` / `error` / `security` / `audit` / `probe`；这些粗分类只由 `msg` 表达。框架级事件名由核心包维护，领域事件由接入方自建注册表。
 
 ---
 
@@ -199,7 +200,7 @@ access.http.request
 
 ### 🧱 1. 核心事件模型不绑定 OTel SDK
 
-根包以标准库 `log/slog` 为属性载体。OTel 依赖集中在转换、Writer、telemetry 和集成层，业务代码不需要围绕 exporter 重写。
+log 包以标准库 `log/slog` 为属性载体。OTel 依赖集中在转换、Writer、telemetry 和集成层，业务代码不需要围绕 exporter 重写。
 
 ### 🪞 2. file/stdout 与 OTLP 不强行共用一种形状
 
@@ -217,20 +218,28 @@ access.http.request
 
 `TraceSampleRatio` 是 SDK 头部采样。Collector 无法恢复 SDK 已丢弃的 trace；需要按错误或延迟执行 `tail_sampling` 时，应先让 SDK 完整导出，再由 Collector 决策。
 
-## 🎚️ 推荐日志采样策略
+## 🎚️ 默认全量与可选采样
 
-日志条数由应用侧控制，默认每条都写。按运维最佳实践推荐：
+日志条数由应用侧控制。`NewLogger` 未配置 `WithSampler` 时每条都写，这是推荐默认：
 
-- **业务 / 错误 / 安全 / 审计 / 探测事件**：全量保留（业务成功也是交易记录，不能丢）。
-- **访问事件（access.\*）**：高频且心跳/轮询占大头，成功按比例采样、失败（`failed` 等）恒保留。
+- **HTTP 访问事件（access.\*）**：除明确跳过的健康检查外，每个请求恰好保留一条，无论结果是 2xx、4xx、5xx 还是 panic。
+- **HTTP 事件关联**：HTTP 来源的 business（包括 success / failed）、error、security、audit 事件必须能通过同一 `trace_id` / `request_id` 找到该请求的 AccessEvent；一个请求中的多个业务事件仍只对应一条 AccessEvent。
+- **后台事件边界**：MQ 消费、定时任务等非 HTTP 来源事件独立记录，不伪造 AccessEvent。
+- **业务 / 错误 / 安全 / 审计 / 探测事件**：事件一旦产生就全量保留；业务成功同样是有效运营记录。
 - **心跳 / 健康检查**：确定性噪音，用 `SkipPaths`（ginlog）或接入层短路直接排除，不进入概率采样。
 
+AccessEvent 记录 method、path、status、latency 等请求事实，BusinessEvent 记录领域动作与结果，两者不是重复日志。即使业务结果为 success，运营仍需要 AccessEvent 计算请求量、成功率、延迟和容量，并在 trace 被采样时保留可检索的请求全貌。
+
+高流量服务只有在已有网关全量 access，或明确接受成功请求的事件关联不完整时，才应显式启用 access 采样；一旦启用，就不再保证每个 HTTP 语义事件都有 AccessEvent。失败结果仍由 `ResultKeepSampler` 强制保留：
+
 ```go
-log.WithSampler(log.EventKeepSampler{
-	KeepPrefixes: []string{"business.", "error.", "security.", "audit.", "probe."},
-	Fallback:     log.ResultKeepSampler{Ratio: 0.1},
-})
+log.WithSampler(log.NewEventTypeKeepSampler(
+	[]log.EventType{log.EventBusiness, log.EventError, log.EventSecurity, log.EventAudit, log.EventProbe},
+	log.ResultKeepSampler{Ratio: 0.1},
+))
 ```
+
+`EventKeepSampler` 仍保留用于按领域前缀采样；旧的类别前缀配置会按 `msg` 兼容识别。启用任意 AccessEvent 采样策略后，不再保证每个 HTTP 语义事件都有 AccessEvent。
 
 ---
 
@@ -240,16 +249,18 @@ log.WithSampler(log.EventKeepSampler{
 
 ```text
 go-observability/
-├── 🧩 根包 log                  # Event、Payload、Logger、Sampler、Masker
+├── 🧩 log/ 子包                # Event、Payload、Logger、Sampler、Masker
 ├── 🧨 errs/                    # 错误分类、堆栈策略与错误投影
 ├── 🚚 writer/
 │   ├── 📄 file/                # JSONL 文件 Writer
 │   ├── 🖥️ stdout/              # 标准输出 Writer
 │   └── 📡 otlp/                # OTLP gRPC Log Writer
 ├── ⚙️ telemetry/               # Trace、Metric、Log Provider 装配
-├── 🔌 middleware/
-│   ├── ginlog/                 # Gin access 日志
-│   └── recover/                # Gin panic 恢复与错误事件
+├── 🔌 middleware/               # 按框架体系分组（gin / http / grpc / kratos）
+│   ├── gin/                    # Gin：access / error / recover / security / audit / trace / metrics
+│   ├── http/                   # net/http：error / recover / security / audit / trace / metrics
+│   ├── grpc/                   # gRPC：trace / metrics 拦截器
+│   └── kratos/                 # kratos v3 传输适配
 ├── 🧪 example/                 # minimal、Gin、net/http、Metric、领域事件示例
 ├── 📊 observability/           # Collector、Loki、Tempo、Mimir、Grafana 参考栈
 └── 📚 docs/                    # 接入、配置、架构、安全与发布文档
@@ -260,6 +271,14 @@ go-observability/
 ---
 
 ## 📡 从本地 JSONL 切到 OTLP
+
+不部署 Collector 的小单体可直接使用 `telemetry.SetupFile`：它不会创建 OTLP
+exporter，只生成本地有效 trace/span 用于日志关联，并把 `service.name`、
+`service.version`、`service.instance.id`、`deployment.environment.name` 写入每条 JSONL。
+完整 Trace 树不会落盘；需要 Tempo 查询时再切换到 OTLP 模式。配置模板见
+[`example/config/file-only.example.yaml`](example/config/file-only.example.yaml)。
+带最低级别、输出路径和文件轮转的可运行配置见
+[`example/blackbox/config.example.yaml`](example/blackbox/config.example.yaml)。
 
 主示例通过环境变量选择出口：
 
@@ -300,6 +319,7 @@ docker compose -f observability/docker-compose.yml up -d
 | 默认覆盖 password、token、authorization 等凭证键 | 配置审计日志的防篡改存储与访问控制 |
 | 禁止 `ExtraAttrs` 覆盖 canonical 字段 | 制定日志保留期限与合规策略 |
 | 支持显式写入错误回调 | 监控 Writer 失败并建立告警 |
+| `InputGuard` 注入点：错误事件后按应用规则补发 `SecurityEvent` / `AuditEvent` | 风险分级/命中规则与输入摘要提取（`httperr.WithInputSummary`） |
 
 完整责任边界见 [安全指南](docs/security.md)。漏洞请通过 [GitHub 私密报告入口](https://github.com/formal-you/go-observability/security/advisories/new) 提交，不要公开利用细节。
 

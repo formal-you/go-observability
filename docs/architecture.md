@@ -8,24 +8,25 @@
 一句话定位：**go-observability 是 `slog` 与 OpenTelemetry 之间的语义层**——事件类型稳定、字段来源明确、错误可投影、日志可治理，三信号统一装配。它不替代 `slog` 或 OTel，而是把团队最容易失控的约定固化成可测试的 Go API。
 
 - **方案2「源即规范」**：属性键直接使用 OTel semconv 1.41.0 名 + `app.*` vendor 命名空间，字段名可追踪、不发明私有键。
-- **核心零依赖**：根包 `log` 只依赖标准库（`log/slog`、`net`、`time`、`fmt`、`strings`）；OTel SDK 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`、`example/*`。
+- **核心零依赖**：`log/` 包只依赖标准库（`log/slog`、`net`、`time`、`fmt`、`strings`）；OTel SDK 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`、`example/*`。
 - **批量导出分两层**：SDK 侧由 `telemetry.Config` 的批量导出间隔控制（trace 5s / metric 15s / log 1s），Collector 侧由 batch processor（timeout / send_batch_size）二次凑批；核心层每次 `Emit` 同步写出，不做批处理/定时器。
 - **出口可替换**：同一事件模型可投影到 JSONL / stdout / OTLP，业务埋点不因出口变化而重写。
+- **决策记录（ADR）**：错误模型（ErrorType / ErrorCode）等关键决策记录在 [docs/adr/](adr/README.md)，Review 时对照 ADR 判断实现是否漂移。
 
 ## 2. 分层架构
 
 | 层 | 包 | 职责 |
 | --- | --- | --- |
-| 事件核心 | 根包 `log` | 事件类型、属性键、字段归一化、Logger、采样与脱敏接口 |
+| 事件核心 | `log/` | 事件类型、属性键、字段归一化、Logger、采样与脱敏接口 |
 | 错误模型 | `errs` | 错误分类（ErrorKind）、低基数失败类别（ErrorType）、堆栈策略（StackRule） |
-| 错误投影 | 根包 `error_project.go` | 把 `errs.AppError` 沿错误链投影为 Business/Error 事件 |
+| 错误投影 | `log/error_project.go` | 把 `errs.AppError` 沿错误链投影为 Business/Error 事件 |
 | 写出 | `writer/file`、`writer/stdout`、`writer/otlp` | 把归一化事件写到不同后端（装配层，可替换） |
 | OTel 映射 | `internal/attrkv` | `slog.Attr` ↔ OTel 值转换 + LogRecord 顶层字段映射（唯一核心映射层） |
 | endpoint 校验 | `internal/otlpendpoint` | OTLP gRPC endpoint 统一校验与规范化（host:port / http(s) URL） |
 | 三信号装配 | `telemetry` | 创建并关闭 Trace / Metric / Log Provider，选择日志出口 |
-| HTTP/gRPC 集成 | `middleware/ginlog`、`middleware/recover`、`middleware/errresp`、`middleware/kratos` | Gin access 日志、panic 收口与统一错误响应；net/http 见 `example/nethttp`；kratos v3 见 `middleware/kratos`（HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter） |
+| HTTP/gRPC 集成 | `middleware/httperr`（契约核心）、`middleware/otelutil`（OTel 工具）、`middleware/gin`、`middleware/http`、`middleware/grpc`、`middleware/kratos` | 按框架体系分组：gin（Gin）、http（net/http）、grpc（gRPC）各含错误收口/access/链路/指标；kratos v3 见 `middleware/kratos`（HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter） |
 
-依赖方向：`errs` 与根包 `log` 互不依赖对方实现（根包经 `EventFromError` 消费 `errs.AppError` 接口，`errs` 不依赖根包）；`middleware` 依赖根包与 `errs`（ginlog 只依赖根包，errresp/recover 还依赖 `errs`）；`writer/*`、`telemetry` 依赖根包与 `internal/*`。
+依赖方向：`errs` 与 `log/` 互不依赖对方实现（log 包经 `EventFromError` 消费 `errs.AppError` 接口，`errs` 不依赖 log 包）；`middleware` 依赖 log 包与 `errs`（ginlog 只依赖 log 包，errresp/recover 还依赖 `errs`）；`writer/*`、`telemetry` 依赖 log 包与 `internal/*`。
 
 ## 3. 文件树（代码导航图）
 
@@ -37,7 +38,7 @@ go-observability/
 │   ├── pull_request_template.md
 │   └── workflows/ci.yml         # 双平台门禁：Ubuntu(verify/gofmt/vet/test/race/vuln) + Windows(vet/test)
 │
-├── 根包 log（零 OTel 依赖，只依赖标准库）
+├── log/                        # 核心日志包（零 OTel 依赖，只依赖标准库）
 │   ├── doc.go                   # 包注释：核心包零外部依赖承诺
 │   ├── types.go                 # 类型化枚举：EventType / EventName(三段式+Validate) / Level / Result / EventPayload
 │   ├── keys.go                  # 属性键常量：semconv 1.41.0 + app.* vendor 命名空间
@@ -46,7 +47,7 @@ go-observability/
 │   ├── events.go                # 六类事件结构体（EventMetadata + Data）
 │   ├── normalize.go             # 归一化：metadata+payload → 扁平 attrs；reservedKeys 过滤；零值省略
 │   ├── log.go                   # Logger / Writer / Sampler / Masker / ErrorHandler / Option
-│   ├── sampler.go               # ResultKeepSampler（高价值结果强制保留）+ EventKeepSampler（事件前缀全量）
+│   ├── sampler.go               # ResultKeepSampler + EventTypeKeepSampler（粗分类全量）+ EventKeepSampler（领域前缀）
 │   ├── sampler_rand.go          # 并发安全随机源（math/rand/v2）
 │   ├── masker.go                # FieldMasker：按键名递归脱敏（group/map/slice/LogValuer）
 │   ├── error_project.go         # EventFromError / LevelOf：errs.AppError → 事件投影
@@ -68,16 +69,19 @@ go-observability/
 │       ├── endpoint.go          # OTLP gRPC endpoint 校验与规范化
 │       └── endpoint_test.go
 │
-├── writer/                      # 写出后端（实现根包 log.Writer，可替换）
-│   ├── file/file.go             # JSONL 文件 Writer（append，并发安全，含 Close）
+├── writer/                      # 写出后端（实现 log 包 Writer，可替换）
+│   ├── file/file.go             # JSONL 文件 Writer（append/轮转，并发安全，含 Close）
 │   ├── stdout/stdout.go         # stdoutlog exporter 包装（本地演示）
 │   └── otlp/otlp.go             # OTLP gRPC Writer（BatchProcessor；可注入外部 LoggerProvider）
 │
-├── middleware/
-│   ├── ginlog/ginlog.go         # Gin access 事件中间件（status→level/result 映射、trace/request 提取）
-│   ├── errresp/errresp.go       # Gin 统一错误收口：读 c.Errors，按 errs.Kind 映射状态码/响应体并投影事件
-│   ├── recover/recover.go       # Gin panic 收口（构造 SystemError → EventFromError → 统一 500）
-│   └── kratos/kratos.go         # kratos v3 适配：HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter（errs/kratos 原生错误双识别）
+├── middleware/               # 按框架体系分组（gin / http / grpc / kratos），共享契约与工具独立成包
+│   ├── httperr/httperr.go       # 框架无关错误契约核心：Kind→状态码、安全 reason/message/metadata、扁平响应体、span 元数据
+│   ├── otelutil/otelutil.go     # 框架无关 OTel 工具：链路注入/提取、TraceExtractor
+│   ├── gin/                     # Gin 体系：AccessLog / ErrorResponse / Recover / SecurityLog / AuditLog / Trace / Metrics / Abort
+│   ├── http/                    # net/http 体系：ErrorResponse / Recover / SetError / SetSecurity / SetAudit / SecurityLog / AuditLog / Trace / Metrics
+│   ├── grpc/                    # gRPC 体系：Trace / Metrics unary 拦截器
+│   ├── kratos/                  # kratos v3 适配：HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter（httperr 契约 + kratos 原生错误双识别）
+│   └── internal/mwutil/         # 内部共享底层工具（状态码记录、路由/RPC 解析、span 收尾、直方图）
 │
 ├── telemetry/
 │   └── telemetry.go             # 三信号 Provider 装配 + Shutdown + NewLogWriter 出口选择
@@ -93,7 +97,7 @@ go-observability/
 │   ├── main.go                  # 主示例：Gin + telemetry + OTLP/JSONL 出口选择
 │   ├── config/                  # 应用 / Collector 配置模板（.env.example、docker-compose.example）
 │   ├── minimal/main.go          # 不依赖框架的最小 JSONL 示例
-│   ├── mall/                    # 领域事件注册表示范：business.* 事件名 + app.* 专属键
+│   ├── mall/                    # 领域事件注册表示范：order.* 事实名 + app.* 专属键
 │   ├── metrics/main.go          # 使用方定义 RED 与业务指标
 │   ├── nethttp/main.go          # 标准库 HTTP access 事件
 │   └── samber/main.go           # 与 samber slog handler 互操作
@@ -108,7 +112,7 @@ go-observability/
 ├── README.md                    # 项目首页（真源之一）
 ├── CHANGELOG.md / LICENSE / SECURITY.md / SUPPORT.md / CONTRIBUTING.md / CODE_OF_CONDUCT.md
 ├── go.mod / go.sum              # Go 1.26；OTel 依赖集中在装配层
-└── 根测试文件                    # 与根包同目录的黑盒/单元测试（见上）
+└── log/ 测试文件                # 与 log/ 包同目录的黑盒/单元测试（见上）
 ```
 
 > `logs/` 与 `example/logs/` 是示例运行产物（已被 `.gitignore` 忽略），不属于源码。
@@ -131,6 +135,8 @@ go-observability/
 
 - `msg` 即 `event_type`；`attrs` 是完整扁平字段（公共 metadata + payload）。
 - Logger 构造后配置只读，无需加锁；`Writer` / `Sampler` / `Masker` 需自行满足并发契约（服务端 Writer 必须支持多 goroutine 并发写）。
+- `NewLogger` 默认不配置 Sampler，所有事件全量写出。HTTP 接入推荐保持该默认，确保每个 HTTP 来源的 Business / Error / Security / Audit 事件都有同 trace/request 的 AccessEvent；显式启用 access 成功采样即表示接入方接受该关联不再完整。
+- Gin 注册顺序为 `Trace -> AccessLog -> Recover -> 其他链尾中间件`：AccessLog 必须包在 Recover / ErrorResponse / SecurityLog / AuditLog 外层，才能在 2xx、4xx、5xx 与 panic 收口后记录最终响应。健康检查由 `SkipPaths` 排除，不进入概率采样。
 
 ### 4.2 错误投影（`errs` → 事件）
 
@@ -146,7 +152,22 @@ go-observability/
   -> 进入 4.1 同一条 Emit 管线写出
 ```
 
-错误事件名必须由调用方从 `types.go` 常量注册表传入，`EventFromError` 不自动派生；Trace/Span 由调用方从 span context 提取后填入 `md`。Gin 接入时，显式业务/系统错误由 `middleware/errresp` 在链尾统一收口（`c.Errors` + `Abort`），panic 仍由 `middleware/recover` 处理，二者组合时一个请求最多一个错误出口。
+错误事件名必须由调用方从 `types.go` 常量注册表传入，`EventFromError` 不自动派生；Trace/Span 由调用方从 span context 提取后填入 `md`。Gin 接入时，显式业务/系统错误由 `middleware/errresp` 在链尾统一收口（`c.Errors` + `Abort`），panic 仍由 `middleware/recover` 处理，二者组合时一个请求的错误事件唯一；经 InputGuard 注入的安全/审计事件可与错误事件并存（见 4.3）。
+
+### 4.3 非法输入的安全/审计事件（方案 D，ADR-0007）
+
+非法输入穿透校验触发系统错误时，错误收口（errresp / recover）仍只投影一条
+`ErrorEvent`（错误出口唯一）；接入方在 handler 用 `httperr.WithInputSummary` 把
+`InputSummary`（app.input_field / app.input_hash / app.input_truncated）挂到 ctx，
+并配置 `InputGuard`——收口在写出 ErrorEvent 后调用 guard，按风险分级/命中规则补发
+`SecurityEvent`（安全聚合 / SIEM）与 `AuditEvent`（合规审计），与错误事件并存，
+共享同一 ctx（trace/span 自动关联）。输入只记 app.* 摘要，不落原始 body（配合 FieldMasker）。
+
+除错误路径的 `InputGuard` 外，Security / Audit 事件另有独立中间件（与 access / error 同级）：
+`ginmw.SecurityLog` / `httpmw.SecurityLog` 的 `Decide` 由认证/授权中间件提供——链尾自动调用
+并写出 SecurityEvent（缺省 WARN）；`ginmw.AuditLog` / `httpmw.AuditLog` 的 `Describe` 在链尾
+组装并写出 AuditEvent（缺省 INFO）。两者都从 ctx 关联 trace/span，返回 nil 或未挂载载荷时
+直接放行；深层代码判定场景可回退用 `SetSecurity` / `SetAudit` 挂载。
 
 ## 5. 双投影：同一事件两种出口
 
@@ -160,9 +181,11 @@ go-observability/
 
 顶层字段映射集中在 `internal/attrkv.Record`（唯一核心映射层）。**不要**为 OTLP 把顶层字段塞回属性，也**不要**为 file 把属性拆掉；两边共享同一份归一化 attrs。
 
+file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `level` → `msg` → `trace_id`/`span_id`/`request_id`/`latency_ms` → `event.name` → 其余事件字段 → `app.result` 收尾；跨事件保持一致，避免同一字段（尤其 `app.result`）在不同日志里相对位置漂移。由 `writer/file` 实现，`example/blackbox` 测试锁定。
+
 ## 6. 关键设计决策与不可违反边界
 
-1. **三段式事件名**：`类别.模块.操作`（如 `access.http.request`），必须经 `Validate`；框架级事件登记在 `types.go`，领域 `business.*` 由接入方自建注册表（见 `example/mall`），禁止在中间件/生产埋点里散落手写字符串。
+1. **三段式事件名**：`领域.对象.事实`（如 `http.request.completed`），必须经 `Validate`；`msg` 已承载六类粗分类，因此首段不得使用 `access/business/error/security/audit/probe`。框架级事件登记在 `types.go`，领域事件由接入方自建注册表（见 `example/mall`），禁止在中间件/生产埋点里散落手写字符串。
 2. **semconv 1.41.0 键名**：路径用 `url.path`（不是 `http.request.path`）；代码位置用 `code.function.name` / `code.file.path` / `code.line.number`。
 3. **顶层映射集中**：新增保留键必须同时更新 `attrkv.recordAttrKeys` 与 `normalize.reservedKeys`，保证 OTLP 剥离与 file 保留一致。
 4. **公共字段登记**：核心公共字段必须在 `keys.go` 登记；vendor 一律 `app.*`；领域专属键（`order_id` 等）由接入方自建，不进核心 `keys.go`。
@@ -173,22 +196,23 @@ go-observability/
 ## 7. 三信号装配（`telemetry`）
 
 - `Setup`：装配并全局安装 Trace（头部采样 + 批量 5s/512）、Metric（PeriodicReader 15s）、Log（批量 1s/512）Provider 与 W3C propagator；任一步失败回滚已创建资源，不留半初始化状态。
+- `SetupFile`：不创建 exporter，仅安装 `ParentBased(NeverSample())` 的本地 TraceProvider 与 W3C propagator；生成有效 trace/span 供 JSONL 关联，但不保存完整 Trace 树。
 - `SetupFromEnvironment`：从 `OTEL_SDK_DISABLED` 读启用状态、`OTEL_EXPORTER_OTLP_ENDPOINT` 读 endpoint（缺省 `127.0.0.1:4317`）。
-- `Providers.NewLogWriter`：复用 Setup 固化决策——显式配置 endpoint 且已启用 → OTLP Writer（共享 Resource/LoggerProvider）；否则写本地 JSONL（`file` Writer），离线可核对。
+- `Providers.NewLogWriter`：复用 Setup 固化决策——显式配置 endpoint 且已启用 → OTLP Writer（共享 Resource/LoggerProvider）；否则写本地 JSONL，并把 Resource 中的 `service.name`、`service.version`、`service.instance.id`、`deployment.environment.name` 注入每条记录。
 - `Providers.Shutdown`：进程退出前调用；顺序刻意先 log 再 metric 后 trace，保证日志携带的 span 上下文关联完整。
 
 ## 8. 扩展边界（接入方）
 
 1. 在业务自己的 observability 包中声明 `EventName` 常量（`NewEventName` 或经 `Validate`），并写测试校验格式。
 2. 使用 `BusinessPayload.ExtraAttrs` 注入领域属性（`app.*` 键），避免把领域字段加入核心注册表；canonical 键与保留键会被过滤。
-3. 新增写出后端：在 `writer/` 下新建包，实现根包 `log.Writer`（明确并发语义，提供 `Close`）。
+3. 新增写出后端：在 `writer/` 下新建包，实现 `log.Writer`（明确并发语义，提供 `Close`）。
 4. 公共 schema 或 API 改动必须同步 README、docs、示例与 CHANGELOG（改代码与改文档应在同一提交内完成）。
 
 ## 9. 代码 Review 检查点
 
 | Review 焦点 | 看什么 | 验证方式 |
 | --- | --- | --- |
-| 核心零依赖 | 根包 `log` 的 import 是否仅标准库 | `go list -deps ./` 或 grep 根包 import |
+| 核心零依赖 | `log/` 包的 import 是否仅标准库 | `go list -deps ./` 或 grep log 包 import |
 | 事件名规范性 | `types.go` 注册表、`Validate` 实现与测试 | `go test ./...` |
 | 键名 semconv | `keys.go` 与 `$GOMODCACHE/go.opentelemetry.io/otel@v1.45.0/semconv/v1.41.0` 对照 | 人工比对 |
 | 归一化/保留键 | `normalize.go reservedKeys` 与 `attrkv.recordAttrKeys` 一致性 | `go test ./... -run Record` |

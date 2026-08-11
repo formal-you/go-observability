@@ -1,5 +1,5 @@
 // Command example 演示 go-observability 的三信号装配（telemetry）+ Gin 全链路中间件
-// （trace / recover / ginlog / metrics / errresp）。
+// （ginmw.Trace / Recover / AccessLog / Metrics / ErrorResponse）。
 // 默认把日志写入当前工作目录的 logs/events.jsonl；设置 OTEL_EXPORTER_OTLP_ENDPOINT 时改走 OTLP。
 // 设 OTEL_SDK_DISABLED=true 可离线运行（trace/metric/log provider 全部 noop）。
 package main
@@ -12,13 +12,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/formal-you/go-observability"
 	"github.com/formal-you/go-observability/errs"
-	"github.com/formal-you/go-observability/middleware/errresp"
-	"github.com/formal-you/go-observability/middleware/ginlog"
-	"github.com/formal-you/go-observability/middleware/metrics"
-	recovermw "github.com/formal-you/go-observability/middleware/recover"
-	tracemw "github.com/formal-you/go-observability/middleware/trace"
+	"github.com/formal-you/go-observability/log"
+	ginmw "github.com/formal-you/go-observability/middleware/gin"
 	"github.com/formal-you/go-observability/telemetry"
 )
 
@@ -48,22 +44,23 @@ func main() {
 	logger := log.NewLogger(w)
 
 	// 全链路中间件（注册顺序即执行顺序）：
-	// trace（server span，注入 ctx）→ recover（panic 收口）→ ginlog（access 事件）
+	// trace（server span，注入 ctx）→ ginlog（access 事件）→ recover（panic 收口）
 	// → metrics（http.server.request.duration）→ errresp（显式错误收口）。
+	// AccessLog 必须包在 Recover 外层，才能在 panic 被收口后记录最终 500 响应。
 	r := gin.New()
 	r.Use(
-		tracemw.NewGinMiddleware(tracemw.Config{}),
-		recovermw.Middleware(recovermw.Config{Logger: logger}),
-		ginlog.Middleware(ginlog.Config{Logger: logger}),
-		metrics.NewGinMiddleware(metrics.Config{}),
-		errresp.Middleware(errresp.Config{Logger: logger}),
+		ginmw.Trace(ginmw.TraceConfig{}),
+		ginmw.AccessLog(ginmw.AccessConfig{Logger: logger}),
+		ginmw.Recover(ginmw.RecoverConfig{Logger: logger}),
+		ginmw.Metrics(ginmw.MetricsConfig{}),
+		ginmw.ErrorResponse(ginmw.ErrorConfig{Logger: logger}),
 	)
 	r.GET("/api/v1/products/:id", func(c *gin.Context) {
 		c.JSON(200, gin.H{"id": c.Param("id")})
 	})
 	r.POST("/api/v1/orders", func(c *gin.Context) {
 		// 业务拒绝：errresp.Abort 挂载错误，收口中间件决定状态码/响应体并写错误事件。
-		errresp.Abort(c, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "business.order.stock_insufficient", "库存不足"))
+		ginmw.Abort(c, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "business.order.stock_insufficient", "库存不足"))
 	})
 	if err := r.Run(":8080"); err != nil {
 		slog.Error("server exit", "err", err)

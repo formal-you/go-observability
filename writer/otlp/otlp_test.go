@@ -125,7 +125,7 @@ func TestWriteRecordShape(t *testing.T) {
 	if err := w.Write(context.Background(), "access",
 		slog.Time("timestamp", ts),
 		slog.String("level", "WARN"),
-		slog.String("event.name", "access.http.request"),
+		slog.String("event.name", "http.request.completed"),
 		slog.String("trace_id", "949058d5c20153624d52da3358038026"),
 		slog.String("span_id", "bba473e9b3034af6"),
 		slog.String("http.request.method", "GET"),
@@ -142,8 +142,8 @@ func TestWriteRecordShape(t *testing.T) {
 	if rec.Severity() != otelog.SeverityWarn || rec.SeverityText() != "WARN" {
 		t.Errorf("Severity = %v / %q, want WARN", rec.Severity(), rec.SeverityText())
 	}
-	if rec.EventName() != "access.http.request" {
-		t.Errorf("EventName = %q, want access.http.request", rec.EventName())
+	if rec.EventName() != "http.request.completed" {
+		t.Errorf("EventName = %q, want http.request.completed", rec.EventName())
 	}
 
 	keys := recordKeys(&rec)

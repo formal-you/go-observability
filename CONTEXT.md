@@ -15,8 +15,12 @@ _Avoid_: 日志行、log message（指结构化事件时）
 _Avoid_: 日志级别（Level 是另一维度）、EventName
 
 **EventName**:
-事件的细名，三段式「类别.模块.操作」（如 access.http.request、business.order.paid），写入 event.name，三段式必须经 Validate。
-_Avoid_: 随意字符串、message、EventType
+事件的稳定事实名，三段式「领域.对象.事实」（如 http.request.completed、order.payment.succeeded），写入 event.name；粗分类已由 msg/EventType 承载，事实名不得重复六类前缀。
+_Avoid_: 类别.模块.操作、随意字符串、message、EventType 前缀
+
+**ErrorCode**:
+可选的稳定具体错误码(业务错误码：（服务/模块）.（场景/操作）.（结果/具体错误）)，用于客服、业务查询和精确聚合，统一写入 app.error_code；它不决定 EventName，也不替代低基数 error.type。
+_Avoid_: app.business_code、app.operation、从错误码自动生成 EventName
 
 **Level**:
 语义化级别 DEBUG / INFO / WARN / ERROR，映射 slog.Level 与 OTel SeverityNumber。
@@ -29,6 +33,12 @@ _Avoid_: HTTP 状态码（状态码是访问事件的传输字段，不等于 Re
 **高价值结果（High-value Result）**:
 failed / error / blocked / denied 四类，采样器强制保留。
 _Avoid_: 错误（仅指 error 一类）、异常
+
+**安全/审计事件并存（Security/Audit Co-occurrence）**:
+错误事件（ErrorEvent）每请求唯一（错误出口唯一）；经 InputGuard 注入的安全事件
+（SecurityEvent）与审计事件（AuditEvent）可与错误事件并存，三者记录视角不同——
+故障排障 / 安全聚合 / 合规审计，不是对同一失败的重复记录。
+_Avoid_: 用多条错误事件表达同一失败
 
 ### 数据治理
 
@@ -53,7 +63,7 @@ Collector 侧等 trace 完整到达后按错误 / 概率 / 属性策略决定保
 _Avoid_: 后端采样（模糊）
 
 **Sampler**:
-采样判定器，返回保留或丢弃；ResultKeepSampler 按 Result 判定，EventKeepSampler 按 event.name 前缀 + Fallback 判定。
+采样判定器，返回保留或丢弃；ResultKeepSampler 按 Result 判定，EventTypeKeepSampler 按 msg/EventType 粗分类判定，EventKeepSampler 按 event.name 领域前缀判定。
 _Avoid_: 采样频率、过滤器
 
 **Masker（脱敏）**:
@@ -137,11 +147,13 @@ _Avoid_: 完整事件内容
 _Avoid_: 日志级别（WARN/ERROR 是 Level 维度）、错误码
 
 **低基数失败类别（ErrorType）**:
-error.type 的低基数失败类别，段式命名（db./redis./mq./http./runtime.…），用于聚合与告警路由。
+error.type 的低基数失败类别，采用 domain.reason 格式（db./redis./mq./http./runtime.…），用于聚合与告警路由。
+与业务错误码（ErrorCode）是「宏观分类 > 微观错误码」的多对一关系：多个三段式
+ErrorCode 归入同一个低基数 ErrorType，ErrorType 不是对 ErrorCode 的细化。
 _Avoid_: 错误消息（消息是高基数文本，类别是低基数标签）
 
 **业务错误码（ErrorCode）**:
-业务错误码：模块.场景.操作（如 ORDER.CREATE.STOCK_INSUFFICIENT）；由 BizError 承载，SystemError 可经 WithCode 关联可选码。
+业务错误码：（服务/模块）.（场景/操作）.（结果/具体错误）（如 ORDER.CREATE.STOCK_INSUFFICIENT）；由 BizError 承载，SystemError 可经 WithCode 关联可选码。
 _Avoid_: ErrorType、error message
 
 **错误投影（Error Projection）**:
@@ -156,6 +168,11 @@ _Avoid_: 重试逻辑（本仓库只记录元数据，不执行重试）
 堆栈记录策略：must（构造点必记）/ optional（按需）/ none（不记），按 error.type 前缀生效，控制体积。
 _Avoid_: 一律记堆栈（会让高频类别体积失控）
 
+**输入摘要（Input Summary）**:
+非法输入的关键字段名 / 哈希 / 截断文本，由接入方提取并经 `httperr.WithInputSummary`
+挂到 ctx，供错误收口的 `InputGuard` 读取；只记 `app.*` 摘要，不落原始 body。
+_Avoid_: 原始请求 body / 完整 payload（高基数且可能含 PII/凭证）
+
 ### OTel 基础设施与协议
 
 **信号（Signal）**:
@@ -163,7 +180,7 @@ OTel 的三大数据类型：trace / metric / log。
 _Avoid_: 数据源、Writer
 
 **SDK 与 API**:
-OTel 分层：API 定义接口与类型，SDK 提供实现（Provider / Exporter / Reader）；本项目根包只依赖 slog 标准库，OTel SDK 集中在 telemetry / writer / middleware。
+OTel 分层：API 定义接口与类型，SDK 提供实现（Provider / Exporter / Reader）；本项目 log 包只依赖 slog 标准库，OTel SDK 集中在 telemetry / writer / middleware。
 _Avoid_: 混用两层的概念
 
 **OTLP**:
@@ -197,7 +214,7 @@ _Avoid_: 传播（跨服务传递）——TraceExtractor 是进程内补全
 _Avoid_: 用 Collector 配置描述 SDK 采样率或导出间隔
 
 **Exporter**:
-telemetry 侧的 OTel 导出器（otlptrace / otlpmetric / otlplog），与根包 Writer 不同层。
+telemetry 侧的 OTel 导出器（otlptrace / otlpmetric / otlplog），与 log 包 Writer 不同层。
 _Avoid_: Writer
 
 **Provider**:
@@ -205,7 +222,7 @@ trace / metric / log 三信号 Provider 的装配与全局安装（otel / global
 _Avoid_: Exporter
 
 **Resource**:
-服务身份与低基数标签（service.name、service.version、deployment.environment、region、instance）。
+服务身份与低基数标签（service.name、service.version、service.instance.id、deployment.environment.name、region）。
 _Avoid_: 属性（attribute 是事件字段维度）
 
 **Pipeline（管线）**:

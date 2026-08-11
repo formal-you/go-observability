@@ -11,7 +11,7 @@ import (
 	"github.com/samber/slog-multi"
 	"github.com/samber/slog-sampling"
 
-	obs "github.com/formal-you/go-observability"
+	obs "github.com/formal-you/go-observability/log"
 )
 
 func main() {
@@ -53,7 +53,7 @@ func accessEvent() obs.AccessEvent {
 			LatencyMS: 12,
 		},
 		Data: obs.AccessPayload{
-			EventName: obs.EventNameAccessHTTPRequest,
+			EventName: obs.EventNameHTTPRequestCompleted,
 			Subject:   obs.Subject{UserID: "u_12345"},
 			HTTP: obs.HTTPInfo{
 				Method:     "GET",
@@ -77,9 +77,9 @@ func businessEvent() obs.BusinessEvent {
 			RequestID: "req-001",
 		},
 		Data: obs.BusinessPayload{
-			EventName:    obs.EventName("business.order.paid"),
-			BusinessCode: "ORD-200",
-			Result:       obs.ResultSuccess,
+			EventName: obs.EventName("order.payment.succeeded"),
+			ErrorCode: "ORD-200",
+			Result:    obs.ResultSuccess,
 		},
 	}
 }

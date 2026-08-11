@@ -21,6 +21,6 @@
 
 - [ ] 创建并推送带注释标签：`git tag -a v0.1.0 -m "v0.1.0"`，然后 `git push origin v0.1.0`。
 - [ ] 在一个全新的临时模块中执行 `go get github.com/formal-you/go-observability@v0.1.0`，编译 README 示例。
-- [ ] 打开对应 pkg.go.dev 页面，确认根包、`telemetry`、writer 和 middleware 文档可索引。
+- [ ] 打开对应 pkg.go.dev 页面，确认 log 包、`telemetry`、writer 和 middleware 文档可索引。
 - [ ] 从仓库外网络检查 GitHub release、tag、CI badge、源码链接和文档相对链接。
 - [ ] 只有以上检查全部通过后，才在 README 展示正式版本安装命令、Go Reference badge 和稳定支持声明。

@@ -1,0 +1,24 @@
+# Blackbox 应用级配置模板。由 example/blackbox 读取，不是核心库的自动配置入口。
+service:
+  name: go-observability-blackbox
+  version: dev
+  instance_id: blackbox-local
+  environment: local
+
+logs:
+  # 最低写出级别：DEBUG / INFO / WARN / ERROR。
+  level: INFO
+  # 相对路径以启动进程的当前工作目录为基准。
+  output_path: example/blackbox/sample.jsonl
+  # 黑盒验收需要结果可重复；常驻生产进程通常设为 false。
+  overwrite_on_start: true
+  rotation:
+    enabled: true
+    max_size_mb: 10
+    max_backups: 5
+    max_age_days: 7
+    compress: true
+    use_local_time: true
+
+otlp:
+  endpoint: 127.0.0.1:4317
