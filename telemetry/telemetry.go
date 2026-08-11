@@ -3,46 +3,20 @@
 package telemetry
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"log/slog"
-	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/log/global"
 	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/propagation"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/formal-you/go-observability/internal/otlpendpoint"
-	"github.com/formal-you/go-observability/log"
 	"github.com/formal-you/go-observability/writer/file"
-	"github.com/formal-you/go-observability/writer/otlp"
 	stdoutwriter "github.com/formal-you/go-observability/writer/stdout"
-)
-
-const defaultEndpoint = "127.0.0.1:4317"
-
-const (
-	defaultTraceBatchTimeout    = 5 * time.Second
-	defaultMetricExportInterval = 15 * time.Second
-	defaultLogBatchTimeout      = 1 * time.Second
-	defaultTraceSampleRatio     = 0.1
-	defaultExportBatchSize      = 512
-	defaultLogQueueSize         = 2048
 )
 
 // LogOutput selects the log Writer created by Runtime.NewWriter.
@@ -130,10 +104,7 @@ type RuntimeStats struct {
 
 // Stats 返回当前 Runtime 的导出错误快照。
 func (r *Runtime) Stats() RuntimeStats {
-	if r == nil {
-		return RuntimeStats{}
-	}
-	if r.counters == nil {
+	if r == nil || r.counters == nil {
 		return RuntimeStats{}
 	}
 	return RuntimeStats{LogExportErrors: r.counters.logExportErrors.Load()}
@@ -143,354 +114,8 @@ func (r *Runtime) Stats() RuntimeStats {
 // Deprecated: use Runtime.
 type Providers = Runtime
 
-// NewRuntime creates OTLP-backed providers without installing them globally.
-func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
-	if !cfg.Enabled {
-		output := cfg.LogOutput
-		if output == "" || output == LogOutputOTLP {
-			output = LogOutputFile
-		}
-		return &Runtime{logOutput: output}, nil
-	}
-	if err := normalizeAndValidateConfig(&cfg); err != nil {
-		return nil, err
-	}
-	endpoint, err := endpointURL(defaultIfEmpty(strings.TrimSpace(cfg.Endpoint), defaultEndpoint))
-	if err != nil {
-		return nil, err
-	}
-	res := resourceForConfig(cfg)
-	counters := new(runtimeCounters)
-
-	traceExporter := cfg.TraceExporter
-	ownsTraceExporter := false
-	if traceExporter == nil {
-		traceExporter, err = otlptracegrpc.New(ctx, otlptracegrpc.WithEndpointURL(endpoint))
-		if err != nil {
-			return nil, fmt.Errorf("telemetry: create trace exporter: %w", err)
-		}
-		ownsTraceExporter = true
-	}
-	metricReader := cfg.MetricReader
-	ownsMetricReader := false
-	if metricReader == nil {
-		metricExporter, metricErr := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithEndpointURL(endpoint))
-		if metricErr != nil {
-			if ownsTraceExporter {
-				_ = traceExporter.Shutdown(ctx)
-			}
-			return nil, fmt.Errorf("telemetry: create metric exporter: %w", metricErr)
-		}
-		metricReader = sdkmetric.NewPeriodicReader(metricExporter, sdkmetric.WithInterval(cfg.MetricExportInterval))
-		ownsMetricReader = true
-	}
-	var loggerProvider *sdklog.LoggerProvider
-	if cfg.LogOutput == LogOutputOTLP {
-		logExporter, err := otlploggrpc.New(ctx, otlploggrpc.WithEndpointURL(endpoint))
-		if err != nil {
-			if ownsMetricReader {
-				_ = metricReader.Shutdown(ctx)
-			}
-			if ownsTraceExporter {
-				_ = traceExporter.Shutdown(ctx)
-			}
-			return nil, fmt.Errorf("telemetry: create log exporter: %w", err)
-		}
-		loggerProvider = sdklog.NewLoggerProvider(
-			sdklog.WithProcessor(sdklog.NewBatchProcessor(countingLogExporter{delegate: logExporter, errors: &counters.logExportErrors},
-				sdklog.WithExportInterval(cfg.LogBatchTimeout),
-				sdklog.WithExportMaxBatchSize(defaultExportBatchSize),
-				sdklog.WithMaxQueueSize(cfg.LogQueueSize),
-			)),
-			sdklog.WithResource(res),
-		)
-	}
-
-	return &Runtime{
-		resource: res,
-		tracerProvider: sdktrace.NewTracerProvider(
-			sdktrace.WithBatcher(traceExporter, sdktrace.WithBatchTimeout(cfg.TraceBatchTimeout)),
-			sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.TraceSampleRatio))),
-			sdktrace.WithResource(res),
-		),
-		meterProvider: sdkmetric.NewMeterProvider(
-			sdkmetric.WithReader(metricReader),
-			sdkmetric.WithResource(res),
-		),
-		loggerProvider: loggerProvider,
-		logOutput:      cfg.LogOutput,
-		fileMetadata:   resourceMetadata(res),
-		counters:       counters,
-	}, nil
-}
-
-// NewFileRuntime creates a local NeverSample trace provider and no exporter.
-func NewFileRuntime(cfg Config) (*Runtime, error) {
-	if strings.TrimSpace(cfg.ServiceName) == "" {
-		return nil, errors.New("telemetry: service name is required")
-	}
-	if cfg.Environment == "" {
-		cfg.Environment = "development"
-	}
-	res := resourceForConfig(cfg)
-	return &Runtime{
-		resource: res,
-		tracerProvider: sdktrace.NewTracerProvider(
-			sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.NeverSample())),
-			sdktrace.WithResource(res),
-		),
-		logOutput:    LogOutputFile,
-		fileMetadata: resourceMetadata(res),
-	}, nil
-}
-
-func normalizeAndValidateConfig(cfg *Config) error {
-	if strings.TrimSpace(cfg.ServiceName) == "" {
-		return errors.New("telemetry: service name is required")
-	}
-	switch cfg.LogOutput {
-	case LogOutputFile, LogOutputOTLP, LogOutputStdout, LogOutputNone:
-	default:
-		return fmt.Errorf("telemetry: invalid log output %q", cfg.LogOutput)
-	}
-	if cfg.TraceSampleRatio == 0 {
-		cfg.TraceSampleRatio = defaultTraceSampleRatio
-	}
-	if cfg.TraceSampleRatio < 0 || cfg.TraceSampleRatio > 1 {
-		return errors.New("telemetry: trace sample ratio must be in (0, 1]")
-	}
-	if cfg.TraceBatchTimeout == 0 {
-		cfg.TraceBatchTimeout = defaultTraceBatchTimeout
-	}
-	if cfg.TraceBatchTimeout < 0 {
-		return errors.New("telemetry: trace batch timeout must be positive")
-	}
-	if cfg.MetricExportInterval == 0 {
-		cfg.MetricExportInterval = defaultMetricExportInterval
-	}
-	if cfg.MetricExportInterval < 0 {
-		return errors.New("telemetry: metric export interval must be positive")
-	}
-	if cfg.LogBatchTimeout == 0 {
-		cfg.LogBatchTimeout = defaultLogBatchTimeout
-	}
-	if cfg.LogBatchTimeout < 0 {
-		return errors.New("telemetry: log batch timeout must be positive")
-	}
-	if cfg.LogQueueSize == 0 {
-		cfg.LogQueueSize = defaultLogQueueSize
-	}
-	if cfg.LogQueueSize < 0 {
-		return errors.New("telemetry: log queue size must be positive")
-	}
-	if cfg.Environment == "" {
-		cfg.Environment = "development"
-	}
-	return nil
-}
-
-// InstallGlobal installs this Runtime's non-nil providers and the W3C
-// propagator. The returned restore function is idempotent. Nested installs are
-// supported when their restore functions are called in LIFO order.
-func (r *Runtime) InstallGlobal() func() {
-	if r == nil || (r.tracerProvider == nil && r.meterProvider == nil && r.loggerProvider == nil) {
-		return func() {}
-	}
-	oldTrace := otel.GetTracerProvider()
-	oldMeter := otel.GetMeterProvider()
-	oldLogger := global.GetLoggerProvider()
-	oldPropagator := otel.GetTextMapPropagator()
-	if r.tracerProvider != nil {
-		otel.SetTracerProvider(r.tracerProvider)
-	}
-	if r.meterProvider != nil {
-		otel.SetMeterProvider(r.meterProvider)
-	}
-	if r.loggerProvider != nil {
-		global.SetLoggerProvider(r.loggerProvider)
-	}
-	otel.SetTextMapPropagator(w3cPropagator())
-
-	var once sync.Once
-	restore := func() {
-		once.Do(func() {
-			if r.loggerProvider != nil {
-				global.SetLoggerProvider(oldLogger)
-			}
-			if r.meterProvider != nil {
-				otel.SetMeterProvider(oldMeter)
-			}
-			if r.tracerProvider != nil {
-				otel.SetTracerProvider(oldTrace)
-			}
-			otel.SetTextMapPropagator(oldPropagator)
-		})
-	}
-	r.restoreMu.Lock()
-	r.restores = append(r.restores, restore)
-	r.restoreMu.Unlock()
-	return restore
-}
-
-func w3cPropagator() propagation.TextMapPropagator {
-	return propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
-}
-
-// NewWriter creates the explicitly selected log output.
-func (r *Runtime) NewWriter(ctx context.Context, cfg WriterConfig) (log.Writer, error) {
-	if r == nil {
-		return nil, errors.New("telemetry: nil runtime")
-	}
-	switch r.logOutput {
-	case LogOutputFile:
-		if strings.TrimSpace(cfg.FilePath) == "" {
-			return nil, errors.New("telemetry: file output requires file path")
-		}
-		if len(cfg.StdoutOptions) != 0 {
-			return nil, errors.New("telemetry: stdout options do not apply to file output")
-		}
-		opts := append([]file.Option(nil), cfg.FileOptions...)
-		opts = append(opts, file.WithResourceMetadata(r.fileMetadata))
-		return file.New(cfg.FilePath, opts...)
-	case LogOutputOTLP:
-		if cfg.FilePath != "" || len(cfg.FileOptions) != 0 || len(cfg.StdoutOptions) != 0 {
-			return nil, errors.New("telemetry: writer options do not apply to otlp output")
-		}
-		if r.loggerProvider == nil {
-			return nil, errors.New("telemetry: otlp output requires logger provider")
-		}
-		return otlp.New(ctx, otlp.WithLoggerProvider(r.loggerProvider), otlp.WithResource(r.resource))
-	case LogOutputStdout:
-		if cfg.FilePath != "" || len(cfg.FileOptions) != 0 {
-			return nil, errors.New("telemetry: file options do not apply to stdout output")
-		}
-		opts := append([]stdoutwriter.Option(nil), cfg.StdoutOptions...)
-		opts = append(opts, stdoutwriter.WithResource(r.resource))
-		return stdoutwriter.New(ctx, opts...)
-	case LogOutputNone:
-		if cfg.FilePath != "" || len(cfg.FileOptions) != 0 || len(cfg.StdoutOptions) != 0 {
-			return nil, errors.New("telemetry: writer options do not apply to none output")
-		}
-		return noopWriter{}, nil
-	default:
-		return nil, fmt.Errorf("telemetry: invalid log output %q", r.logOutput)
-	}
-}
-
-type noopWriter struct{}
-
-func (noopWriter) Write(context.Context, string, ...slog.Attr) error { return nil }
-
-type countingLogExporter struct {
-	delegate sdklog.Exporter
-	errors   *atomic.Uint64
-}
-
-func (e countingLogExporter) Export(ctx context.Context, records []sdklog.Record) error {
-	err := e.delegate.Export(ctx, records)
-	if err != nil {
-		e.errors.Add(1)
-	}
-	return err
-}
-
-func (e countingLogExporter) Shutdown(ctx context.Context) error {
-	return e.delegate.Shutdown(ctx)
-}
-
-func (e countingLogExporter) ForceFlush(ctx context.Context) error {
-	err := e.delegate.ForceFlush(ctx)
-	if err != nil {
-		e.errors.Add(1)
-	}
-	return err
-}
-
-// Setup creates a Runtime using legacy endpoint-based output selection and
-// installs it globally.
-// Deprecated: use NewRuntime and Runtime.InstallGlobal.
-func Setup(ctx context.Context, cfg Config) (*Runtime, error) {
-	if cfg.Enabled {
-		if strings.TrimSpace(cfg.Endpoint) != "" {
-			cfg.LogOutput = LogOutputOTLP
-		} else {
-			cfg.LogOutput = LogOutputFile
-		}
-	}
-	r, err := NewRuntime(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
-	if !cfg.Enabled {
-		r.logOutput = LogOutputFile
-	}
-	r.InstallGlobal()
-	return r, nil
-}
-
-// SetupFile creates a local file Runtime and installs it globally.
-// Deprecated: use NewFileRuntime and Runtime.InstallGlobal.
-func SetupFile(cfg Config) (*Runtime, error) {
-	r, err := NewFileRuntime(cfg)
-	if err != nil {
-		return nil, err
-	}
-	r.InstallGlobal()
-	return r, nil
-}
-
-// SetupFromEnvironment applies the legacy environment mapping before Setup.
-// Deprecated: use NewRuntime and explicit Config fields.
-func SetupFromEnvironment(ctx context.Context, cfg Config) (*Runtime, error) {
-	cfg.Enabled = EnabledFromEnvironment()
-	if strings.TrimSpace(cfg.Endpoint) == "" {
-		cfg.Endpoint = strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
-	}
-	return Setup(ctx, cfg)
-}
-
-// NewLogWriter maps the legacy path and file options to NewWriter.
-// Deprecated: use Runtime.NewWriter.
-func (r *Runtime) NewLogWriter(ctx context.Context, jsonlPath string, fileOpts ...file.Option) (log.Writer, error) {
-	if r != nil && r.logOutput == LogOutputOTLP {
-		return r.NewWriter(ctx, WriterConfig{})
-	}
-	return r.NewWriter(ctx, WriterConfig{FilePath: jsonlPath, FileOptions: fileOpts})
-}
-
-// Shutdown restores globals first, then shuts down log, metric, and trace.
-func (r *Runtime) Shutdown(ctx context.Context) error {
-	if r == nil {
-		return nil
-	}
-	r.shutdown.Do(func() {
-		r.restoreMu.Lock()
-		for i := len(r.restores) - 1; i >= 0; i-- {
-			r.restores[i]()
-		}
-		r.restoreMu.Unlock()
-		var errs []error
-		if r.loggerProvider != nil {
-			errs = appendError(errs, r.loggerProvider.Shutdown(ctx))
-		}
-		if r.meterProvider != nil {
-			errs = appendError(errs, r.meterProvider.Shutdown(ctx))
-		}
-		if r.tracerProvider != nil {
-			errs = appendError(errs, r.tracerProvider.Shutdown(ctx))
-		}
-		r.shutdownErr = errors.Join(errs...)
-	})
-	return r.shutdownErr
-}
-
-func appendError(errs []error, err error) []error {
-	if err != nil {
-		return append(errs, err)
-	}
-	return errs
-}
-
+// Tracer returns a tracer from this Runtime, or the process global provider for
+// a nil/unconfigured Runtime.
 func (r *Runtime) Tracer(name string) trace.Tracer {
 	if r == nil || r.tracerProvider == nil {
 		return otel.Tracer(name)
@@ -498,6 +123,8 @@ func (r *Runtime) Tracer(name string) trace.Tracer {
 	return r.tracerProvider.Tracer(name)
 }
 
+// Meter returns a meter from this Runtime, or the process global provider for
+// a nil/unconfigured Runtime.
 func (r *Runtime) Meter(name string) metric.Meter {
 	if r == nil || r.meterProvider == nil {
 		return otel.Meter(name)
@@ -505,6 +132,7 @@ func (r *Runtime) Meter(name string) metric.Meter {
 	return r.meterProvider.Meter(name)
 }
 
+// Resource returns the Resource shared by this Runtime's providers and writers.
 func (r *Runtime) Resource() *resource.Resource {
 	if r == nil {
 		return nil
@@ -512,75 +140,10 @@ func (r *Runtime) Resource() *resource.Resource {
 	return r.resource
 }
 
+// LoggerProvider returns this Runtime's OTLP LoggerProvider, if configured.
 func (r *Runtime) LoggerProvider() *sdklog.LoggerProvider {
 	if r == nil {
 		return nil
 	}
 	return r.loggerProvider
-}
-
-func resourceForConfig(cfg Config) *resource.Resource {
-	if cfg.Resource != nil {
-		return cfg.Resource
-	}
-	attrs := make([]attribute.KeyValue, 0, 5)
-	if cfg.ServiceName != "" {
-		attrs = append(attrs, attribute.String("service.name", cfg.ServiceName))
-	}
-	if cfg.ServiceVersion != "" {
-		attrs = append(attrs, attribute.String("service.version", cfg.ServiceVersion))
-	}
-	if cfg.Environment != "" {
-		attrs = append(attrs, attribute.String("deployment.environment.name", cfg.Environment))
-	}
-	if cfg.Region != "" {
-		attrs = append(attrs, attribute.String("region", cfg.Region))
-	}
-	if cfg.Instance != "" {
-		attrs = append(attrs, attribute.String("service.instance.id", cfg.Instance))
-	}
-	return resource.NewWithAttributes("https://opentelemetry.io/schemas/1.41.0", attrs...)
-}
-
-func resourceMetadata(res *resource.Resource) file.ResourceMetadata {
-	var metadata file.ResourceMetadata
-	if res == nil {
-		return metadata
-	}
-	for _, kv := range res.Attributes() {
-		switch string(kv.Key) {
-		case "service.name":
-			metadata.ServiceName = kv.Value.AsString()
-		case "service.version":
-			metadata.ServiceVersion = kv.Value.AsString()
-		case "service.instance.id":
-			metadata.ServiceInstanceID = kv.Value.AsString()
-		case "deployment.environment.name":
-			metadata.DeploymentEnvironmentName = kv.Value.AsString()
-		}
-	}
-	return metadata
-}
-
-func EnabledFromEnvironment() bool {
-	return !strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_SDK_DISABLED")), "true")
-}
-
-func EndpointFromEnvironment() string {
-	return defaultIfEmpty(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")), defaultEndpoint)
-}
-
-func endpointURL(endpoint string) (string, error) {
-	normalized, err := otlpendpoint.Parse(endpoint)
-	if err != nil {
-		return "", fmt.Errorf("telemetry: %w", err)
-	}
-	return normalized, nil
-}
-
-func defaultIfEmpty(value, fallback string) string {
-	if value == "" {
-		return fallback
-	}
-	return value
 }

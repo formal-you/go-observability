@@ -84,7 +84,12 @@ go-observability/
 │   └── internal/mwutil/         # 内部共享底层工具（状态码记录、路由/RPC 解析、span 收尾、直方图）
 │
 ├── telemetry/
-│   └── telemetry.go             # Runtime 装配、全局安装恢复、显式日志出口与 Shutdown
+│   ├── telemetry.go             # 公开类型、Runtime 状态与轻量访问器
+│   ├── runtime_config.go        # 默认值、配置校验、Resource 与环境变量
+│   ├── runtime_providers.go     # Trace / Metric / Log Provider 构造
+│   ├── runtime_global.go        # 全局 Provider 安装、恢复与 Shutdown
+│   ├── runtime_writer.go        # file / OTLP / stdout / none 出口选择
+│   └── runtime_compat.go        # Deprecated Setup* / NewLogWriter 兼容层
 │
 ├── observability/               # 本地 LGTM 参考栈（docker compose，非生产方案）
 │   ├── docker-compose.yml       # Collector + Tempo + Loki + Mimir + Grafana
@@ -222,7 +227,7 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 | 采样/脱敏 | `sampler.go` 高价值保留/事件前缀全量、`masker.go` 递归脱敏与并发契约 | `go test ./... -run 'Sample|Mask'` |
 | 错误收口 | `errresp.go`：Kind→状态码映射、system 响应不泄露、`Abort(nil)` 兜底、与 recover 不双写 | `go test ./middleware/errresp/...` |
 | 并发安全 | Logger 构造后只读；Writer/ErrorHandler 多 goroutine 语义 | `go test -race ./...` |
-| 三信号装配 | `telemetry.go` Setup 失败回滚、Shutdown 顺序、出口选择固化 | `go test ./telemetry/...` |
+| 三信号装配 | `telemetry/*.go` Setup 失败回滚、Shutdown 顺序、出口选择固化 | `go test ./telemetry/...` |
 
 改动后的本地验证：`gofmt -w <改动文件>` → `go build ./...` → `go vet ./...` → `go test ./...`（本机低内存组合：`$env:GOMAXPROCS=1; $env:GOGC=30`）。
 
