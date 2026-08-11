@@ -127,7 +127,7 @@ func TestErrorEventFromSystemError(t *testing.T) {
 		TraceID: "0123456789abcdef0123456789abcdef",
 		SpanID:  "0123456789abcdef",
 	}
-	ev := errorEventFromError(EventNameErrorDBTimeout, err, md)
+	ev := sysEventFromError(EventNameErrorDBTimeout, err, md)
 
 	if ev.Data.EventName != EventNameErrorDBTimeout {
 		t.Errorf("EventName = %q, want %q", ev.Data.EventName, EventNameErrorDBTimeout)
@@ -188,7 +188,7 @@ func TestErrorEventFromSystemError(t *testing.T) {
 // ErrorPayload.Operation（app.operation），而非 app.business_code。
 func TestErrorEventOperationFromErrCode(t *testing.T) {
 	err := errs.NewSystem(errs.TypeHTTPUpstream5xx, "payment-gateway: 502", errs.WithCode("ORDER.PAY.UPSTREAM_5XX"))
-	ev := errorEventFromError(EventNameErrorDBTimeout, err, EventMetadata{})
+	ev := sysEventFromError(EventNameErrorDBTimeout, err, EventMetadata{})
 	if ev.Data.Operation != "ORDER.PAY.UPSTREAM_5XX" {
 		t.Errorf("Operation = %q, want ORDER.PAY.UPSTREAM_5XX", ev.Data.Operation)
 	}
@@ -207,7 +207,7 @@ func TestErrorEventStackOnlyWhenMust(t *testing.T) {
 		errs.WithRetry(1, false),
 		errs.WithStack("不应投影的堆栈"),
 	)
-	ev := errorEventFromError(EventNameErrorDBTimeout, err, EventMetadata{})
+	ev := sysEventFromError(EventNameErrorDBTimeout, err, EventMetadata{})
 	if ev.Data.StackTrace != "" {
 		t.Errorf("StackTrace = %q, want empty（stock.race 非 StackMust）", ev.Data.StackTrace)
 	}
@@ -324,7 +324,7 @@ func TestErrorProjectionConcreteForms(t *testing.T) {
 		{name: "wrapped pointer", err: wrapper},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ev := errorEventFromError(EventNameErrorDBTimeout, tc.err, EventMetadata{})
+			ev := sysEventFromError(EventNameErrorDBTimeout, tc.err, EventMetadata{})
 			if !ev.Data.Retryable || ev.Data.RetryCount != 3 {
 				t.Errorf("retry = %v/%d, want true/3", ev.Data.Retryable, ev.Data.RetryCount)
 			}
@@ -500,7 +500,7 @@ func TestErrorEventStackRespectsStackPolicyOverride(t *testing.T) {
 	t.Cleanup(func() { errs.SetStackPolicy(nil) })
 
 	err := errs.NewSystem(errs.TypeDBQueryTimeout, "query timeout after 5s", errs.WithStack("不应投影的堆栈"))
-	ev := errorEventFromError(EventNameErrorDBTimeout, err, EventMetadata{})
+	ev := sysEventFromError(EventNameErrorDBTimeout, err, EventMetadata{})
 	if ev.Data.StackTrace != "" {
 		t.Errorf("StackTrace = %q, want empty（db. 覆盖为 none）", ev.Data.StackTrace)
 	}

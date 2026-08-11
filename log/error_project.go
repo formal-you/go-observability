@@ -36,14 +36,14 @@ func businessEventFromError(eventName EventName, err errs.AppError, md EventMeta
 	}
 }
 
-// errorEventFromError 把 errs.AppError 投影为 ErrorEvent。
+// sysEventFromError 把 errs.AppError 投影为 ErrorEvent。
 // 适用于 KindSystem：ErrorType 取 err.ErrorType()，ErrorMessage 取 err.Error()，
 // Operation 取 err.ErrCode()（SystemError 可选业务码落 app.operation，可为空），
 // Retryable / RetryCount / UpstreamService / Source 从错误链中的 errs.SystemError 提取，
 // 支持值和指针形式；StackTrace 仅当 errs.StackRule(err.ErrorType()) 判定为 StackMust
 // 时写入 err.Stack()，其余类别留空以控制体积；Result 固定 error。
 // 缺省级别由 LevelOf 推导，调用方显式设置的 md.Level 不被覆盖。
-func errorEventFromError(eventName EventName, err errs.AppError, md EventMetadata) ErrorEvent {
+func sysEventFromError(eventName EventName, err errs.AppError, md EventMetadata) ErrorEvent {
 	if md.Level == "" {
 		md.Level = LevelOf(err)
 	}
@@ -98,11 +98,11 @@ func EventFromError(eventName EventName, err error, md EventMetadata) EventPaylo
 	case errs.KindValidation, errs.KindBusiness:
 		return businessEventFromError(eventName, appErr, md)
 	case errs.KindSystem:
-		return errorEventFromError(eventName, appErr, md)
+		return sysEventFromError(eventName, appErr, md)
 	default:
 		// 未知 Kind：与 errs 基类零值兜底（appError.Kind() 返回 KindSystem）保持一致，
 		// 按系统错误事件投影，避免静默丢失错误信息。
-		return errorEventFromError(eventName, appErr, md)
+		return sysEventFromError(eventName, appErr, md)
 	}
 }
 
