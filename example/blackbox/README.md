@@ -30,6 +30,21 @@ go test ./example/blackbox -v
 | 7 | error | 运行时 panic | **exception.stacktrace 有堆栈**、event.name=error.runtime.panic、level=ERROR |
 | 8 | error | 锁冲突（对比项） | **exception.stacktrace 无堆栈**（StackOptional）、level=ERROR |
 
+## 字段顺序（所有事件一致）
+
+每条日志的字段按固定顺序输出，跨事件保持一致，便于人眼扫描与工具解析
+（由 `writer/file` 保证，测试锁定）：
+
+| 顺序 | 字段 | 说明 |
+| --- | --- | --- |
+| 1 | `timestamp` | 事件时间（未设置时省略） |
+| 2 | `level` | 语义化级别 |
+| 3 | `msg` | 事件粗分类（access/business/error…） |
+| 4 | `trace_id` / `span_id` / `request_id` / `latency_ms` | 链路与延迟（未设置时省略） |
+| 5 | `event.name` | 三段式细名 |
+| 6 | 其余 payload 字段 | 按事件构造顺序（http.*、error.type、exception.*、app.*…） |
+| 7 | `app.result` | 恒为最后，一眼看结局 |
+
 ## 非预期系统错误的结构（第 5/6/7 条）
 
 `errs.NewSystem` 使用 StackMust 类别（db./redis./mq./http./runtime.）时，构造点自动采集

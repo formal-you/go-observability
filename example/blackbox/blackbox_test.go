@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -135,4 +136,79 @@ func TestBlackboxJSONL(t *testing.T) {
 	assertStr(m, "error.type", "lock.conflict")
 	assertStr(m, "level", "ERROR")
 	assertStack(m, "exception.stacktrace", false)
+}
+
+// orderedKeys 按 JSON 对象实际写入顺序返回键名（不做字典序），用于锁定规范字段顺序。
+func orderedKeys(t *testing.T, line string) []string {
+	t.Helper()
+	dec := json.NewDecoder(strings.NewReader(line))
+	tok, err := dec.Token()
+	if err != nil {
+		t.Fatalf("decode first token: %v", err)
+	}
+	if d, ok := tok.(json.Delim); !ok || d != '{' {
+		t.Fatalf("line 不是 JSON 对象: %v", tok)
+	}
+	var keys []string
+	for dec.More() {
+		ktok, err := dec.Token()
+		if err != nil {
+			t.Fatalf("decode key: %v", err)
+		}
+		keys = append(keys, ktok.(string))
+		var v any
+		if err := dec.Decode(&v); err != nil {
+			t.Fatalf("decode value: %v", err)
+		}
+	}
+	return keys
+}
+
+// TestBlackboxJSONLCanonicalOrder 断言 9 条事件共享同一规范字段顺序：
+// msg 恒紧跟 level（事件粗分类），末键恒为 app.result（结果收尾）；
+// 代表行锁定完整键序，防止实现漂移（与 writer/file 的固定顺序契约一致）。
+func TestBlackboxJSONLCanonicalOrder(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	w, err := file.New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	emitAll(ctx, log.NewLogger(w))
+	if err := w.Close(ctx); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 9 {
+		t.Fatalf("want 9 event lines, got %d", len(lines))
+	}
+
+	for i, line := range lines {
+		keys := orderedKeys(t, line)
+		if keys[1] != "msg" {
+			t.Errorf("line %d: msg 未紧跟 level（level=%q, next=%q），want 固定顺序 level→msg", i+1, keys[0], keys[1])
+		}
+		if keys[len(keys)-1] != "app.result" {
+			t.Errorf("line %d 末键 = %q, want app.result（结果收尾）", i+1, keys[len(keys)-1])
+		}
+	}
+
+	exact := map[int][]string{
+		0: {"level", "msg", "trace_id", "span_id", "request_id", "latency_ms", "event.name",
+			"http.request.method", "url.path", "http.route", "http.response.status_code",
+			"client.address", "user_agent.original", "app.result"},
+		2: {"level", "msg", "event.name", "app.order_id", "app.amount", "app.result"},
+		5: {"level", "msg", "event.name", "error.type", "exception.message", "exception.stacktrace",
+			"app.retryable", "app.retry_count", "app.upstream_service", "app.result"},
+		8: {"level", "msg", "event.name", "error.type", "exception.message", "app.retryable", "app.result"},
+	}
+	for i, want := range exact {
+		if got := orderedKeys(t, lines[i]); !slices.Equal(got, want) {
+			t.Errorf("line %d 键序 = %v, want %v", i+1, got, want)
+		}
+	}
 }

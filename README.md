@@ -64,7 +64,7 @@ go run ./example/minimal
 得到一条可直接检索的 JSONL 事件：
 
 ```json
-{"app.result":"success","event.name":"business.order.paid","level":"INFO","msg":"business"}
+{"level":"INFO","msg":"business","event.name":"business.order.paid","app.result":"success"}
 ```
 
 切换到 OTLP Writer 后，`severity`、`EventName`、`timestamp` 和 span context 会进入 OTel LogRecord 顶层；业务属性继续保持结构化，不会退化成拼接字符串。

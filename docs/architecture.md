@@ -164,6 +164,8 @@ go-observability/
 
 顶层字段映射集中在 `internal/attrkv.Record`（唯一核心映射层）。**不要**为 OTLP 把顶层字段塞回属性，也**不要**为 file 把属性拆掉；两边共享同一份归一化 attrs。
 
+file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `level` → `msg` → `trace_id`/`span_id`/`request_id`/`latency_ms` → `event.name` → 其余事件字段 → `app.result` 收尾；跨事件保持一致，避免同一字段（尤其 `app.result`）在不同日志里相对位置漂移。由 `writer/file` 实现，`example/blackbox` 测试锁定。
+
 ## 6. 关键设计决策与不可违反边界
 
 1. **三段式事件名**：`类别.模块.操作`（如 `access.http.request`），必须经 `Validate`；框架级事件登记在 `types.go`，领域 `business.*` 由接入方自建注册表（见 `example/mall`），禁止在中间件/生产埋点里散落手写字符串。
