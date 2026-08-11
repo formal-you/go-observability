@@ -2,14 +2,22 @@
 
 配置分三层：应用代码负责事件、Logger 和 `telemetry.Config`；进程环境负责启用状态与 OTLP 地址；Collector 和存储由部署平台维护。本库不读取 YAML 配置文件，仓库中的 YAML 只作为可复制模板。
 
+## OTel 版本边界
+
+截至 2026-08-11，官网分别发布 OpenTelemetry Specification `1.60.0` 和 Semantic
+Conventions `1.44.0`；它们与具体语言 SDK 不是同一版本线。本仓库依赖 Go OTel SDK
+`v1.45.0`、Logs `v0.21.0`，代码仍明确锁定 `semconv/v1.41.0`。当前 Go 模块可导入的
+semconv 最高目录为 `v1.43.0`，因此不能把官网 `1.44.0` 直接写成 Go import。
+semconv 升级将作为独立变更，同步验证 schema URL、API、Resource 映射和测试。
+
 ## telemetry.Config
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `ServiceName` | 无 | 启用 telemetry 时必填，写入 `service.name` |
 | `ServiceVersion` | 空 | 写入 `service.version` |
-| `Environment` | `dev` | 写入 `deployment.environment` |
-| `Region` / `Instance` | 省略 | 可选低基数资源属性 |
+| `Environment` | `development` | 写入 `deployment.environment.name` |
+| `Region` / `Instance` | 省略 | `Region` 写入低基数 `region`；`Instance` 写入 `service.instance.id` |
 | `Endpoint` | 环境变量或 `127.0.0.1:4317` | OTLP gRPC endpoint，可用 `host:port` 或 URL |
 | `Enabled` | `SetupFromEnvironment` 从环境读取 | `false` 返回空 Providers |
 | `TraceSampleRatio` | `0.1` | SDK 头部采样比例，范围 `(0, 1]` |
@@ -35,7 +43,31 @@ defer func() {
 }()
 ```
 
-`SetupFromEnvironment` 会安装全局 Trace、Metric、Log Provider 和 W3C Trace Context/Baggage propagator。库类型不负责监听配置变化；运行中修改需由应用重建并安全切换 Provider。
+`SetupFromEnvironment` 会安装全局 Trace、Metric、Log Provider 和 W3C Trace Context/Baggage propagator。`ServiceName` 在 file-only 与 OTLP 模式均必填。库类型不负责监听配置变化；运行中修改需由应用重建并安全切换 Provider。
+
+### 小单体 File-Only
+
+不部署 Collector 的单体应用可使用 `telemetry.SetupFile`。它不连接任何 OTLP
+exporter，只在进程内生成合法 TraceID/SpanID，并把服务身份扁平写入每条 JSONL；完整
+Trace 树不会被保存，需链路查询时再使用 OTLP/Tempo 装配。
+
+```go
+providers, err := telemetry.SetupFile(telemetry.Config{
+	ServiceName: "mall-monolith",
+	ServiceVersion: "1.0.0",
+	Environment: "production",
+	Instance: "shop-server-01",
+})
+if err != nil {
+	return err
+}
+defer providers.Shutdown(ctx)
+writer, err := providers.NewLogWriter(ctx, "logs/events.jsonl")
+```
+
+文件中的规范服务身份键为 `service.name`、`service.version`、`service.instance.id` 和
+`deployment.environment.name`。`example/config/file-only.example.json` 只是配置模板，
+不会被库自动读取；应用需自行解析 JSON/YAML 后映射到 `telemetry.Config`。
 
 ## 日志出口
 

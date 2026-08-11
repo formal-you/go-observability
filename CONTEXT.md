@@ -218,7 +218,7 @@ trace / metric / log 三信号 Provider 的装配与全局安装（otel / global
 _Avoid_: Exporter
 
 **Resource**:
-服务身份与低基数标签（service.name、service.version、deployment.environment、region、instance）。
+服务身份与低基数标签（service.name、service.version、service.instance.id、deployment.environment.name、region）。
 _Avoid_: 属性（attribute 是事件字段维度）
 
 **Pipeline（管线）**:

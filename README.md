@@ -65,7 +65,7 @@ go run ./example/minimal
 得到一条可直接检索的 JSONL 事件：
 
 ```json
-{"level":"INFO","msg":"business","event.name":"business.order.paid","app.result":"success"}
+{"timestamp":"2026-08-11T15:00:00Z","level":"INFO","msg":"business","service.name":"mall-monolith","deployment.environment.name":"development","trace_id":"...","span_id":"...","event.name":"business.order.paid","app.result":"success"}
 ```
 
 切换到 OTLP Writer 后，`severity`、`EventName`、`timestamp` 和 span context 会进入 OTel LogRecord 顶层；业务属性继续保持结构化，不会退化成拼接字符串。
@@ -269,6 +269,12 @@ go-observability/
 ---
 
 ## 📡 从本地 JSONL 切到 OTLP
+
+不部署 Collector 的小单体可直接使用 `telemetry.SetupFile`：它不会创建 OTLP
+exporter，只生成本地有效 trace/span 用于日志关联，并把 `service.name`、
+`service.version`、`service.instance.id`、`deployment.environment.name` 写入每条 JSONL。
+完整 Trace 树不会落盘；需要 Tempo 查询时再切换到 OTLP 模式。配置模板见
+[`example/config/file-only.example.json`](example/config/file-only.example.json)。
 
 主示例通过环境变量选择出口：
 

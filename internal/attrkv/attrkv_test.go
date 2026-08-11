@@ -168,6 +168,10 @@ func TestRecordFieldsExtraction(t *testing.T) {
 		slog.String("event.name", "access.http.request"),
 		slog.String("trace_id", "949058d5c20153624d52da3358038026"),
 		slog.String("span_id", "bba473e9b3034af6"),
+		slog.String("service.name", "forged"),
+		slog.String("service.version", "forged"),
+		slog.String("service.instance.id", "forged"),
+		slog.String("deployment.environment.name", "forged"),
 		slog.String("http.request.method", "GET"),
 		slog.Int("http.response.status_code", 404),
 	}

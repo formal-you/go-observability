@@ -44,11 +44,16 @@ func Severity(attrs []slog.Attr) (otelog.Severity, string) {
 // timestamp/level 映射为 LogRecord 顶层字段，event.name 映射为 EventName 顶层字段，
 // trace_id/span_id 由 ctx 的 span context 承担。
 var recordAttrKeys = map[string]struct{}{
-	"timestamp":  {},
-	"level":      {},
-	"event.name": {},
-	"trace_id":   {},
-	"span_id":    {},
+	"timestamp":                   {},
+	"level":                       {},
+	"event.name":                  {},
+	"trace_id":                    {},
+	"span_id":                     {},
+	"service.name":                {},
+	"service.version":             {},
+	"service.instance.id":         {},
+	"deployment.environment":      {},
+	"deployment.environment.name": {},
 }
 
 // Record 组装 OTLP LogRecord 的顶层字段，并返回应作为属性的剩余 attrs。

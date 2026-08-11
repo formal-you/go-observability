@@ -49,7 +49,7 @@ func TestLoggerEmitWritesNormalizedAttrs(t *testing.T) {
 		t.Fatalf("msg = %v, want [access]", w.msgs)
 	}
 	attrs := attrMap(w.attrsList[0])
-	for _, k := range []string{"trace_id", "span_id", "event.name", "http.request.method", "app.result"} {
+	for _, k := range []string{"timestamp", "trace_id", "span_id", "event.name", "http.request.method", "app.result"} {
 		if _, ok := attrs[k]; !ok {
 			t.Errorf("缺少属性 %s（实际: %v）", k, keysOf(attrs))
 		}

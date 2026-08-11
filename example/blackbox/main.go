@@ -12,12 +12,9 @@ import (
 	"sort"
 	"time"
 
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-
 	log "github.com/formal-you/go-observability/log"
 	"github.com/formal-you/go-observability/middleware/otelutil"
 	"github.com/formal-you/go-observability/telemetry"
-	"github.com/formal-you/go-observability/writer/file"
 )
 
 const blackboxServiceName = "go-observability-blackbox"
@@ -59,15 +56,24 @@ func writeFileSample(ctx context.Context, path string) (*scenarioReport, error) 
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("清理旧样例: %w", err)
 	}
-	w, err := file.New(path)
+	providers, err := telemetry.SetupFile(telemetry.Config{
+		ServiceName:    blackboxServiceName,
+		ServiceVersion: "dev",
+		Environment:    "local",
+		Instance:       "blackbox-local",
+	})
 	if err != nil {
+		return nil, fmt.Errorf("初始化 file-only telemetry: %w", err)
+	}
+	w, err := providers.NewLogWriter(ctx, path)
+	if err != nil {
+		_ = providers.Shutdown(ctx)
 		return nil, fmt.Errorf("创建 file writer: %w", err)
 	}
-	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
 	logger := log.NewLogger(w, log.WithTraceExtractor(otelutil.NewTraceExtractor()))
-	report, emitErr := emitAll(ctx, logger, tracerProvider.Tracer(blackboxServiceName))
-	closeErr := w.Close(ctx)
-	traceErr := tracerProvider.Shutdown(ctx)
+	report, emitErr := emitAll(ctx, logger, providers.Tracer(blackboxServiceName))
+	closeErr := closeLogWriter(ctx, w)
+	traceErr := providers.Shutdown(ctx)
 	if err := errors.Join(emitErr, closeErr, traceErr); err != nil {
 		return nil, err
 	}

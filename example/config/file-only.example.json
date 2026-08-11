@@ -1,0 +1,7 @@
+{
+  "service.name": "mall-monolith",
+  "service.version": "1.0.0",
+  "service.instance.id": "shop-server-01",
+  "deployment.environment.name": "production",
+  "logs.path": "logs/events.jsonl"
+}

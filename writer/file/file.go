@@ -9,18 +9,38 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/formal-you/go-observability/log"
 )
 
 // Writer 实现 log.Writer：把事件以 JSON 行追加写入文件。
 type Writer struct {
-	mu   sync.Mutex
-	file *os.File
+	mu       sync.Mutex
+	file     *os.File
+	metadata ResourceMetadata
 }
 
-// New 创建文件 Writer；自动创建父目录，append 模式。
-func New(path string) (*Writer, error) {
+// ResourceMetadata 描述写入每条 JSONL 的进程级服务身份。
+// 字段使用 OTel Resource 的规范键投影，空值不会写出。
+type ResourceMetadata struct {
+	ServiceName               string
+	ServiceVersion            string
+	ServiceInstanceID         string
+	DeploymentEnvironmentName string
+}
+
+// Option 配置文件 Writer。
+type Option func(*Writer)
+
+// WithResourceMetadata 让 Writer 在每条 JSONL 中注入不可被事件属性覆盖的服务身份。
+func WithResourceMetadata(metadata ResourceMetadata) Option {
+	return func(w *Writer) { w.metadata = metadata }
+}
+
+// New 创建文件 Writer；自动创建父目录，append 模式。可选的 ResourceMetadata
+// 会作为进程级字段写入每条记录；不传选项时保持旧行为。
+func New(path string, opts ...Option) (*Writer, error) {
 	if dir := filepath.Dir(path); dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return nil, err
@@ -30,7 +50,11 @@ func New(path string) (*Writer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Writer{file: f}, nil
+	w := &Writer{file: f}
+	for _, opt := range opts {
+		opt(w)
+	}
+	return w, nil
 }
 
 // Write 把事件写为一行 JSON（扁平字段 + msg=event_type）。
@@ -41,7 +65,7 @@ func New(path string) (*Writer, error) {
 //
 // 键已存在时保留首次出现位置、以最后一次值为准（与 map 语义一致）。
 func (w *Writer) Write(_ context.Context, msg string, attrs ...slog.Attr) error {
-	line, err := marshalLine(msg, attrs)
+	line, err := marshalLine(msg, attrs, w.metadata)
 	if err != nil {
 		return err
 	}
@@ -53,7 +77,7 @@ func (w *Writer) Write(_ context.Context, msg string, attrs ...slog.Attr) error 
 
 // marshalLine 按规范字段顺序序列化一行 JSON（含换行）。
 // 任何值无法序列化时返回错误，不写出部分内容。
-func marshalLine(msg string, attrs []slog.Attr) ([]byte, error) {
+func marshalLine(msg string, attrs []slog.Attr, metadata ResourceMetadata) ([]byte, error) {
 	order := make([]string, 0, len(attrs)+1)
 	values := make(map[string]any, len(attrs)+1)
 	for _, a := range attrs {
@@ -64,6 +88,29 @@ func marshalLine(msg string, attrs []slog.Attr) ([]byte, error) {
 			order = append(order, a.Key)
 		}
 		values[a.Key] = a.Value.Any()
+	}
+	timestamp, validTimestamp := values[string(log.KeyTimestamp)].(time.Time)
+	if !validTimestamp || timestamp.IsZero() {
+		values[string(log.KeyTimestamp)] = time.Now()
+		if !validTimestamp {
+			order = append([]string{string(log.KeyTimestamp)}, order...)
+		}
+	}
+	metadataValues := []struct {
+		key   string
+		value string
+	}{
+		{"service.name", metadata.ServiceName},
+		{"service.version", metadata.ServiceVersion},
+		{"service.instance.id", metadata.ServiceInstanceID},
+		{"deployment.environment.name", metadata.DeploymentEnvironmentName},
+	}
+	metadataKeys := make(map[string]struct{}, len(metadataValues))
+	for _, item := range metadataValues {
+		metadataKeys[item.key] = struct{}{}
+		if item.value != "" {
+			values[item.key] = item.value
+		}
 	}
 
 	var buf bytes.Buffer
@@ -102,8 +149,18 @@ func marshalLine(msg string, attrs []slog.Attr) ([]byte, error) {
 	if err := writeKV("msg", msg); err != nil {
 		return nil, err
 	}
+	for _, item := range metadataValues {
+		if item.value != "" {
+			if err := writeKV(item.key, values[item.key]); err != nil {
+				return nil, err
+			}
+		}
+	}
 	for _, key := range order {
 		if key == string(log.KeyTimestamp) || key == string(log.KeyLevel) || key == string(log.KeyAppResult) {
+			continue
+		}
+		if _, protected := metadataKeys[key]; protected {
 			continue
 		}
 		if err := writeKV(key, values[key]); err != nil {

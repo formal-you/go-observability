@@ -1,7 +1,8 @@
 // Package telemetry 为应用装配 OTel Trace、Metric 和 Log provider。
 //
 // 本包提供应用可直接导入的三信号装配入口：
-//  1. Resource：标准属性（service.name / service.version / deployment.environment）
+//  1. Resource：标准属性（service.name / service.version / service.instance.id /
+//     deployment.environment.name）
 //     加低基数标签（region / instance）；
 //  2. OTLP gRPC exporter：trace / metric / log 各一，默认 127.0.0.1:4317；
 //  3. Provider：trace（头部采样 + 批量 5s/512）、metric（PeriodicReader 15s）、
@@ -65,11 +66,11 @@ type Config struct {
 	ServiceName string
 	// ServiceVersion 写入 service.version，区分部署版本。
 	ServiceVersion string
-	// Environment 写入 deployment.environment。
+	// Environment 写入 deployment.environment.name；为空时默认 development。
 	Environment string
 	// Region 写入低基数资源属性 region；空则省略。
 	Region string
-	// Instance 写入资源属性 instance；空则省略。
+	// Instance 写入 service.instance.id；空则省略。
 	Instance string
 	// Endpoint OTLP gRPC endpoint（裸 host:port 为明文，URL 保留 http/https）；空用 defaultEndpoint。
 	// 显式设置时 NewLogWriter 复用本次 Setup 的 LoggerProvider 写 OTLP。
@@ -97,6 +98,7 @@ type Providers struct {
 	meterProvider  *sdkmetric.MeterProvider
 	loggerProvider *sdklog.LoggerProvider
 	useOTLPLogs    bool
+	fileMetadata   file.ResourceMetadata
 }
 
 // Setup 装配并全局安装三信号 provider，返回进程运行时对象。
@@ -133,7 +135,7 @@ func Setup(ctx context.Context, cfg Config) (*Providers, error) {
 		return nil, errors.New("telemetry: log batch timeout must be positive")
 	}
 	if cfg.Environment == "" {
-		cfg.Environment = "dev"
+		cfg.Environment = "development"
 	}
 
 	endpoint := strings.TrimSpace(cfg.Endpoint)
@@ -146,21 +148,7 @@ func Setup(ctx context.Context, cfg Config) (*Providers, error) {
 		return nil, err
 	}
 
-	res := cfg.Resource
-	if res == nil {
-		attrs := []attribute.KeyValue{
-			attribute.String("service.name", cfg.ServiceName),
-			attribute.String("service.version", cfg.ServiceVersion),
-			attribute.String("deployment.environment", cfg.Environment),
-		}
-		if cfg.Region != "" {
-			attrs = append(attrs, attribute.String("region", cfg.Region))
-		}
-		if cfg.Instance != "" {
-			attrs = append(attrs, attribute.String("instance", cfg.Instance))
-		}
-		res = resource.NewWithAttributes("https://opentelemetry.io/schemas/1.41.0", attrs...)
-	}
+	res := resourceForConfig(cfg)
 
 	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithEndpointURL(endpoint))
 	if err != nil {
@@ -209,7 +197,78 @@ func Setup(ctx context.Context, cfg Config) (*Providers, error) {
 		meterProvider:  meterProvider,
 		loggerProvider: loggerProvider,
 		useOTLPLogs:    useOTLPLogs,
+		fileMetadata:   resourceMetadata(res),
 	}, nil
+}
+
+// SetupFile 装配仅供本进程使用的 TraceProvider 和本地文件日志出口。
+// 它不创建任何 OTLP exporter，不连接 Collector；Trace 只用于生成合法的
+// trace_id/span_id 供 JSONL 关联。service.name 必填，environment 缺省为 development。
+func SetupFile(cfg Config) (*Providers, error) {
+	if cfg.ServiceName == "" {
+		return nil, errors.New("telemetry: service name is required")
+	}
+	if cfg.Environment == "" {
+		cfg.Environment = "development"
+	}
+	res := resourceForConfig(cfg)
+	tracerProvider := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.NeverSample())),
+		sdktrace.WithResource(res),
+	)
+	otel.SetTracerProvider(tracerProvider)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+	return &Providers{
+		resource:       res,
+		tracerProvider: tracerProvider,
+		fileMetadata:   resourceMetadata(res),
+	}, nil
+}
+
+func resourceForConfig(cfg Config) *resource.Resource {
+	if cfg.Resource != nil {
+		return cfg.Resource
+	}
+	attrs := []attribute.KeyValue{}
+	if cfg.ServiceName != "" {
+		attrs = append(attrs, attribute.String("service.name", cfg.ServiceName))
+	}
+	if cfg.ServiceVersion != "" {
+		attrs = append(attrs, attribute.String("service.version", cfg.ServiceVersion))
+	}
+	if cfg.Environment != "" {
+		attrs = append(attrs, attribute.String("deployment.environment.name", cfg.Environment))
+	}
+	if cfg.Region != "" {
+		attrs = append(attrs, attribute.String("region", cfg.Region))
+	}
+	if cfg.Instance != "" {
+		attrs = append(attrs, attribute.String("service.instance.id", cfg.Instance))
+	}
+	return resource.NewWithAttributes("https://opentelemetry.io/schemas/1.41.0", attrs...)
+}
+
+func resourceMetadata(res *resource.Resource) file.ResourceMetadata {
+	var metadata file.ResourceMetadata
+	if res == nil {
+		return metadata
+	}
+	for _, kv := range res.Attributes() {
+		switch string(kv.Key) {
+		case "service.name":
+			metadata.ServiceName = kv.Value.AsString()
+		case "service.version":
+			metadata.ServiceVersion = kv.Value.AsString()
+		case "service.instance.id":
+			metadata.ServiceInstanceID = kv.Value.AsString()
+		case "deployment.environment.name":
+			metadata.DeploymentEnvironmentName = kv.Value.AsString()
+		}
+	}
+	return metadata
 }
 
 // SetupFromEnvironment 按环境变量装配三信号 provider。
@@ -294,7 +353,11 @@ func (p *Providers) NewLogWriter(ctx context.Context, jsonlPath string) (log.Wri
 		}
 		return otlp.New(ctx, opts...)
 	}
-	return file.New(jsonlPath)
+	var metadata file.ResourceMetadata
+	if p != nil {
+		metadata = p.fileMetadata
+	}
+	return file.New(jsonlPath, file.WithResourceMetadata(metadata))
 }
 
 // EnabledFromEnvironment 从 OTEL_SDK_DISABLED 读取启用开关。

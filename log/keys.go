@@ -12,6 +12,12 @@ const (
 	KeyTimestamp Key = "timestamp"
 	KeyLevel     Key = "level"
 
+	// Resource 服务身份（file/stdout 扁平投影；OTLP 路径只写 Resource）
+	KeyServiceName               Key = "service.name"
+	KeyServiceVersion            Key = "service.version"
+	KeyServiceInstanceID         Key = "service.instance.id"
+	KeyDeploymentEnvironmentName Key = "deployment.environment.name"
+
 	// HTTP（semconv http；路径用 url.path，1.41.0 已移除 http.request.path）
 	KeyHTTPRequestMethod      Key = "http.request.method"
 	KeyURLPath                Key = "url.path"

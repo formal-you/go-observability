@@ -196,8 +196,9 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 ## 7. 三信号装配（`telemetry`）
 
 - `Setup`：装配并全局安装 Trace（头部采样 + 批量 5s/512）、Metric（PeriodicReader 15s）、Log（批量 1s/512）Provider 与 W3C propagator；任一步失败回滚已创建资源，不留半初始化状态。
+- `SetupFile`：不创建 exporter，仅安装 `ParentBased(NeverSample())` 的本地 TraceProvider 与 W3C propagator；生成有效 trace/span 供 JSONL 关联，但不保存完整 Trace 树。
 - `SetupFromEnvironment`：从 `OTEL_SDK_DISABLED` 读启用状态、`OTEL_EXPORTER_OTLP_ENDPOINT` 读 endpoint（缺省 `127.0.0.1:4317`）。
-- `Providers.NewLogWriter`：复用 Setup 固化决策——显式配置 endpoint 且已启用 → OTLP Writer（共享 Resource/LoggerProvider）；否则写本地 JSONL（`file` Writer），离线可核对。
+- `Providers.NewLogWriter`：复用 Setup 固化决策——显式配置 endpoint 且已启用 → OTLP Writer（共享 Resource/LoggerProvider）；否则写本地 JSONL，并把 Resource 中的 `service.name`、`service.version`、`service.instance.id`、`deployment.environment.name` 注入每条记录。
 - `Providers.Shutdown`：进程退出前调用；顺序刻意先 log 再 metric 后 trace，保证日志携带的 span 上下文关联完整。
 
 ## 8. 扩展边界（接入方）

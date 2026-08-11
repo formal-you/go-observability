@@ -11,11 +11,11 @@ observability:
     name: order-api
     # version: service.version，区分发布版本
     version: "0.1.0"
-    # environment: deployment.environment（dev/staging/prod）
-    environment: dev
+    # environment: deployment.environment.name（development/staging/production）
+    environment: development
     # region: 低基数自定义标签，可空
     region: ""
-    # instance: 低基数实例标识，可空
+    # instance: service.instance.id，低基数实例标识，可空
     instance: ""
 
   # --- OTLP 出口 ---

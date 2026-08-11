@@ -3,6 +3,7 @@ package log
 import (
 	"context"
 	"log/slog"
+	"time"
 )
 
 // Logger 与 Writer：写出已归一化的事件。
@@ -140,6 +141,7 @@ func NewLogger(writer Writer, opts ...Option) *Logger {
 func (l *Logger) Emit(ctx context.Context, ev EventPayload) {
 	msg := string(ev.EventType())
 	attrs := mergeBaseMetadata(ev.Attrs(), l.options.baseMetadata)
+	attrs = ensureTimestamp(attrs)
 	if l.options.traceExtractor != nil {
 		attrs = fillTraceContext(attrs, l.options.traceExtractor.ExtractTraceContext(ctx))
 	}
@@ -152,6 +154,17 @@ func (l *Logger) Emit(ctx context.Context, ev EventPayload) {
 	if err := l.writer.Write(ctx, msg, attrs...); err != nil && l.options.errorHandler != nil {
 		l.options.errorHandler(ctx, msg, attrs, err)
 	}
+}
+
+// ensureTimestamp 为没有显式事件时间的记录补齐当前时间，保证不同 Writer
+// 看到同一事件的时间一致，也让 file-only JSONL 每行都可独立排序查询。
+func ensureTimestamp(attrs []slog.Attr) []slog.Attr {
+	for _, a := range attrs {
+		if a.Key == string(KeyTimestamp) {
+			return attrs
+		}
+	}
+	return append(attrs, slog.Time(string(KeyTimestamp), time.Now()))
 }
 
 // fillTraceContext 仅补全缺失的 trace_id/span_id，不覆盖事件已设置的值。

@@ -26,16 +26,17 @@ func requestIDFromTraceID(traceID string) string {
 // timestamp、level、request_id、latency_ms 由 metadata 承担；
 // trace_id、span_id 由 span context 承担；service.*、deployment.environment 由 Resource 承担。
 var reservedKeys = map[string]struct{}{
-	"timestamp":              {},
-	"level":                  {},
-	"request_id":             {},
-	"latency_ms":             {},
-	"trace_id":               {},
-	"span_id":                {},
-	"service.name":           {},
-	"service.version":        {},
-	"service.instance.id":    {},
-	"deployment.environment": {},
+	"timestamp":                   {},
+	"level":                       {},
+	"request_id":                  {},
+	"latency_ms":                  {},
+	"trace_id":                    {},
+	"span_id":                     {},
+	"service.name":                {},
+	"service.version":             {},
+	"service.instance.id":         {},
+	"deployment.environment":      {},
+	"deployment.environment.name": {},
 }
 
 // eventAttrs 归一化：先写 metadata，再追加 payload attrs（过滤空键与保留键）。

@@ -15,6 +15,7 @@
 - `middleware/trace` 补全链路能力：HTTP/Gin/gRPC 入口提取上游传播上下文（traceparent/tracestate，接续调用方链路），新增 `InjectHTTPHeaders` / `InjectGRPCMetadata` 出口注入 helper。
 - `errs` 错误分类、错误事件投影、Gin access、recover 与统一错误收口（`errresp`）中间件，以及框架级事件名 `error.http.request`。
 - 公开 `telemetry` 包，提供 Trace、Metric、Log Provider 装配、环境变量入口和统一关闭。
+- 新增 `telemetry.SetupFile` 与 file Writer 服务元数据选项：无需 Collector 即可生成可关联的本地 trace/span，并在每条 JSONL 中写入规范 Resource 身份和 timestamp。
 - `ResultKeepSampler`、`FieldMasker` 与写入错误回调。
 - 新增 `EventKeepSampler`：按 `event.name` 前缀全量保留（business./error./security./audit./probe.），其余事件委托 Fallback（如 `ResultKeepSampler`）采样——落地"业务全量 + 访问采样"策略。
 - 新增 `CONTEXT.md` 项目术语表：统一「采样」「批量导出间隔」「事件模型」及 OTel Trace / Metric / Log / Error 专业术语，避免沟通误导。
@@ -35,6 +36,7 @@
 
 ### Changed
 - 默认运维建议改为 HTTP AccessEvent 全量保留（健康检查用 `SkipPaths` 排除）；成功 access 概率采样保留为使用方显式选择，并明确会放弃完整的跨事件 access 关联。
+- Resource 输出键修正为 `service.instance.id` / `deployment.environment.name`；`Environment` 默认值统一为 `development`。
 - 升级 OpenTelemetry 依赖至 otel v1.45.0 / log v0.21.0（破坏性 API：log 包移除 `Value`/`KeyValue`，`attrkv` 迁移到 `attribute` 包）；Go 要求升至 1.26。
 
 - `errs` 堆栈策略可配置：新增 `errs.SetStackPolicy`，使用方可按 `error.type` 前缀覆盖默认策略（最长前缀优先，空 map = 库内置默认）；`NewSystem` 构造采集与 `error_project` 事件渲染均跟随同一策略。

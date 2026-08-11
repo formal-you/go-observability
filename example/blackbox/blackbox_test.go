@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	otelog "go.opentelemetry.io/otel/log"
@@ -38,6 +39,19 @@ func TestBlackboxJSONL(t *testing.T) {
 	events, lines := readJSONLEvents(t, path)
 	if len(events) != blackboxEventCount {
 		t.Fatalf("event lines = %d, want %d", len(events), blackboxEventCount)
+	}
+	for _, event := range events {
+		assertString(t, event, "service.name", blackboxServiceName)
+		assertString(t, event, "service.version", "dev")
+		assertString(t, event, "service.instance.id", "blackbox-local")
+		assertString(t, event, "deployment.environment.name", "local")
+		timestamp, ok := event["timestamp"].(string)
+		if !ok {
+			t.Fatalf("timestamp 不是字符串: %v", event)
+		}
+		if _, err := time.Parse(time.RFC3339Nano, timestamp); err != nil {
+			t.Errorf("timestamp=%q 不是 RFC3339Nano: %v", timestamp, err)
+		}
 	}
 
 	assertRequestScenario(t, events, report, requestBusinessSuccess,
@@ -235,6 +249,10 @@ func assertCanonicalOrder(t *testing.T, lines []string) {
 	t.Helper()
 	for i, line := range lines {
 		keys := orderedKeys(t, line)
+		if len(keys) == 0 || keys[0] != "timestamp" {
+			t.Errorf("line %d keys=%v, want timestamp 为首键", i+1, keys)
+			continue
+		}
 		levelIndex := slices.Index(keys, "level")
 		msgIndex := slices.Index(keys, "msg")
 		if levelIndex < 0 || msgIndex != levelIndex+1 {

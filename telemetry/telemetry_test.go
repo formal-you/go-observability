@@ -61,11 +61,11 @@ func TestSetupResourceAttributes(t *testing.T) {
 	}
 
 	want := map[string]string{
-		"service.name":           "svc",
-		"service.version":        "1.2.3",
-		"deployment.environment": "test",
-		"region":                 "cn",
-		"instance":               "i-1",
+		"service.name":                "svc",
+		"service.version":             "1.2.3",
+		"deployment.environment.name": "test",
+		"region":                      "cn",
+		"service.instance.id":         "i-1",
 	}
 	got := map[string]string{}
 	for _, kv := range p.Resource().Attributes() {
@@ -75,6 +75,45 @@ func TestSetupResourceAttributes(t *testing.T) {
 		if got[k] != v {
 			t.Errorf("resource 属性 %s = %q, want %q（全部: %v）", k, got[k], v, got)
 		}
+	}
+}
+
+func TestSetupFileCreatesLocalTracesAndMetadata(t *testing.T) {
+	ctx := context.Background()
+	p, err := SetupFile(Config{ServiceName: "mall-monolith", ServiceVersion: "1.0.0", Instance: "shop-01"})
+	if err != nil {
+		t.Fatalf("SetupFile 失败: %v", err)
+	}
+	defer func() { _ = p.Shutdown(ctx) }()
+	if p.LoggerProvider() != nil {
+		t.Fatal("SetupFile 不应创建 OTLP LoggerProvider")
+	}
+	attrs := map[string]string{}
+	for _, kv := range p.Resource().Attributes() {
+		attrs[string(kv.Key)] = kv.Value.AsString()
+	}
+	if attrs["service.name"] != "mall-monolith" || attrs["service.version"] != "1.0.0" || attrs["service.instance.id"] != "shop-01" || attrs["deployment.environment.name"] != "development" {
+		t.Fatalf("SetupFile Resource = %v", attrs)
+	}
+	tracer := p.Tracer("test")
+	_, span1 := tracer.Start(ctx, "one")
+	_, span2 := tracer.Start(ctx, "two")
+	if !span1.SpanContext().TraceID().IsValid() || !span1.SpanContext().SpanID().IsValid() {
+		t.Fatal("本地 span1 ID 无效")
+	}
+	if span1.SpanContext().IsSampled() {
+		t.Fatal("file-only root span 不应设置 sampled 标记")
+	}
+	if !span2.SpanContext().TraceID().IsValid() || span1.SpanContext().TraceID() == span2.SpanContext().TraceID() {
+		t.Fatal("独立本地 root span 应有不同有效 TraceID")
+	}
+	span1.End()
+	span2.End()
+}
+
+func TestSetupFileRequiresServiceName(t *testing.T) {
+	if _, err := SetupFile(Config{}); err == nil {
+		t.Fatal("SetupFile 缺少 service.name 应报错")
 	}
 }
 
