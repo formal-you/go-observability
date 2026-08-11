@@ -7,6 +7,7 @@
 | [configuration.md](configuration.md) | 配置 telemetry、Logger 和部署侧 Collector |
 | [environment.md](environment.md) | 查询库实际读取的环境变量 |
 | [architecture.md](architecture.md) | 理解包边界和事件数据流 |
+| [adr/](adr/README.md) | 追溯关键架构决策（ADR）：错误模型等「为什么这么做」的记录 |
 | [security.md](security.md) | 设计脱敏、采样和日志治理策略 |
 | [workflow.md](workflow.md) | 提交代码、测试与维护兼容性 |
 | [samber-comparison.md](samber-comparison.md) | 评估与 samber slog 生态的取舍 |

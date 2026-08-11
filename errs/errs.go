@@ -30,9 +30,12 @@ const (
 	KindSystem ErrorKind = "system"
 )
 
-// ErrorType 低基数失败类别（error.type），全错误类别必填。
-// 取值遵循段式命名：第一段为资源域（db/redis/mq/http/lock/idempotency/stock/data/
-// runtime 等），后接具体失败；business.* 为开放命名空间，本包不穷举，
+// ErrorType 映射 OTel error.type：保持低基数，采用 domain.reason 格式
+// （第一段为资源域 db/redis/mq/http/lock/idempotency/stock/data/runtime/validation/
+// business 等，后接具体失败原因，如 db.connection_error / business.stock_insufficient）。
+// 它是比 ErrorCode 更高层的全局分类：不针对某个具体业务码细化，而是把多个
+// ErrorCode 按失效模式归为同一大类（多对一），用于聚合、告警路由与堆栈策略。
+// 系统侧为固定枚举（本文件下方常量），business.* 为开放命名空间，本包不穷举，
 // 调用方可用 ErrorType("business.stock_insufficient") 或自定义常量。
 type ErrorType string
 
@@ -81,7 +84,8 @@ const (
 	TypeRuntimeDeadlineExceeded ErrorType = "runtime.deadline_exceeded"
 )
 
-// ErrorCode 业务错误码：模块.场景.操作（如 ORDER.CREATE.STOCK_INSUFFICIENT）。
+// ErrorCode 业务错误码：（服务/模块）.（场景/操作）.（结果/具体错误）
+// （如 ORDER.CREATE.STOCK_INSUFFICIENT）。
 // 仅 BizError 承载；SystemError 可通过 WithCode 关联可选业务码。
 type ErrorCode string
 

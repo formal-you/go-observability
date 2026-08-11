@@ -11,6 +11,7 @@
 - **核心零依赖**：根包 `log` 只依赖标准库（`log/slog`、`net`、`time`、`fmt`、`strings`）；OTel SDK 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`、`example/*`。
 - **批量导出分两层**：SDK 侧由 `telemetry.Config` 的批量导出间隔控制（trace 5s / metric 15s / log 1s），Collector 侧由 batch processor（timeout / send_batch_size）二次凑批；核心层每次 `Emit` 同步写出，不做批处理/定时器。
 - **出口可替换**：同一事件模型可投影到 JSONL / stdout / OTLP，业务埋点不因出口变化而重写。
+- **决策记录（ADR）**：错误模型（ErrorType / ErrorCode）等关键决策记录在 [docs/adr/](adr/README.md)，Review 时对照 ADR 判断实现是否漂移。
 
 ## 2. 分层架构
 

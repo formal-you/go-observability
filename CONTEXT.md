@@ -137,11 +137,13 @@ _Avoid_: 完整事件内容
 _Avoid_: 日志级别（WARN/ERROR 是 Level 维度）、错误码
 
 **低基数失败类别（ErrorType）**:
-error.type 的低基数失败类别，段式命名（db./redis./mq./http./runtime.…），用于聚合与告警路由。
+error.type 的低基数失败类别，采用 domain.reason 格式（db./redis./mq./http./runtime.…），用于聚合与告警路由。
+与业务错误码（ErrorCode）是「宏观分类 > 微观错误码」的多对一关系：多个三段式
+ErrorCode 归入同一个低基数 ErrorType，ErrorType 不是对 ErrorCode 的细化。
 _Avoid_: 错误消息（消息是高基数文本，类别是低基数标签）
 
 **业务错误码（ErrorCode）**:
-业务错误码：模块.场景.操作（如 ORDER.CREATE.STOCK_INSUFFICIENT）；由 BizError 承载，SystemError 可经 WithCode 关联可选码。
+业务错误码：（服务/模块）.（场景/操作）.（结果/具体错误）（如 ORDER.CREATE.STOCK_INSUFFICIENT）；由 BizError 承载，SystemError 可经 WithCode 关联可选码。
 _Avoid_: ErrorType、error message
 
 **错误投影（Error Projection）**:

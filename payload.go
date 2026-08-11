@@ -48,7 +48,7 @@ type BusinessPayload struct {
 	ErrorType       string // error.type：business.* / validation.failed（低基数失败类别）
 	Subject         Subject
 	Resource        Resource
-	BusinessCode    string // ErrCode：模块.场景.操作。
+	BusinessCode    string // ErrCode：（服务/模块）.（场景/操作）.（结果/具体错误）。
 	BusinessMessage string
 	Source          Source // code.function.name / code.file.path / code.line.number
 	Result          Result
