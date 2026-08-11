@@ -60,11 +60,21 @@ func main() {
 	})
 	r.POST("/api/v1/orders", func(c *gin.Context) {
 		// 业务拒绝：errresp.Abort 挂载错误，收口中间件决定状态码/响应体并写错误事件。
-		ginmw.Abort(c, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "business.order.stock_insufficient", "库存不足"))
+		ginmw.Abort(c, mustBusinessError(errs.BusinessErrorConfig{
+			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "business.stock_insufficient", Message: "库存不足",
+		}))
 	})
 	if err := r.Run(":8080"); err != nil {
 		slog.Error("server exit", "err", err)
 	}
+}
+
+func mustBusinessError(cfg errs.BusinessErrorConfig) errs.BizError {
+	err, buildErr := errs.NewBusinessError(cfg)
+	if buildErr != nil {
+		panic(buildErr)
+	}
+	return err
 }
 
 // newLogWriter 优先 OTLP（OTEL_EXPORTER_OTLP_ENDPOINT），否则写入当前工作目录的 logs/events.jsonl。

@@ -51,7 +51,9 @@ func main() {
 	})
 	mux.HandleFunc("POST /api/v1/orders", func(rw http.ResponseWriter, _ *http.Request) {
 		// 显式错误统一收口：SetError 挂载，nethttp.ErrorResponse 决定状态码/响应体并写错误事件。
-		httpmw.SetError(rw, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "business.order.stock_insufficient", "库存不足"))
+		httpmw.SetError(rw, mustBusinessError(errs.BusinessErrorConfig{
+			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "business.stock_insufficient", Message: "库存不足",
+		}))
 	})
 
 	// 链顺序：trace（server span）→ recover（panic 收口）→ accessLog（接入方模板）
@@ -67,6 +69,14 @@ func main() {
 	if err := http.ListenAndServe(":8081", handler); err != nil {
 		slog.Error("server", "err", err)
 	}
+}
+
+func mustBusinessError(cfg errs.BusinessErrorConfig) errs.BizError {
+	err, buildErr := errs.NewBusinessError(cfg)
+	if buildErr != nil {
+		panic(buildErr)
+	}
+	return err
 }
 
 // accessLog 是 net/http access 事件的接入方模板（库暂无 net/http access 中间件）。

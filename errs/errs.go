@@ -10,6 +10,7 @@ package errs
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -38,6 +39,21 @@ const (
 // 系统侧为固定枚举（本文件下方常量），business.* 为开放命名空间，本包不穷举，
 // 调用方可用 ErrorType("business.stock_insufficient") 或自定义常量。
 type ErrorType string
+
+// Validate 验证 ErrorType 是否严格符合 domain.reason：恰好两段，且每段仅包含
+// 小写字母、数字或下划线。
+func (t ErrorType) Validate() error {
+	return validateDottedIdentifier(string(t), 2, isLowerIdentifierByte, "error type")
+}
+
+// ParseErrorType 解析并验证严格的 domain.reason ErrorType。
+func ParseErrorType(value string) (ErrorType, error) {
+	t := ErrorType(value)
+	if err := t.Validate(); err != nil {
+		return "", err
+	}
+	return t, nil
+}
 
 const (
 	// TypeUnknown 普通 error 无法归类时的稳定兜底类型。
@@ -84,10 +100,53 @@ const (
 	TypeRuntimeDeadlineExceeded ErrorType = "runtime.deadline_exceeded"
 )
 
-// ErrorCode 业务错误码：（服务/模块）.（场景/操作）.（结果/具体错误）
-// （如 ORDER.CREATE.STOCK_INSUFFICIENT）。
-// 仅 BizError 承载；SystemError 可通过 WithCode 关联可选业务码。
+// ErrorCode 是可选、稳定、具体的应用错误码，严格采用
+// （服务/模块）.（场景/操作）.（结果/具体错误）三段式，例如
+// ORDER.CREATE.STOCK_INSUFFICIENT。日志统一投影到 app.error_code，不用于推导
+// ErrorType 或 EventName。
+// 仅 BizError 必须承载；SystemError 可通过 Code 关联可选业务码。
 type ErrorCode string
+
+// Validate 验证 ErrorCode 是否严格符合 SCOPE.OPERATION.REASON：恰好三段，且每段
+// 仅包含大写字母、数字或下划线。
+func (c ErrorCode) Validate() error {
+	return validateDottedIdentifier(string(c), 3, isUpperIdentifierByte, "error code")
+}
+
+// ParseErrorCode 解析并验证严格的 SCOPE.OPERATION.REASON ErrorCode。
+func ParseErrorCode(value string) (ErrorCode, error) {
+	c := ErrorCode(value)
+	if err := c.Validate(); err != nil {
+		return "", err
+	}
+	return c, nil
+}
+
+func validateDottedIdentifier(value string, segments int, validByte func(byte) bool, name string) error {
+	parts := strings.Split(value, ".")
+	if len(parts) != segments {
+		return fmt.Errorf("%s must contain exactly %d segments", name, segments)
+	}
+	for _, part := range parts {
+		if part == "" {
+			return fmt.Errorf("%s segments must not be empty", name)
+		}
+		for i := 0; i < len(part); i++ {
+			if !validByte(part[i]) {
+				return fmt.Errorf("%s contains invalid character %q", name, part[i])
+			}
+		}
+	}
+	return nil
+}
+
+func isUpperIdentifierByte(b byte) bool {
+	return b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_'
+}
+
+func isLowerIdentifierByte(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || b == '_'
+}
 
 // Source 代码位置（OTel code.* 语义），用于定位错误产生点。
 type Source struct {
@@ -265,7 +324,8 @@ func (e BizError) Source() Source {
 }
 
 // NewValidation 参数校验错误：typ=TypeValidationFailed，不记 ErrCode。
-// 调用方只需传可读 message，分类与类别由本函数固定，避免业务层误填。
+//
+// Deprecated: 使用 NewValidationError 获取严格校验与 cause/source 配置能力。
 func NewValidation(message string) BizError {
 	return BizError{
 		appError: appError{message: message},
@@ -275,8 +335,9 @@ func NewValidation(message string) BizError {
 	}
 }
 
-// NewBusiness 业务拒绝：ErrCode 必填，typ 为 business.* 类别
-// （如 TypeBusinessStockInsufficient 由调用方传 string 转 ErrorType 或自定义常量）。
+// NewBusiness 业务拒绝：ErrCode 与 typ 由调用方提供。
+//
+// Deprecated: 使用 NewBusinessError 获取严格错误码、类别与消息校验。
 func NewBusiness(code ErrorCode, typ ErrorType, message string) BizError {
 	return BizError{
 		appError: appError{message: message},
@@ -290,6 +351,60 @@ func NewBusiness(code ErrorCode, typ ErrorType, message string) BizError {
 func (e BizError) WithSource(s Source) BizError {
 	e.source = s
 	return e
+}
+
+// ValidationErrorConfig 配置严格的参数校验错误。
+type ValidationErrorConfig struct {
+	Message string
+	Cause   error
+	Source  Source
+}
+
+// BusinessErrorConfig 配置严格的业务拒绝错误。
+type BusinessErrorConfig struct {
+	Code    ErrorCode
+	Type    ErrorType
+	Message string
+	Cause   error
+	Source  Source
+}
+
+// NewValidationError 构造严格的参数校验错误。
+func NewValidationError(cfg ValidationErrorConfig) (BizError, error) {
+	message, err := validateMessage(cfg.Message)
+	if err != nil {
+		return BizError{}, err
+	}
+	return BizError{
+		appError: appError{message: message, cause: cfg.Cause},
+		typ:      TypeValidationFailed,
+		kind:     KindValidation,
+		source:   cfg.Source,
+	}, nil
+}
+
+// NewBusinessError 构造严格的业务拒绝错误。
+func NewBusinessError(cfg BusinessErrorConfig) (BizError, error) {
+	message, err := validateMessage(cfg.Message)
+	if err != nil {
+		return BizError{}, err
+	}
+	if err := cfg.Code.Validate(); err != nil {
+		return BizError{}, err
+	}
+	if err := cfg.Type.Validate(); err != nil {
+		return BizError{}, err
+	}
+	if !strings.HasPrefix(string(cfg.Type), "business.") {
+		return BizError{}, errors.New("business error type must use the business.* namespace")
+	}
+	return BizError{
+		appError: appError{message: message, cause: cfg.Cause},
+		code:     cfg.Code,
+		typ:      cfg.Type,
+		kind:     KindBusiness,
+		source:   cfg.Source,
+	}, nil
 }
 
 // SystemError 系统错误：error.type 必填；StackMust 类别的堆栈在构造时自动补记
@@ -353,6 +468,8 @@ func (e SystemError) Source() Source {
 }
 
 // SystemOption 构造选项：函数式选项，修改 *SystemError，NewSystem 按传入顺序应用。
+//
+// Deprecated: 使用 SystemErrorConfig 与 NewSystemError。
 type SystemOption func(*SystemError)
 
 // WithRetry 设置重试上下文：retryable=true，retries=已重试次数，exhausted=是否耗尽。
@@ -392,10 +509,12 @@ func WithSource(s Source) SystemOption {
 	}
 }
 
-// NewSystem 构造系统错误：typ 必填（低基数失败类别），message 为可读描述；
+// NewSystem 构造系统错误：typ 与 message 保持兼容性，不执行严格校验；
 // 可选选项按传入顺序生效（重试上下文、上游、关联码、堆栈、代码位置）。
 // StackMust 类别在构造点自动补记创建点堆栈（诊断价值高于收口点采集）；
 // 显式 WithStack 优先，避免覆盖调用方提供的堆栈。
+//
+// Deprecated: 使用 NewSystemError 获取严格校验与完整配置能力。
 func NewSystem(typ ErrorType, message string, opts ...SystemOption) SystemError {
 	e := SystemError{
 		appError: appError{message: message},
@@ -409,6 +528,68 @@ func NewSystem(typ ErrorType, message string, opts ...SystemOption) SystemError 
 		e.stack = CaptureStack()
 	}
 	return e
+}
+
+// SystemErrorConfig 配置严格的系统错误。
+type SystemErrorConfig struct {
+	Type             ErrorType
+	Code             ErrorCode
+	Message          string
+	Cause            error
+	Retryable        bool
+	Retries          int
+	RetriesExhausted bool
+	Upstream         string
+	Stack            string
+	Source           Source
+}
+
+// NewSystemError 构造严格的系统错误，并保留 StackPolicy 自动采集行为。
+func NewSystemError(cfg SystemErrorConfig) (SystemError, error) {
+	message, err := validateMessage(cfg.Message)
+	if err != nil {
+		return SystemError{}, err
+	}
+	if err := cfg.Type.Validate(); err != nil {
+		return SystemError{}, err
+	}
+	if strings.HasPrefix(string(cfg.Type), "business.") || strings.HasPrefix(string(cfg.Type), "validation.") {
+		return SystemError{}, errors.New("system error type must not use business.* or validation.* namespaces")
+	}
+	if cfg.Code != "" {
+		if err := cfg.Code.Validate(); err != nil {
+			return SystemError{}, err
+		}
+	}
+	if cfg.Retries < 0 {
+		return SystemError{}, errors.New("retries must be greater than or equal to zero")
+	}
+	if !cfg.Retryable && (cfg.Retries != 0 || cfg.RetriesExhausted) {
+		return SystemError{}, errors.New("non-retryable errors must have zero retries and not be exhausted")
+	}
+	e := SystemError{
+		appError:  appError{message: message, cause: cfg.Cause},
+		typ:       cfg.Type,
+		code:      cfg.Code,
+		retryable: cfg.Retryable,
+		retries:   cfg.Retries,
+		exhausted: cfg.RetriesExhausted,
+		upstream:  cfg.Upstream,
+		stack:     cfg.Stack,
+		source:    cfg.Source,
+	}
+	if e.stack == "" && StackRule(e.typ) == StackMust {
+		e.stack = CaptureStack()
+	}
+	return e, nil
+}
+
+func validateMessage(message string) (string, error) {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return "", errors.New("message must not be empty")
+	}
+	return message, nil
 }
 
 // CaptureSource 捕获调用点代码位置（skip 从 CaptureSource 自身开始计，建议调用方传 1-2）。

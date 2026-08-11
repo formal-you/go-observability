@@ -128,10 +128,16 @@ func EventMetadataFromContext(ctx context.Context) log.EventMetadata {
 // SystemErrorFromPanic 构造非预期系统错误：错误消息为 panic 值，自动补记创建点堆栈
 // （定位 panic 发生点）与代码位置（指向调用点）。各框架 panic 收口中间件共用。
 func SystemErrorFromPanic(typ errs.ErrorType, recovered any) errs.SystemError {
-	return errs.NewSystem(typ, fmt.Sprint(recovered),
-		errs.WithStack(errs.CaptureStack()),
-		errs.WithSource(errs.CaptureSource(1)),
-	)
+	err, buildErr := errs.NewSystemError(errs.SystemErrorConfig{
+		Type:    typ,
+		Message: fmt.Sprint(recovered),
+		Stack:   errs.CaptureStack(),
+		Source:  errs.CaptureSource(1),
+	})
+	if buildErr != nil {
+		panic("httperr: invalid panic error contract: " + buildErr.Error())
+	}
+	return err
 }
 
 // asAppError 从错误链中提取 errs.AppError；非 AppError 或 nil 返回 false。
