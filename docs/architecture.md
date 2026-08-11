@@ -226,4 +226,3 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 改动后的本地验证：`gofmt -w <改动文件>` → `go build ./...` → `go vet ./...` → `go test ./...`（本机低内存组合：`$env:GOMAXPROCS=1; $env:GOGC=30`）。
 
 完整示例见 [`example/mall`](../example/mall/)；可编辑架构图见 [go-observability-architecture.drawio](go-observability-architecture.drawio)。
-
