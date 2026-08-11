@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 )
+
 // （脱敏) 操作
 // FieldMasker 按键名（精确或后缀）将属性值替换为 Redact。
 // 默认敏感键见 DefaultSensitiveKeys；可通过 Keys 追加。
