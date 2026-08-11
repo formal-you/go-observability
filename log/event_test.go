@@ -209,6 +209,8 @@ func TestEventNameConventions(t *testing.T) {
 		EventNameAccessHTTPRequest,
 		EventName("business.order.paid"),
 		EventNameErrorDBTimeout,
+		EventNameSecurityInputAnomaly,
+		EventNameAuditInputAnomaly,
 	}
 	for _, n := range names {
 		if err := n.Validate(); err != nil {
@@ -299,5 +301,98 @@ func TestAccessPayloadRPCAttrs(t *testing.T) {
 	}
 	if _, ok := attrs["http.request.method"]; ok {
 		t.Error("RPC 访问事件不应输出 http.* 键")
+	}
+}
+
+// TestErrorSecurityAuditPayloadExtraAttrs 验证 Error/Security/Audit 的 ExtraAttrs：
+// canonical 键与公共保留键被过滤、合法 app.* 键保留、app.result 恒为最后键。
+func TestErrorSecurityAuditPayloadExtraAttrs(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload EventPayload
+		legal   map[string]string
+	}{
+		{
+			name: "error",
+			payload: ErrorEvent{
+				EventMetadata: EventMetadata{Level: LevelError},
+				Data: ErrorPayload{
+					EventName:    EventNameErrorDBTimeout,
+					ErrorType:    "db.timeout",
+					ErrorMessage: "dial tcp: timeout",
+					Result:       ResultError,
+					ExtraAttrs: []slog.Attr{
+						slog.String(string(KeyEventName), "error.forged"),
+						slog.String(string(KeyAppResult), string(ResultSuccess)),
+						slog.String(string(KeyTimestamp), "forged"),
+						slog.String("service.name", "forged"),
+						slog.String(string(KeyAppInputHash), "sha256:abc"),
+					},
+				},
+			},
+			legal: map[string]string{string(KeyAppInputHash): "sha256:abc"},
+		},
+		{
+			name: "security",
+			payload: SecurityEvent{
+				EventMetadata: EventMetadata{Level: LevelWarn},
+				Data: SecurityPayload{
+					EventName: EventNameSecurityInputAnomaly,
+					Result:    ResultBlocked,
+					ExtraAttrs: []slog.Attr{
+						slog.String(string(KeyAppResult), string(ResultSuccess)),
+						slog.String(string(KeyTimestamp), "forged"),
+						slog.String(string(KeyAppInputField), `["order_id"]`),
+					},
+				},
+			},
+			legal: map[string]string{string(KeyAppInputField): `["order_id"]`},
+		},
+		{
+			name: "audit",
+			payload: AuditEvent{
+				EventMetadata: EventMetadata{Level: LevelInfo},
+				Data: AuditPayload{
+					EventName: EventNameAuditInputAnomaly,
+					Result:    ResultBlocked,
+					ExtraAttrs: []slog.Attr{
+						slog.String(string(KeyAppResult), string(ResultSuccess)),
+						slog.String("timestamp", "forged"),
+						slog.String(string(KeyAppInputTruncated), `{"role":"admin"}`),
+					},
+				},
+			},
+			legal: map[string]string{string(KeyAppInputTruncated): `{"role":"admin"}`},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			attrs := tc.payload.Attrs()
+			counts := make(map[string]int)
+			values := make(map[string]string)
+			order := make([]string, 0, len(attrs))
+			for _, a := range attrs {
+				counts[a.Key]++
+				values[a.Key] = a.Value.String()
+				order = append(order, a.Key)
+			}
+			for key, want := range tc.legal {
+				if counts[key] != 1 || values[key] != want {
+					t.Errorf("%s = count %d value %q, want %q", key, counts[key], values[key], want)
+				}
+			}
+			for _, key := range []string{string(KeyTimestamp), "service.name"} {
+				if counts[key] != 0 {
+					t.Errorf("保留键 %s 未过滤（ExtraAttrs 注入）", key)
+				}
+			}
+			if counts[string(KeyAppResult)] != 1 || values[string(KeyAppResult)] == "success" {
+				t.Errorf("canonical app.result 应保持唯一且非伪造: %v", values)
+			}
+			if order[len(order)-1] != string(KeyAppResult) {
+				t.Errorf("app.result 应为最后键，实际末尾 %q", order[len(order)-1])
+			}
+		})
 	}
 }

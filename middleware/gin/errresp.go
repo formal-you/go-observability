@@ -4,7 +4,8 @@
 //
 // 与 Recover 的边界：本中间件只处理显式挂载到 c.Errors 的错误；Recover 捕获 panic
 // 后直接渲染 500 并中止（不写 c.Errors）。两者组合时，panic 会跳过本中间件
-// c.Next() 之后的代码，因此一个请求最多一个错误出口。
+// c.Next() 之后的代码，因此一个请求的错误事件唯一；经 InputGuard 注入的
+// 安全/审计事件可与错误事件并存。
 package ginmw
 
 import (
@@ -34,6 +35,10 @@ type ErrorConfig struct {
 	// ResponseProjector 自定义错误响应体与状态码；nil 使用默认（扁平 {code,message,request_id?}）。
 	// 接入方可用它注入自定义契约形状（如嵌套 error 对象），状态码与响应体一次决定。
 	ResponseProjector httperr.Projector
+
+	// InputGuard 输入风险守卫：写出 ErrorEvent 后调用，返回的 Security/Audit 事件
+	// 与错误事件并存（错误出口唯一）；nil 表示不补发额外事件。风险分级由接入方维护。
+	InputGuard httperr.InputGuard
 }
 
 // ErrorResponse 返回收口显式业务/系统错误的 Gin 中间件。
@@ -78,6 +83,7 @@ func ErrorResponse(cfg ErrorConfig) gin.HandlerFunc {
 		// Level 由 EventFromError 按 Kind 推导，不在此覆盖。
 		ev := log.EventFromError(eventName, err, md)
 		cfg.Logger.Emit(c.Request.Context(), ev)
+		httperr.EmitGuardEvents(cfg.Logger, c.Request.Context(), c.Request, err, cfg.InputGuard)
 
 		status, body := projector(err, md.RequestID)
 		c.AbortWithStatusJSON(status, body)

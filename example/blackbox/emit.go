@@ -125,4 +125,44 @@ func emitAll(ctx context.Context, l *log.Logger) {
 			"acquire lock order:pay:42 conflict"),
 		log.EventMetadata{},
 	))
+
+	// 9: security——高风险非法输入穿透校验触发系统错误（SIEM 视角，可直连安全聚合）
+	l.Emit(ctx, log.SecurityEvent{
+		EventMetadata: log.EventMetadata{Level: log.LevelWarn},
+		Data: log.SecurityPayload{
+			EventName:         log.EventNameSecurityInputAnomaly,
+			Subject:           log.Subject{UserID: "u-1001"},
+			SecurityEventType: "input.bypass",
+			FailureReason:     "非法输入穿透校验触发系统错误",
+			ActionTaken:       "blocked",
+			RiskScore:         85,
+			Result:            log.ResultBlocked,
+			ExtraAttrs: []slog.Attr{
+				slog.Any("app.input_field", []string{"order_id", "amount"}),
+				slog.String("app.input_hash", "sha256:3f4a1c2b"),
+				slog.String("app.input_truncated", `{"order_id":"...","amount":-1}`),
+			},
+		},
+	})
+
+	// 10: audit——非法输入涉及高权限/敏感资源变更（可追责审计留痕）
+	l.Emit(ctx, log.AuditEvent{
+		EventMetadata: log.EventMetadata{Level: log.LevelInfo},
+		Data: log.AuditPayload{
+			EventName:      log.EventNameAuditInputAnomaly,
+			Action:         "user.role.update",
+			Actor:          log.Actor{UserID: "u-1001", Role: "operator"},
+			Resource:       log.Resource{Type: "user", ID: "u-2002"},
+			AuditEventType: "input.anomaly",
+			TargetUserID:   "u-2002",
+			ChangedFields:  []string{"role"},
+			Reason:         "高风险输入触发敏感资源操作",
+			Result:         log.ResultBlocked,
+			ExtraAttrs: []slog.Attr{
+				slog.Any("app.input_field", []string{"role"}),
+				slog.String("app.input_hash", "sha256:9f2c8d4a"),
+				slog.String("app.input_truncated", `{"role":"admin"}`),
+			},
+		},
+	})
 }

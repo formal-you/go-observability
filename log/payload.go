@@ -121,6 +121,10 @@ type ErrorPayload struct {
 	UpstreamService  string
 	Source           Source
 	Result           Result
+	// ExtraAttrs 是事件专属扩展字段：接入方按事件注入 app.* 键（如非法输入摘要
+	// app.input_*），随公共字段一起扁平输出；与 ErrorPayload canonical 字段或
+	// 公共保留字段重名的属性会被忽略。
+	ExtraAttrs []slog.Attr
 }
 
 func (ErrorPayload) EventType() EventType { return EventError }
@@ -140,7 +144,43 @@ func (e ErrorPayload) Attrs() []slog.Attr {
 	attrs = appendString(attrs, KeyCodeFunctionName, e.Source.Function)
 	attrs = appendString(attrs, KeyCodeFilePath, e.Source.Filepath)
 	attrs = appendInt(attrs, KeyCodeLineNumber, e.Source.Line)
+	for _, attr := range e.ExtraAttrs {
+		if isErrorExtraAttrKeyAllowed(attr.Key) {
+			attrs = append(attrs, attr)
+		}
+	}
 	return appendString(attrs, KeyAppResult, string(e.Result))
+}
+
+// errorPayloadCanonicalKeys 是 ErrorPayload 的固定字段键：ExtraAttrs 不允许覆盖。
+var errorPayloadCanonicalKeys = map[string]struct{}{
+	string(KeyEventName):           {},
+	string(KeyErrorType):           {},
+	string(KeyExceptionMessage):    {},
+	string(KeyExceptionStacktrace): {},
+	string(KeyAppOperation):        {},
+	string(KeyAppFailureOperation): {},
+	string(KeyAppRootCauseType):    {},
+	string(KeyAppRetryable):        {},
+	string(KeyAppRetryCount):       {},
+	string(KeyAppUpstreamService):  {},
+	string(KeyCodeFunctionName):    {},
+	string(KeyCodeFilePath):        {},
+	string(KeyCodeLineNumber):      {},
+	string(KeyAppResult):           {},
+}
+
+// isErrorExtraAttrKeyAllowed 判断 ExtraAttrs 键是否允许注入 ErrorPayload：
+// 空键、canonical 键与公共保留键一律忽略。
+func isErrorExtraAttrKeyAllowed(key string) bool {
+	if key == "" {
+		return false
+	}
+	if _, canonical := errorPayloadCanonicalKeys[key]; canonical {
+		return false
+	}
+	_, reserved := reservedKeys[key]
+	return !reserved
 }
 
 // AuditPayload 记录高权限操作与敏感资源变更（审计，防篡改存储）。
@@ -157,6 +197,10 @@ type AuditPayload struct {
 	Reason         string
 	ApprovalID     string
 	Result         Result
+	// ExtraAttrs 是事件专属扩展字段：接入方按事件注入 app.* 键（如非法输入摘要
+	// app.input_*），随公共字段一起扁平输出；与 AuditPayload canonical 字段或
+	// 公共保留字段重名的属性会被忽略。
+	ExtraAttrs []slog.Attr
 }
 
 func (AuditPayload) EventType() EventType { return EventAudit }
@@ -176,7 +220,43 @@ func (e AuditPayload) Attrs() []slog.Attr {
 	attrs = appendFields(attrs, KeyAppAfter, e.After)
 	attrs = appendString(attrs, KeyAppReason, e.Reason)
 	attrs = appendString(attrs, KeyAppApprovalID, e.ApprovalID)
+	for _, attr := range e.ExtraAttrs {
+		if isAuditExtraAttrKeyAllowed(attr.Key) {
+			attrs = append(attrs, attr)
+		}
+	}
 	return appendString(attrs, KeyAppResult, string(e.Result))
+}
+
+// auditPayloadCanonicalKeys 是 AuditPayload 的固定字段键：ExtraAttrs 不允许覆盖。
+var auditPayloadCanonicalKeys = map[string]struct{}{
+	string(KeyEventName):         {},
+	string(KeyAppAction):         {},
+	string(KeyAppActorUserID):    {},
+	string(KeyAppActorRole):      {},
+	string(KeyAppResourceType):   {},
+	string(KeyAppResourceID):     {},
+	string(KeyAppAuditEventType): {},
+	string(KeyAppTargetUserID):   {},
+	string(KeyAppChangedFields):  {},
+	string(KeyAppBefore):         {},
+	string(KeyAppAfter):          {},
+	string(KeyAppReason):         {},
+	string(KeyAppApprovalID):     {},
+	string(KeyAppResult):         {},
+}
+
+// isAuditExtraAttrKeyAllowed 判断 ExtraAttrs 键是否允许注入 AuditPayload：
+// 空键、canonical 键与公共保留键一律忽略。
+func isAuditExtraAttrKeyAllowed(key string) bool {
+	if key == "" {
+		return false
+	}
+	if _, canonical := auditPayloadCanonicalKeys[key]; canonical {
+		return false
+	}
+	_, reserved := reservedKeys[key]
+	return !reserved
 }
 
 // SecurityPayload 记录认证、鉴权、风险或访问拦截行为（可直连 SIEM）。
@@ -188,6 +268,10 @@ type SecurityPayload struct {
 	ActionTaken       string
 	RiskScore         int
 	Result            Result
+	// ExtraAttrs 是事件专属扩展字段：接入方按事件注入 app.* 键（如非法输入摘要
+	// app.input_*），随公共字段一起扁平输出；与 SecurityPayload canonical 字段或
+	// 公共保留字段重名的属性会被忽略。
+	ExtraAttrs []slog.Attr
 }
 
 func (SecurityPayload) EventType() EventType { return EventSecurity }
@@ -201,7 +285,37 @@ func (e SecurityPayload) Attrs() []slog.Attr {
 	attrs = appendString(attrs, KeyAppFailureReason, e.FailureReason)
 	attrs = appendString(attrs, KeyAppActionTaken, e.ActionTaken)
 	attrs = appendInt(attrs, KeyAppRiskScore, e.RiskScore)
+	for _, attr := range e.ExtraAttrs {
+		if isSecurityExtraAttrKeyAllowed(attr.Key) {
+			attrs = append(attrs, attr)
+		}
+	}
 	return appendString(attrs, KeyAppResult, string(e.Result))
+}
+
+// securityPayloadCanonicalKeys 是 SecurityPayload 的固定字段键：ExtraAttrs 不允许覆盖。
+var securityPayloadCanonicalKeys = map[string]struct{}{
+	string(KeyEventName):            {},
+	string(KeyAppUserID):            {},
+	string(KeyAppTenantID):          {},
+	string(KeyAppSecurityEventType): {},
+	string(KeyAppFailureReason):     {},
+	string(KeyAppActionTaken):       {},
+	string(KeyAppRiskScore):         {},
+	string(KeyAppResult):            {},
+}
+
+// isSecurityExtraAttrKeyAllowed 判断 ExtraAttrs 键是否允许注入 SecurityPayload：
+// 空键、canonical 键与公共保留键一律忽略。
+func isSecurityExtraAttrKeyAllowed(key string) bool {
+	if key == "" {
+		return false
+	}
+	if _, canonical := securityPayloadCanonicalKeys[key]; canonical {
+		return false
+	}
+	_, reserved := reservedKeys[key]
+	return !reserved
 }
 
 // ProbePayload 记录健康、就绪、存活与启动探测结果。

@@ -1,14 +1,17 @@
 package httpmw
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/formal-you/go-observability/errs"
 	"github.com/formal-you/go-observability/log"
+	"github.com/formal-you/go-observability/middleware/httperr"
 )
 
 func TestErrorResponseRendersDefaultBodyAndEmitsEvent(t *testing.T) {
@@ -116,4 +119,77 @@ func TestNilLoggerRendersOnly(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400（nil logger 仍应渲染）", rec.Code)
 	}
+}
+
+// TestErrorResponseInputGuardEmitsSecurityAuditEvents 验证 net/http 版 InputGuard：
+// 系统错误写出 ErrorEvent 后，guard 返回的 Security/Audit 事件按序补发。
+func TestErrorResponseInputGuardEmitsSecurityAuditEvents(t *testing.T) {
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	var gotSummary httperr.InputSummary
+	handler := ErrorResponse(ErrorConfig{
+		Logger: logger,
+		InputGuard: func(_ context.Context, _ *http.Request, _ error, s httperr.InputSummary) []log.EventPayload {
+			gotSummary = s
+			return []log.EventPayload{
+				log.SecurityEvent{
+					EventMetadata: log.EventMetadata{Level: log.LevelWarn},
+					Data:          log.SecurityPayload{EventName: log.EventNameSecurityInputAnomaly, Result: log.ResultBlocked},
+				},
+				log.AuditEvent{
+					EventMetadata: log.EventMetadata{Level: log.LevelInfo},
+					Data:          log.AuditPayload{EventName: log.EventNameAuditInputAnomaly, Result: log.ResultBlocked},
+				},
+			}
+		},
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		SetError(w, errs.NewSystem(errs.TypeDBQueryTimeout, "dial tcp: timeout"))
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req = req.WithContext(httperr.WithInputSummary(req.Context(), httperr.InputSummary{Fields: []string{"order_id"}, Hash: "sha256:abc"}))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	if !reflect.DeepEqual(gotSummary.Fields, []string{"order_id"}) || gotSummary.Hash != "sha256:abc" {
+		t.Errorf("guard 摘要 = %+v, want order_id/sha256:abc", gotSummary)
+	}
+	if len(w.msgs) != 3 || !reflect.DeepEqual(w.msgs, []string{"error", "security", "audit"}) {
+		t.Fatalf("msgs = %v, want [error security audit]", w.msgs)
+	}
+	for i, want := range []string{"error.http.request", "security.input.anomaly", "audit.input.anomaly"} {
+		attrString(t, attrMap(w.attrsList[i]), "event.name", want)
+	}
+}
+
+// TestRecoverInputGuardEmitsSecurityEvent 验证 net/http Recover 同样支持 InputGuard。
+func TestRecoverInputGuardEmitsSecurityEvent(t *testing.T) {
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	handler := Recover(ErrorConfig{
+		Logger: logger,
+		InputGuard: func(_ context.Context, _ *http.Request, _ error, _ httperr.InputSummary) []log.EventPayload {
+			return []log.EventPayload{
+				log.SecurityEvent{
+					EventMetadata: log.EventMetadata{Level: log.LevelWarn},
+					Data:          log.SecurityPayload{EventName: log.EventNameSecurityInputAnomaly, Result: log.ResultBlocked},
+				},
+			}
+		},
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("boom")
+	}))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/boom", nil))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	if len(w.msgs) != 2 || !reflect.DeepEqual(w.msgs, []string{"error", "security"}) {
+		t.Fatalf("msgs = %v, want [error security]", w.msgs)
+	}
+	attrString(t, attrMap(w.attrsList[1]), "event.name", "security.input.anomaly")
 }

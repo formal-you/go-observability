@@ -29,6 +29,10 @@ type RecoverConfig struct {
 	// ResponseProjector 自定义 panic 错误响应体与状态码；nil 使用默认
 	// （500 + 扁平 {code:SYS_ERROR,message,request_id?}）。接入方可用它注入自定义契约形状。
 	ResponseProjector httperr.Projector
+
+	// InputGuard 输入风险守卫：写出 ErrorEvent 后调用，返回的 Security/Audit 事件
+	// 与错误事件并存（错误出口唯一）；nil 表示不补发额外事件。风险分级由接入方维护。
+	InputGuard httperr.InputGuard
 }
 
 // Recover 返回收口 Gin handler panic 的中间件。
@@ -74,6 +78,7 @@ func Recover(cfg RecoverConfig) gin.HandlerFunc {
 			// 统一走 log.EventFromError 投影，避免中间件重复维护字段映射。
 			ev := log.EventFromError(eventName, err, md)
 			cfg.Logger.Emit(c.Request.Context(), ev)
+			httperr.EmitGuardEvents(cfg.Logger, c.Request.Context(), c.Request, err, cfg.InputGuard)
 
 			status, body := projector(err, reqID)
 			c.AbortWithStatusJSON(status, body)

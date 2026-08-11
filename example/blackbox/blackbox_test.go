@@ -32,8 +32,8 @@ func TestBlackboxJSONL(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) != 9 {
-		t.Fatalf("want 9 event lines, got %d", len(lines))
+	if len(lines) != 11 {
+		t.Fatalf("want 11 event lines, got %d", len(lines))
 	}
 
 	decode := func(i int) map[string]any {
@@ -136,6 +136,25 @@ func TestBlackboxJSONL(t *testing.T) {
 	assertStr(m, "error.type", "lock.conflict")
 	assertStr(m, "level", "ERROR")
 	assertStack(m, "exception.stacktrace", false)
+
+	// 9: security——高风险非法输入穿透校验（SIEM 视角）
+	m = decode(9)
+	assertStr(m, "msg", "security")
+	assertStr(m, "event.name", "security.input.anomaly")
+	assertStr(m, "level", "WARN")
+	assertNum(m, "app.risk_score", 85)
+	assertStr(m, "app.action_taken", "blocked")
+	assertStr(m, "app.result", "blocked")
+
+	// 10: audit——非法输入涉及敏感资源变更（可追责审计）
+	m = decode(10)
+	assertStr(m, "msg", "audit")
+	assertStr(m, "event.name", "audit.input.anomaly")
+	assertStr(m, "level", "INFO")
+	assertStr(m, "app.actor_user_id", "u-1001")
+	assertStr(m, "app.target_user_id", "u-2002")
+	assertStr(m, "app.result", "blocked")
+
 }
 
 // orderedKeys 按 JSON 对象实际写入顺序返回键名（不做字典序），用于锁定规范字段顺序。
@@ -183,8 +202,8 @@ func TestBlackboxJSONLCanonicalOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) != 9 {
-		t.Fatalf("want 9 event lines, got %d", len(lines))
+	if len(lines) != 11 {
+		t.Fatalf("want 11 event lines, got %d", len(lines))
 	}
 
 	for i, line := range lines {
@@ -205,6 +224,13 @@ func TestBlackboxJSONLCanonicalOrder(t *testing.T) {
 		5: {"level", "msg", "event.name", "error.type", "exception.message", "exception.stacktrace",
 			"app.retryable", "app.retry_count", "app.upstream_service", "app.result"},
 		8: {"level", "msg", "event.name", "error.type", "exception.message", "app.retryable", "app.result"},
+		9: {"level", "msg", "event.name", "app.user_id", "app.security_event_type",
+			"app.failure_reason", "app.action_taken", "app.risk_score",
+			"app.input_field", "app.input_hash", "app.input_truncated", "app.result"},
+		10: {"level", "msg", "event.name", "app.action", "app.actor_user_id", "app.actor_role",
+			"app.resource_type", "app.resource_id", "app.audit_event_type", "app.target_user_id",
+			"app.changed_fields", "app.reason",
+			"app.input_field", "app.input_hash", "app.input_truncated", "app.result"},
 	}
 	for i, want := range exact {
 		if got := orderedKeys(t, lines[i]); !slices.Equal(got, want) {

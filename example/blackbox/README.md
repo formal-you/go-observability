@@ -16,7 +16,7 @@ go run ./example/blackbox
 go test ./example/blackbox -v
 ```
 
-## 覆盖的事件（9 条，顺序固定）
+## 覆盖的事件（11 条，顺序固定）
 
 | # | 类别 | 事件 | 关键结构 |
 | --- | --- | --- | --- |
@@ -29,6 +29,8 @@ go test ./example/blackbox -v
 | 6 | error | MQ 发布失败（重试耗尽） | **exception.stacktrace 有堆栈**、level=ERROR、app.retry_count=3 |
 | 7 | error | 运行时 panic | **exception.stacktrace 有堆栈**、event.name=error.runtime.panic、level=ERROR |
 | 8 | error | 锁冲突（对比项） | **exception.stacktrace 无堆栈**（StackOptional）、level=ERROR |
+| 9 | security | 高风险非法输入穿透校验 | **event.name=security.input.anomaly**、app.risk_score=85、app.input_*、app.result=blocked |
+| 10 | audit | 非法输入涉及敏感资源变更 | **event.name=audit.input.anomaly**、actor/resource、app.input_*、app.result=blocked |
 
 ## 字段顺序（所有事件一致）
 
@@ -59,3 +61,4 @@ go test ./example/blackbox -v
 | exception.stacktrace | **构造点堆栈（StackMust 自动采集）** |
 | app.retryable / app.retry_count / app.upstream_service | 重试与上游上下文 |
 | app.result | error |
+

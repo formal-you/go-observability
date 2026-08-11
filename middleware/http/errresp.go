@@ -33,6 +33,10 @@ type ErrorConfig struct {
 
 	// ResponseProjector 自定义错误响应体与状态码；nil 使用默认（扁平 {code,message,request_id?}）。
 	ResponseProjector httperr.Projector
+
+	// InputGuard 输入风险守卫：写出 ErrorEvent 后调用，返回的 Security/Audit 事件
+	// 与错误事件并存（错误出口唯一）；nil 表示不补发额外事件。风险分级由接入方维护。
+	InputGuard httperr.InputGuard
 }
 
 // errorWriter 捕获 handler 通过 SetError 挂载的错误，供 ErrorResponse 收口。
@@ -89,6 +93,7 @@ func ErrorResponse(cfg ErrorConfig) func(http.Handler) http.Handler {
 					md.RequestID = requestID
 				}
 				cfg.Logger.Emit(r.Context(), log.EventFromError(eventName, recorder.err, md))
+				httperr.EmitGuardEvents(cfg.Logger, r.Context(), r, recorder.err, cfg.InputGuard)
 			}
 			status, body := projector(recorder.err, requestID)
 			writeJSON(w, status, body)
@@ -123,6 +128,7 @@ func Recover(cfg ErrorConfig) func(http.Handler) http.Handler {
 							md.RequestID = requestID
 						}
 						cfg.Logger.Emit(r.Context(), log.EventFromError(eventName, err, md))
+						httperr.EmitGuardEvents(cfg.Logger, r.Context(), r, err, cfg.InputGuard)
 					}
 					status, body := projector(err, requestID)
 					writeJSON(w, status, body)

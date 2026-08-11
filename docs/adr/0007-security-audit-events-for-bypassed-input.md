@@ -1,6 +1,6 @@
 # ADR-0007：非法输入穿透校验触发系统错误的事件记录策略（SecurityEvent / AuditEvent 候选方案）
 
-- 状态：Proposed
+- 状态：Accepted
 - 日期：2026-08-11
 - 关联：ADR-0004（msg/event_type → LogRecord.Body）、CONTEXT.md（六类事件）、docs/architecture.md（错误投影 / 一个请求最多一个错误出口）
 
@@ -20,7 +20,18 @@
 
 ## 决策（Decision）
 
-**待定**：以下候选方案由维护者 / 接入方选择。选定后在同一提交内落地「代码 + 测试 + 文档」（AGENTS.md 防漂移规则）。
+**选定方案 D（按风险 / 资源分级组合）**：恒记 ErrorEvent；经中间件注入点 `InputGuard`
+由接入方维护风险分级 / 命中规则，按需补发 `SecurityEvent` / `AuditEvent`；输入只记
+`app.*` 摘要 + `FieldMasker`，不落原始 body。
+
+已落地（与本文档同批提交）：
+- `security.input.anomaly` / `audit.input.anomaly` 框架级事件名常量（log/types.go）；
+- `app.input_field` / `app.input_hash` / `app.input_truncated` 键（log/keys.go）；
+- Error / Security / Audit 三个 payload 的 `ExtraAttrs`（canonical 键守卫 + 保留键过滤）；
+- `httperr.InputSummary` / `InputGuard` / `WithInputSummary` / `InputSummaryFromContext` /
+  `EmitGuardEvents`（middleware/httperr）；
+- gin 与 net/http 的 errresp + recover 均支持 `InputGuard` 注入点；
+- example/blackbox 新增 security / audit 两条演示（9 → 11 条）与黑盒键序断言。
 
 ### 共同前提（任何方案都成立）
 
@@ -71,6 +82,8 @@
 
 ## 结果（Consequences）
 
-- 无论选哪个，都需在 `CONTEXT.md` / `docs/architecture.md` / `AGENTS.md` 同步「安全 / 审计事件与错误事件可否并存」的表述；若选 B / C / D，显式放宽「一个请求最多一个错误出口」为「错误出口唯一，安全 / 审计事件可并存」。
+- 方案 A / B / C 作为备选记录，未单独采纳（其能力已被 D 的组合覆盖）。
+- 已显式放宽「一个请求最多一个错误出口」为「错误出口唯一，安全 / 审计事件可并存」，并同步
+  `docs/architecture.md`、`middleware/gin/errresp.go` 注释与 `CONTEXT.md` 术语。
 - 输入记录一律走 `app.*` 摘要 + `FieldMasker`，默认不落原始 body；后端保留策略由接入方负责。
 - 选定后：新增事件名常量、示例（example）与黑盒断言测试，并回填本 ADR 状态为 Accepted 及最终方案。

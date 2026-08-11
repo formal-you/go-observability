@@ -300,6 +300,7 @@ docker compose -f observability/docker-compose.yml up -d
 | 默认覆盖 password、token、authorization 等凭证键 | 配置审计日志的防篡改存储与访问控制 |
 | 禁止 `ExtraAttrs` 覆盖 canonical 字段 | 制定日志保留期限与合规策略 |
 | 支持显式写入错误回调 | 监控 Writer 失败并建立告警 |
+| `InputGuard` 注入点：错误事件后按应用规则补发 `SecurityEvent` / `AuditEvent` | 风险分级/命中规则与输入摘要提取（`httperr.WithInputSummary`） |
 
 完整责任边界见 [安全指南](docs/security.md)。漏洞请通过 [GitHub 私密报告入口](https://github.com/formal-you/go-observability/security/advisories/new) 提交，不要公开利用细节。
 
@@ -374,3 +375,4 @@ go test ./...
   <strong>🔭 让每一条事件都有稳定语义，让每一次故障都有可追踪上下文。</strong><br>
   <sub>go-observability · semantic events for Go services</sub>
 </p>
+

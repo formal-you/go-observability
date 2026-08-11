@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"go.opentelemetry.io/otel/trace"
@@ -131,3 +132,64 @@ func asAppError(err error) (errs.AppError, bool) {
 func metadataOf(appErr errs.AppError) map[string]string {
 	return map[string]string{"error.type": string(appErr.ErrorType())}
 }
+
+// InputSummary 非法输入摘要：接入方在 handler 里提取输入相关字段/哈希/截断文本后，
+// 用 WithInputSummary 挂到 ctx，供错误收口（errresp/recover）的 InputGuard 读取。
+// 设计约束：只记 app.* 摘要字段，不落原始 body（高基数且可能含 PII/凭证），
+// 原始 payload 的留存与脱敏由接入方负责（配合 FieldMasker）。
+type InputSummary struct {
+	// Fields 与失败相关的输入字段名（app.input_field）。
+	Fields []string
+	// Hash 输入哈希（可选，原文不落地；app.input_hash）。
+	Hash string
+	// Truncated 截断前 N 字节的输入摘要（可选；app.input_truncated）。
+	Truncated string
+}
+
+// Attrs 输出 InputSummary 的扁平属性（app.input_*，零值省略）。
+func (s InputSummary) Attrs() []slog.Attr {
+	attrs := make([]slog.Attr, 0, 3)
+	if len(s.Fields) > 0 {
+		attrs = append(attrs, slog.Any(string(log.KeyAppInputField), s.Fields))
+	}
+	if s.Hash != "" {
+		attrs = append(attrs, slog.String(string(log.KeyAppInputHash), s.Hash))
+	}
+	if s.Truncated != "" {
+		attrs = append(attrs, slog.String(string(log.KeyAppInputTruncated), s.Truncated))
+	}
+	return attrs
+}
+
+// InputGuard 输入风险守卫：错误收口（errresp/recover）在写出 ErrorEvent 后调用，
+// 返回的 Security/Audit 等事件由中间件用同一 logger 与 ctx 依次写出（错误事件唯一，
+// 安全/审计事件可与错误事件并存）。返回 nil 表示不补发额外事件。
+// 风险分级/命中规则由接入方维护，库不做自动分类；guard 仅在错误路径被调用。
+type InputGuard func(ctx context.Context, r *http.Request, err error, summary InputSummary) []log.EventPayload
+
+// WithInputSummary 把非法输入摘要挂到 ctx，供错误收口的 InputGuard 读取。
+func WithInputSummary(ctx context.Context, s InputSummary) context.Context {
+	return context.WithValue(ctx, inputSummaryKey{}, s)
+}
+
+// InputSummaryFromContext 从 ctx 读取输入摘要；未设置时返回零值。
+func InputSummaryFromContext(ctx context.Context) InputSummary {
+	s, _ := ctx.Value(inputSummaryKey{}).(InputSummary)
+	return s
+}
+
+// EmitGuardEvents 调用 InputGuard 并把返回的额外事件依次写出；guard 为 nil 时不做任何事。
+// 中间件在写出 ErrorEvent 之后调用，保证同一请求的错误事件唯一、安全/审计事件可并存，
+// 且共享同一 ctx（trace/span 自动关联）。
+func EmitGuardEvents(l *log.Logger, ctx context.Context, r *http.Request, err error, guard InputGuard) {
+	if guard == nil {
+		return
+	}
+	summary := InputSummaryFromContext(ctx)
+	for _, ev := range guard(ctx, r, err, summary) {
+		l.Emit(ctx, ev)
+	}
+}
+
+// inputSummaryKey 是 InputSummary 在 context.Context 中的私有键类型，避免与外部键冲突。
+type inputSummaryKey struct{}

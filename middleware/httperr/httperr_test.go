@@ -3,13 +3,17 @@ package httperr
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/formal-you/go-observability/errs"
+	"github.com/formal-you/go-observability/log"
 )
 
 func TestStatusForError(t *testing.T) {
@@ -165,4 +169,77 @@ func TestSystemErrorFromPanic(t *testing.T) {
 	if !strings.Contains(err.Stack(), "goroutine") {
 		t.Errorf("stack should contain goroutine dump")
 	}
+}
+
+// captureLogger 捕获写出的 msg，用于验证 EmitGuardEvents 的写出行为。
+type captureLogger struct{ msgs []string }
+
+func (c *captureLogger) Write(_ context.Context, msg string, _ ...slog.Attr) error {
+	c.msgs = append(c.msgs, msg)
+	return nil
+}
+
+func TestInputSummaryAttrs(t *testing.T) {
+	t.Run("zero omitted", func(t *testing.T) {
+		if got := (InputSummary{}).Attrs(); len(got) != 0 {
+			t.Errorf("零值应全部省略, got %v", got)
+		}
+	})
+	t.Run("fields hash truncated", func(t *testing.T) {
+		attrs := (InputSummary{
+			Fields:    []string{"order_id", "amount"},
+			Hash:      "sha256:abc",
+			Truncated: `{"order_id":"..."}`,
+		}).Attrs()
+		got := make(map[string]any, len(attrs))
+		for _, a := range attrs {
+			got[a.Key] = a.Value.Any()
+		}
+		if !reflect.DeepEqual(got["app.input_field"], []string{"order_id", "amount"}) {
+			t.Errorf("app.input_field = %#v", got["app.input_field"])
+		}
+		if got["app.input_hash"] != "sha256:abc" {
+			t.Errorf("app.input_hash = %#v", got["app.input_hash"])
+		}
+		if got["app.input_truncated"] != `{"order_id":"..."}` {
+			t.Errorf("app.input_truncated = %#v", got["app.input_truncated"])
+		}
+	})
+}
+
+func TestWithInputSummaryRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	if got := InputSummaryFromContext(ctx); !reflect.DeepEqual(got, InputSummary{}) {
+		t.Errorf("未设置时应返回零值, got %+v", got)
+	}
+	s := InputSummary{Fields: []string{"role"}, Hash: "sha256:x"}
+	if got := InputSummaryFromContext(WithInputSummary(ctx, s)); !reflect.DeepEqual(got, s) {
+		t.Errorf("round trip = %+v, want %+v", got, s)
+	}
+}
+
+func TestEmitGuardEvents(t *testing.T) {
+	c := &captureLogger{}
+	l := log.NewLogger(c)
+	ctx := WithInputSummary(context.Background(), InputSummary{Fields: []string{"order_id"}})
+	err := errs.NewSystem(errs.TypeDBConnectionError, "dial tcp: refused")
+
+	t.Run("nil guard no-op", func(t *testing.T) {
+		EmitGuardEvents(l, ctx, httptest.NewRequest(http.MethodGet, "/x", nil), err, nil)
+		if len(c.msgs) != 0 {
+			t.Errorf("nil guard 不应写出事件, got %v", c.msgs)
+		}
+	})
+	t.Run("guard events emitted in order", func(t *testing.T) {
+		guard := func(_ context.Context, _ *http.Request, _ error, _ InputSummary) []log.EventPayload {
+			return []log.EventPayload{
+				log.SecurityEvent{EventMetadata: log.EventMetadata{Level: log.LevelWarn}, Data: log.SecurityPayload{EventName: log.EventNameSecurityInputAnomaly, Result: log.ResultBlocked}},
+				log.AuditEvent{EventMetadata: log.EventMetadata{Level: log.LevelInfo}, Data: log.AuditPayload{EventName: log.EventNameAuditInputAnomaly, Result: log.ResultBlocked}},
+			}
+		}
+		EmitGuardEvents(l, ctx, httptest.NewRequest(http.MethodGet, "/x", nil), err, guard)
+		if !reflect.DeepEqual(c.msgs, []string{"security", "audit"}) {
+			t.Errorf("events = %v, want [security audit]", c.msgs)
+		}
+	})
 }

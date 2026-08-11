@@ -75,6 +75,9 @@ const (
 	KeyAppProbeType         Key = "app.probe_type"
 	KeyAppErrorCode         Key = "app.error_code"
 	KeyAppSource            Key = "app.source"
+	KeyAppInputField        Key = "app.input_field"
+	KeyAppInputHash         Key = "app.input_hash"
+	KeyAppInputTruncated    Key = "app.input_truncated"
 	// 领域专属键（order_id/amount/…）不在核心登记：由接入方自建（example/mall）
 	// 经 BusinessPayload.ExtraAttrs 注入，前缀仍使用 app.*。
 )

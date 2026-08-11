@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -13,6 +14,7 @@ import (
 
 	"github.com/formal-you/go-observability/errs"
 	"github.com/formal-you/go-observability/log"
+	"github.com/formal-you/go-observability/middleware/httperr"
 )
 
 // TestErrorResponseBusinessErrorWritesEventAndResponse 验证业务拒绝（KindBusiness）：
@@ -326,4 +328,95 @@ func TestErrorResponseProjectorOverride(t *testing.T) {
 	if len(w.msgs) != 1 || w.msgs[0] != "business" {
 		t.Fatalf("events = %v, want one business event", w.msgs)
 	}
+}
+
+// TestErrorResponseInputGuardEmitsSecurityAuditEvents 验证 InputGuard 注入点：
+// 系统错误写出 ErrorEvent 后，guard 返回的 Security/Audit 事件按序补发，
+// 且共享同一 trace/span（扁平投影 trace_id/span_id 一致）。
+func TestErrorResponseInputGuardEmitsSecurityAuditEvents(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	var gotSummary httperr.InputSummary
+	engine := gin.New()
+	engine.Use(ErrorResponse(ErrorConfig{
+		Logger: logger,
+		InputGuard: func(ctx context.Context, _ *http.Request, _ error, s httperr.InputSummary) []log.EventPayload {
+			gotSummary = s
+			md := httperr.EventMetadataFromContext(ctx)
+			return []log.EventPayload{
+				log.SecurityEvent{
+					EventMetadata: md,
+					Data:          log.SecurityPayload{EventName: log.EventNameSecurityInputAnomaly, Result: log.ResultBlocked},
+				},
+				log.AuditEvent{
+					EventMetadata: md,
+					Data:          log.AuditPayload{EventName: log.EventNameAuditInputAnomaly, Result: log.ResultBlocked},
+				},
+			}
+		},
+	}))
+	engine.GET("/x", func(c *gin.Context) {
+		c.Request = c.Request.WithContext(httperr.WithInputSummary(c.Request.Context(), httperr.InputSummary{Fields: []string{"order_id"}, Hash: "sha256:abc"}))
+		Abort(c, errs.NewSystem(errs.TypeDBQueryTimeout, "dial tcp: timeout"))
+	})
+
+	tid, err := trace.TraceIDFromHex("0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sid, err := trace.SpanIDFromHex("0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := trace.NewSpanContext(trace.SpanContextConfig{TraceID: tid, SpanID: sid, TraceFlags: trace.FlagsSampled})
+	req := httptest.NewRequest(http.MethodGet, "/x", nil).WithContext(trace.ContextWithRemoteSpanContext(context.Background(), sc))
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	if !reflect.DeepEqual(gotSummary.Fields, []string{"order_id"}) || gotSummary.Hash != "sha256:abc" {
+		t.Errorf("guard 摘要 = %+v, want order_id/sha256:abc", gotSummary)
+	}
+	if len(w.msgs) != 3 || !reflect.DeepEqual(w.msgs, []string{"error", "security", "audit"}) {
+		t.Fatalf("msgs = %v, want [error security audit]", w.msgs)
+	}
+	for i, want := range []string{"error.http.request", "security.input.anomaly", "audit.input.anomaly"} {
+		attrs := attrMap(w.attrsList[i])
+		attrString(t, attrs, "event.name", want)
+		attrString(t, attrs, "trace_id", "0123456789abcdef0123456789abcdef")
+		attrString(t, attrs, "span_id", "0123456789abcdef")
+	}
+}
+
+// TestRecoverInputGuardEmitsSecurityEvent 验证 Recover 同样支持 InputGuard：
+// panic 收口写出 ErrorEvent 后按序补发 SecurityEvent。
+func TestRecoverInputGuardEmitsSecurityEvent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	engine := gin.New()
+	engine.Use(Recover(RecoverConfig{
+		Logger: logger,
+		InputGuard: func(_ context.Context, _ *http.Request, _ error, _ httperr.InputSummary) []log.EventPayload {
+			return []log.EventPayload{
+				log.SecurityEvent{
+					EventMetadata: log.EventMetadata{Level: log.LevelWarn},
+					Data:          log.SecurityPayload{EventName: log.EventNameSecurityInputAnomaly, Result: log.ResultBlocked},
+				},
+			}
+		},
+	}))
+	engine.GET("/boom", func(c *gin.Context) { panic("boom") })
+
+	rec := doRequest(engine, "/boom")
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	if len(w.msgs) != 2 || !reflect.DeepEqual(w.msgs, []string{"error", "security"}) {
+		t.Fatalf("msgs = %v, want [error security]", w.msgs)
+	}
+	attrString(t, attrMap(w.attrsList[1]), "event.name", "security.input.anomaly")
 }

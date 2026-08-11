@@ -150,7 +150,16 @@ go-observability/
   -> 进入 4.1 同一条 Emit 管线写出
 ```
 
-错误事件名必须由调用方从 `types.go` 常量注册表传入，`EventFromError` 不自动派生；Trace/Span 由调用方从 span context 提取后填入 `md`。Gin 接入时，显式业务/系统错误由 `middleware/errresp` 在链尾统一收口（`c.Errors` + `Abort`），panic 仍由 `middleware/recover` 处理，二者组合时一个请求最多一个错误出口。
+错误事件名必须由调用方从 `types.go` 常量注册表传入，`EventFromError` 不自动派生；Trace/Span 由调用方从 span context 提取后填入 `md`。Gin 接入时，显式业务/系统错误由 `middleware/errresp` 在链尾统一收口（`c.Errors` + `Abort`），panic 仍由 `middleware/recover` 处理，二者组合时一个请求的错误事件唯一；经 InputGuard 注入的安全/审计事件可与错误事件并存（见 4.3）。
+
+### 4.3 非法输入的安全/审计事件（方案 D，ADR-0007）
+
+非法输入穿透校验触发系统错误时，错误收口（errresp / recover）仍只投影一条
+`ErrorEvent`（错误出口唯一）；接入方在 handler 用 `httperr.WithInputSummary` 把
+`InputSummary`（app.input_field / app.input_hash / app.input_truncated）挂到 ctx，
+并配置 `InputGuard`——收口在写出 ErrorEvent 后调用 guard，按风险分级/命中规则补发
+`SecurityEvent`（安全聚合 / SIEM）与 `AuditEvent`（合规审计），与错误事件并存，
+共享同一 ctx（trace/span 自动关联）。输入只记 app.* 摘要，不落原始 body（配合 FieldMasker）。
 
 ## 5. 双投影：同一事件两种出口
 

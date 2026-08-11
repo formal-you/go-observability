@@ -39,6 +39,10 @@ const (
 	EventNameAccessRPCRequest EventName = "access.rpc.request"
 	// EventNameErrorRPCRequest 错误事件：gRPC 调用失败（RPC 错误收口）。
 	EventNameErrorRPCRequest EventName = "error.rpc.request"
+	// EventNameSecurityInputAnomaly 安全事件：非法输入穿透校验触发系统错误（高风险输入异常，可直连 SIEM）。
+	EventNameSecurityInputAnomaly EventName = "security.input.anomaly"
+	// EventNameAuditInputAnomaly 审计事件：非法输入涉及高权限/敏感资源变更（可追责审计留痕）。
+	EventNameAuditInputAnomaly EventName = "audit.input.anomaly"
 )
 
 // NewEventName 由三段（类别.模块.操作）构造 EventName 并做构造校验。
