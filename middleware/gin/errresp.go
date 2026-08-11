@@ -103,7 +103,14 @@ func ErrorResponse(cfg ErrorConfig) gin.HandlerFunc {
 // HTTP 边界由中间件按 errs.Kind 映射状态码与响应体，handler 不应自行决定状态码。
 func Abort(c *gin.Context, err error) {
 	if err == nil {
-		err = errs.NewSystem(errs.TypeUnknown, "internal error")
+		internal, buildErr := errs.NewSystemError(errs.SystemErrorConfig{
+			Type:    errs.TypeUnknown,
+			Message: "internal error",
+		})
+		if buildErr != nil {
+			panic("ginmw: invalid fallback error contract: " + buildErr.Error())
+		}
+		err = internal
 	}
 	_ = c.Error(err)
 	c.Abort()

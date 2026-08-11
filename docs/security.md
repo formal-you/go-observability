@@ -9,7 +9,17 @@
 - 未经评估的请求体、响应体、查询字符串和错误对象。
 - 可以用低敏标识或哈希替代的真实用户信息。
 
-`FieldMasker` 根据键名递归处理常见 map 和 slice，但无法识别所有业务语义、自定义类型或嵌入字符串中的秘密。使用方必须维护自己的敏感字段清单，并在进入事件前减少采集。
+`FieldMasker{}` 内置覆盖 password、passwd、secret、token、access_token、refresh_token、authorization、
+cookie、证件号、手机号和常见 `request.body` / `raw_body` 键，并递归处理 group、map、slice 与
+LogValuer。它仍无法识别所有业务语义、自定义类型或嵌入字符串中的秘密；使用方必须显式配置
+`log.WithMasker`、维护组织特有敏感键，并在进入事件前减少采集。
+
+认证边界可通过 `log.WithIdentityContext` + `ContextIdentityExtractor` 注入可信 Subject / Actor。
+提取器的非空值优先于事件属性，防止业务事件伪造 `user.id` 或 Actor；用户和租户字段只用于日志
+与 Trace 查询，不得作为默认 Metric 维度。
+
+系统错误堆栈通过 `errs.SetStackConfig` 设置最大字节数和路径策略。生产 profile 默认 16 KiB、仅
+保留文件名，并以 `app.stacktrace_truncated` 区分截断；panic 仍保留可用诊断堆栈。
 
 ## 写入与存储
 

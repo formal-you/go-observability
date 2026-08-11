@@ -54,7 +54,7 @@ func TestAccessEventAttrsConform(t *testing.T) {
 		"event.name",
 		"http.request.method", "url.path", "http.route", "http.response.status_code",
 		"client.address", "user_agent.original",
-		"app.user_id", "app.result",
+		"user.id", "app.result",
 	}
 	for _, k := range want {
 		if _, ok := attrs[k]; !ok {
@@ -101,7 +101,7 @@ func TestZeroValueOmission(t *testing.T) {
 		},
 	}
 	attrs := attrMap(ev.Attrs())
-	for _, k := range []string{"app.user_id", "app.error_code", "latency_ms"} {
+	for _, k := range []string{"user.id", "app.user_id", "app.error_code", "latency_ms"} {
 		if _, ok := attrs[k]; ok {
 			t.Errorf("零值字段不应输出：%s", k)
 		}
@@ -121,7 +121,8 @@ func TestBusinessPayloadExtraAttrsCannotOverrideGovernanceKeys(t *testing.T) {
 		ExtraAttrs: []slog.Attr{
 			slog.String(string(KeyEventName), "order.payment.forged"),
 			slog.String(string(KeyErrorType), "forged.error"),
-			slog.String(string(KeyAppUserID), "user-forged"),
+			slog.String(string(KeyUserID), "user-forged"),
+			slog.String(string(KeyAppUserID), "legacy-user-forged"),
 			slog.String(string(KeyAppTenantID), "tenant-forged"),
 			slog.String(string(KeyAppResourceType), "forged-resource"),
 			slog.String(string(KeyAppResourceID), "resource-forged"),
@@ -148,7 +149,7 @@ func TestBusinessPayloadExtraAttrsCannotOverrideGovernanceKeys(t *testing.T) {
 	wantCanonical := map[string]string{
 		string(KeyEventName):          string(payload.EventName),
 		string(KeyErrorType):          payload.ErrorType,
-		string(KeyAppUserID):          payload.Subject.UserID,
+		string(KeyUserID):             payload.Subject.UserID,
 		string(KeyAppTenantID):        payload.Subject.TenantID,
 		string(KeyAppResourceType):    payload.Resource.Type,
 		string(KeyAppResourceID):      payload.Resource.ID,

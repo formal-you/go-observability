@@ -6,6 +6,7 @@
 
 ### Added
 
+- 新增严格错误值验证与配置式构造器：ErrorCode 使用 `SCOPE.OPERATION.REASON`，ErrorType 使用低基数 `domain.reason`，并支持保留 cause 链。
 - 六类类型化事件、`Logger` / `Writer` 接口，以及 JSONL、stdout、OTLP Writer。
 - `AccessPayload` 新增 `RPCInfo`（semconv `rpc.*`）与框架级事件名 `rpc.request.completed` / `rpc.request.failed`，支持 gRPC 传输层访问/错误事件。
 - `errresp` 与 `recover` 中间件新增 `ResponseProjector` 配置：响应体与状态码可注入（默认保持扁平 `{code,message,request_id?}`），接入方可按自身 HTTP 契约投影。
@@ -20,6 +21,9 @@
 - blackbox 新增可实际读取的 YAML 配置模板，覆盖服务身份、最低级别、输出路径、覆盖策略、文件轮转和 OTLP endpoint。
 - `ResultKeepSampler`、`FieldMasker` 与写入错误回调。
 - 新增 `EventTypeKeepSampler`：按 `msg` / EventType 全量保留业务、错误、安全、审计和探测事件，其余事件委托 Fallback（如 `ResultKeepSampler`）采样；`EventKeepSampler` 保留用于领域前缀与旧配置兼容。
+- 新增 `IdentityContext` / `IdentityExtractor`：可信 Subject / Actor 上下文自动补全，用户标识输出 semconv `user.id`；新增手机号、证件号、Cookie 和 request body 等默认敏感键。
+- 新增 `errs.StackConfig`：提供 64 KiB 开发 / 16 KiB 生产 profile、路径策略、稳定截断标记与 panic 保护。
+- `telemetry.Config` 支持注入公开 `TraceExporter` / `MetricReader`、OTLP 日志有界队列和 `Runtime.Stats` exporter 错误计数。
 - 新增 `CONTEXT.md` 项目术语表：统一「采样」「批量导出间隔」「事件模型」及 OTel Trace / Metric / Log / Error 专业术语，避免沟通误导。
 - `TraceExtractor` 接线：新增 `WithTraceExtractor` 与 `middleware/trace.NewTraceExtractor`，事件未显式携带 trace_id/span_id 时自动补全（不覆盖已设值）。
 - 新增采样器构造器 `NewResultKeepSampler` / `NewEventKeepSampler`：非法入参构造期 panic，消除零值陷阱。
@@ -37,10 +41,13 @@
 - Error / Security / Audit payload 新增 `ExtraAttrs`（canonical 键守卫 + 保留键过滤）；新增框架级事实名 `input.threat.detected` / `input.anomaly.recorded` 与键 `app.input_field` / `app.input_hash` / `app.input_truncated`。
 
 ### Changed
+- `telemetry` 新增独立 `Runtime`、显式 `LogOutput` 与 `WriterConfig`；构造不再修改 OTel 全局状态，需显式 `InstallGlobal`，旧 `Setup*` 入口标记 Deprecated。
+- 仓库生产示例和正式黑盒迁移到严格错误构造器；旧错误构造器与 SystemOption 保留为 Deprecated 兼容入口。
 - `event.name` 从重复 `msg` 的「类别.模块.操作」调整为「领域.对象.事实」，并禁止六类 EventType 作为首段；HTTP 错误出口按错误 Kind 默认选择 `http.request.rejected` / `http.request.failed`。
 - BizError 与 SystemError 的稳定具体错误码统一投影到 `app.error_code`；旧 `app.business_code` / `app.operation` 不再输出，旧 Go 字段仅保留源码兼容输入。
 - 默认运维建议改为 HTTP AccessEvent 全量保留（健康检查用 `SkipPaths` 排除）；成功 access 概率采样保留为使用方显式选择，并明确会放弃完整的跨事件 access 关联。
 - Resource 输出键修正为 `service.instance.id` / `deployment.environment.name`；`Environment` 默认值统一为 `development`。
+- `Subject.UserID` 的新事件输出从 `app.user_id` 迁移到 semconv `user.id`；旧常量保留为 Deprecated 兼容输入。
 - 升级 OpenTelemetry 依赖至 otel v1.45.0 / log v0.21.0（破坏性 API：log 包移除 `Value`/`KeyValue`，`attrkv` 迁移到 `attribute` 包）；Go 要求升至 1.26。
 
 - `errs` 堆栈策略可配置：新增 `errs.SetStackPolicy`，使用方可按 `error.type` 前缀覆盖默认策略（最长前缀优先，空 map = 库内置默认）；`NewSystem` 构造采集与 `error_project` 事件渲染均跟随同一策略。

@@ -128,11 +128,9 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 
 	engine.POST("/api/v1/orders", func(c *gin.Context) {
 		pauseForLatency()
-		ginmw.Abort(c, errs.NewBusiness(
-			"ORDER.CREATE.STOCK_INSUFFICIENT",
-			errs.ErrorType("business.order.stock_insufficient"),
-			"商品库存不足",
-		))
+		ginmw.Abort(c, mustBusinessError(errs.BusinessErrorConfig{
+			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "business.stock_insufficient", Message: "商品库存不足",
+		}))
 	})
 
 	engine.POST("/api/v1/admin/users/:id/role", func(c *gin.Context) {
@@ -143,7 +141,9 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 			Truncated: `{"role":"admin"}`,
 		})
 		c.Request = c.Request.WithContext(ctx)
-		ginmw.Abort(c, errs.NewSystem(errs.TypeDBQueryTimeout, "update user role: database timeout"))
+		ginmw.Abort(c, mustSystemError(errs.SystemErrorConfig{
+			Type: errs.TypeDBQueryTimeout, Message: "update user role: database timeout",
+		}))
 	})
 
 	engine.GET("/api/v1/panic", func(*gin.Context) {
@@ -204,10 +204,10 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	report.record("background-mq", mqSpan.SpanContext())
 	logger.Emit(mqCtx, log.EventFromError(
 		log.NewEventName("messaging", "publish", "failed"),
-		errs.NewSystem(errs.TypeMQPublishFailed,
-			"publish order.created: deadline exceeded",
-			errs.WithUpstream("kafka"),
-			errs.WithRetry(3, true)),
+		mustSystemError(errs.SystemErrorConfig{
+			Type: errs.TypeMQPublishFailed, Message: "publish order.created: deadline exceeded",
+			Upstream: "kafka", Retryable: true, Retries: 3, RetriesExhausted: true,
+		}),
 		log.EventMetadata{},
 	))
 	mqSpan.End()
@@ -216,10 +216,28 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	report.record("background-lock", lockSpan.SpanContext())
 	logger.Emit(lockCtx, log.EventFromError(
 		log.NewEventName("lock", "acquire", "failed"),
-		errs.NewSystem(errs.TypeLockConflict, "acquire lock order:pay:42 conflict"),
+		mustSystemError(errs.SystemErrorConfig{
+			Type: errs.TypeLockConflict, Message: "acquire lock order:pay:42 conflict",
+		}),
 		log.EventMetadata{},
 	))
 	lockSpan.End()
+}
+
+func mustBusinessError(cfg errs.BusinessErrorConfig) errs.BizError {
+	err, buildErr := errs.NewBusinessError(cfg)
+	if buildErr != nil {
+		panic(buildErr)
+	}
+	return err
+}
+
+func mustSystemError(cfg errs.SystemErrorConfig) errs.SystemError {
+	err, buildErr := errs.NewSystemError(cfg)
+	if buildErr != nil {
+		panic(buildErr)
+	}
+	return err
 }
 
 func pauseForLatency() {

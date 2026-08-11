@@ -37,7 +37,7 @@ func (e AccessPayload) Attrs() []slog.Attr {
 	attrs = appendString(attrs, KeyRPCSystem, e.RPC.System)
 	attrs = appendString(attrs, KeyRPCService, e.RPC.Service)
 	attrs = appendString(attrs, KeyRPCMethod, e.RPC.Method)
-	attrs = appendString(attrs, KeyAppUserID, e.Subject.UserID)
+	attrs = appendString(attrs, KeyUserID, e.Subject.UserID)
 	attrs = appendString(attrs, KeyAppTenantID, e.Subject.TenantID)
 	return appendString(attrs, KeyAppResult, string(e.Result))
 }
@@ -67,7 +67,7 @@ func (e BusinessPayload) Attrs() []slog.Attr {
 	attrs := make([]slog.Attr, 0, 14)
 	attrs = append(attrs, slog.String(string(KeyEventName), string(e.EventName)))
 	attrs = appendString(attrs, KeyErrorType, e.ErrorType)
-	attrs = appendString(attrs, KeyAppUserID, e.Subject.UserID)
+	attrs = appendString(attrs, KeyUserID, e.Subject.UserID)
 	attrs = appendString(attrs, KeyAppTenantID, e.Subject.TenantID)
 	attrs = appendString(attrs, KeyAppResourceType, e.Resource.Type)
 	attrs = appendString(attrs, KeyAppResourceID, e.Resource.ID)
@@ -91,6 +91,7 @@ func (e BusinessPayload) Attrs() []slog.Attr {
 var businessPayloadCanonicalKeys = map[string]struct{}{
 	string(KeyEventName):          {},
 	string(KeyErrorType):          {},
+	string(KeyUserID):             {},
 	string(KeyAppUserID):          {},
 	string(KeyAppTenantID):        {},
 	string(KeyAppResourceType):    {},
@@ -118,11 +119,12 @@ func isBusinessExtraAttrKeyAllowed(key string) bool {
 // ErrorPayload 记录系统错误、panic、依赖失败或重试上下文。
 // ErrorCode 业务错误码：（服务/模块）.（场景/操作）.（结果/具体错误）
 type ErrorPayload struct {
-	EventName    EventName
-	ErrorType    string // error.type：低基数失败类别
-	ErrorMessage string // exception.message
-	StackTrace   string // exception.stacktrace
-	ErrorCode    string // app.error_code：可选业务关联码。
+	EventName           EventName
+	ErrorType           string // error.type：低基数失败类别
+	ErrorMessage        string // exception.message
+	StackTrace          string // exception.stacktrace
+	StackTraceTruncated bool   // app.stacktrace_truncated，仅在 StackTrace 非空时输出
+	ErrorCode           string // app.error_code：可选业务关联码。
 	// Operation 已弃用：请使用 ErrorCode；仅作为源码兼容输入，不再输出 app.operation。
 	Operation        string
 	FailureOperation string
@@ -146,6 +148,9 @@ func (e ErrorPayload) Attrs() []slog.Attr {
 	attrs = appendString(attrs, KeyErrorType, e.ErrorType)
 	attrs = appendString(attrs, KeyExceptionMessage, e.ErrorMessage)
 	attrs = appendString(attrs, KeyExceptionStacktrace, e.StackTrace)
+	if e.StackTrace != "" {
+		attrs = appendBool(attrs, KeyAppStacktraceTruncated, e.StackTraceTruncated)
+	}
 	errorCode := e.ErrorCode
 	if errorCode == "" {
 		errorCode = e.Operation
@@ -169,21 +174,22 @@ func (e ErrorPayload) Attrs() []slog.Attr {
 
 // errorPayloadCanonicalKeys 是 ErrorPayload 的固定字段键：ExtraAttrs 不允许覆盖。
 var errorPayloadCanonicalKeys = map[string]struct{}{
-	string(KeyEventName):           {},
-	string(KeyErrorType):           {},
-	string(KeyExceptionMessage):    {},
-	string(KeyExceptionStacktrace): {},
-	string(KeyAppErrorCode):        {},
-	string(KeyAppOperation):        {},
-	string(KeyAppFailureOperation): {},
-	string(KeyAppRootCauseType):    {},
-	string(KeyAppRetryable):        {},
-	string(KeyAppRetryCount):       {},
-	string(KeyAppUpstreamService):  {},
-	string(KeyCodeFunctionName):    {},
-	string(KeyCodeFilePath):        {},
-	string(KeyCodeLineNumber):      {},
-	string(KeyAppResult):           {},
+	string(KeyEventName):              {},
+	string(KeyErrorType):              {},
+	string(KeyExceptionMessage):       {},
+	string(KeyExceptionStacktrace):    {},
+	string(KeyAppStacktraceTruncated): {},
+	string(KeyAppErrorCode):           {},
+	string(KeyAppOperation):           {},
+	string(KeyAppFailureOperation):    {},
+	string(KeyAppRootCauseType):       {},
+	string(KeyAppRetryable):           {},
+	string(KeyAppRetryCount):          {},
+	string(KeyAppUpstreamService):     {},
+	string(KeyCodeFunctionName):       {},
+	string(KeyCodeFilePath):           {},
+	string(KeyCodeLineNumber):         {},
+	string(KeyAppResult):              {},
 }
 
 // isErrorExtraAttrKeyAllowed 判断 ExtraAttrs 键是否允许注入 ErrorPayload：
@@ -295,7 +301,7 @@ func (SecurityPayload) EventType() EventType { return EventSecurity }
 func (e SecurityPayload) Attrs() []slog.Attr {
 	attrs := make([]slog.Attr, 0, 9)
 	attrs = append(attrs, slog.String(string(KeyEventName), string(e.EventName)))
-	attrs = appendString(attrs, KeyAppUserID, e.Subject.UserID)
+	attrs = appendString(attrs, KeyUserID, e.Subject.UserID)
 	attrs = appendString(attrs, KeyAppTenantID, e.Subject.TenantID)
 	attrs = appendString(attrs, KeyAppSecurityEventType, e.SecurityEventType)
 	attrs = appendString(attrs, KeyAppFailureReason, e.FailureReason)
@@ -312,6 +318,7 @@ func (e SecurityPayload) Attrs() []slog.Attr {
 // securityPayloadCanonicalKeys 是 SecurityPayload 的固定字段键：ExtraAttrs 不允许覆盖。
 var securityPayloadCanonicalKeys = map[string]struct{}{
 	string(KeyEventName):            {},
+	string(KeyUserID):               {},
 	string(KeyAppUserID):            {},
 	string(KeyAppTenantID):          {},
 	string(KeyAppSecurityEventType): {},

@@ -14,14 +14,16 @@ import (
 
 func main() {
 	ctx := context.Background()
-	providers, err := telemetry.SetupFile(telemetry.Config{
+	providers, err := telemetry.NewFileRuntime(telemetry.Config{
 		ServiceName: "mall-monolith",
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "setup file telemetry:", err)
 		os.Exit(1)
 	}
-	w, err := providers.NewLogWriter(ctx, "logs/events.jsonl")
+	restore := providers.InstallGlobal()
+	defer restore()
+	w, err := providers.NewWriter(ctx, telemetry.WriterConfig{FilePath: "logs/events.jsonl"})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "create log writer:", err)
 		os.Exit(1)

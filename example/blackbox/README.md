@@ -1,6 +1,6 @@
 # example/blackbox
 
-真实日志黑盒样例：file 模式由 `telemetry.SetupFile` 在不连接 Collector 的情况下生成有效 span，通过 Gin 中间件执行四个 HTTP 请求，另生成两个后台错误场景。测试同时锁定带服务身份的 JSONL 运营投影与 OTLP LogRecord 语义。
+真实日志黑盒样例：file 模式由 `telemetry.NewFileRuntime` 在不连接 Collector 的情况下生成有效 span，通过 Gin 中间件执行四个 HTTP 请求，另生成两个后台错误场景。测试同时锁定带服务身份的 JSONL 运营投影与 OTLP LogRecord 语义。
 
 ## 本地 JSONL
 

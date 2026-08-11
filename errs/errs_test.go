@@ -58,6 +58,50 @@ func TestErrorTypeConstants(t *testing.T) {
 	}
 }
 
+func TestErrorCodeValidateAndParse(t *testing.T) {
+	valid := []errs.ErrorCode{"ORDER.CREATE.STOCK_INSUFFICIENT", "S1.OP_2.REASON_3"}
+	for _, code := range valid {
+		if err := code.Validate(); err != nil {
+			t.Errorf("Validate(%q) = %v, want nil", code, err)
+		}
+		got, err := errs.ParseErrorCode(string(code))
+		if err != nil || got != code {
+			t.Errorf("ParseErrorCode(%q) = %q, %v", code, got, err)
+		}
+	}
+	invalid := []string{"", "ORDER.CREATE", "ORDER.CREATE.FAIL.EXTRA", ".CREATE.FAIL", "ORDER..FAIL", "order.CREATE.FAIL", "ORDER.CREATE.stock", "ORDER.CREATE.BAD-REASON", " ORDER.CREATE.FAIL "}
+	for _, value := range invalid {
+		if err := errs.ErrorCode(value).Validate(); err == nil {
+			t.Errorf("ErrorCode(%q).Validate() = nil, want error", value)
+		}
+		if got, err := errs.ParseErrorCode(value); err == nil || got != "" {
+			t.Errorf("ParseErrorCode(%q) = %q, %v, want empty and error", value, got, err)
+		}
+	}
+}
+
+func TestErrorTypeValidateAndParse(t *testing.T) {
+	valid := []errs.ErrorType{"db.connection_error", "business.stock_2"}
+	for _, typ := range valid {
+		if err := typ.Validate(); err != nil {
+			t.Errorf("Validate(%q) = %v, want nil", typ, err)
+		}
+		got, err := errs.ParseErrorType(string(typ))
+		if err != nil || got != typ {
+			t.Errorf("ParseErrorType(%q) = %q, %v", typ, got, err)
+		}
+	}
+	invalid := []string{"", "db", "db.connection.error", ".failed", "db.", "DB.failed", "db.Connection", "db.bad-reason", " db.failed "}
+	for _, value := range invalid {
+		if err := errs.ErrorType(value).Validate(); err == nil {
+			t.Errorf("ErrorType(%q).Validate() = nil, want error", value)
+		}
+		if got, err := errs.ParseErrorType(value); err == nil || got != "" {
+			t.Errorf("ParseErrorType(%q) = %q, %v, want empty and error", value, got, err)
+		}
+	}
+}
+
 func TestStackPolicyConstants(t *testing.T) {
 	table := map[errs.StackPolicy]string{
 		errs.StackMust:     "must",
@@ -162,6 +206,60 @@ func TestBizErrorWithSource(t *testing.T) {
 	}
 }
 
+func TestNewValidationError(t *testing.T) {
+	cause := errors.New("invalid input")
+	source := errs.Source{Function: "validate", Filepath: "input.go", Line: 9}
+	e, err := errs.NewValidationError(errs.ValidationErrorConfig{Message: "  required  ", Cause: cause, Source: source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Error() != "required: invalid input" || e.Kind() != errs.KindValidation || e.ErrorType() != errs.TypeValidationFailed || e.ErrCode() != "" {
+		t.Errorf("unexpected validation error: %#v, Error()=%q", e, e.Error())
+	}
+	if !errors.Is(e, cause) {
+		t.Error("cause is not in unwrap chain")
+	}
+	if e.Source() != source {
+		t.Errorf("Source() = %+v, want %+v", e.Source(), source)
+	}
+	for _, message := range []string{"", "  \t\n"} {
+		if _, err := errs.NewValidationError(errs.ValidationErrorConfig{Message: message}); err == nil {
+			t.Errorf("NewValidationError(message=%q) = nil error", message)
+		}
+	}
+}
+
+func TestNewBusinessError(t *testing.T) {
+	cause := errors.New("stock is zero")
+	source := errs.Source{Function: "reserve", Filepath: "stock.go", Line: 12}
+	e, err := errs.NewBusinessError(errs.BusinessErrorConfig{
+		Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "business.stock_insufficient",
+		Message: "  insufficient stock ", Cause: cause, Source: source,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Error() != "insufficient stock: stock is zero" || e.Kind() != errs.KindBusiness || e.ErrCode() != "ORDER.CREATE.STOCK_INSUFFICIENT" || e.ErrorType() != "business.stock_insufficient" {
+		t.Errorf("unexpected business error: %#v, Error()=%q", e, e.Error())
+	}
+	if !errors.Is(e, cause) || e.Source() != source {
+		t.Error("cause or source was not mapped")
+	}
+
+	tests := []errs.BusinessErrorConfig{
+		{Code: "", Type: "business.failed", Message: "failed"},
+		{Code: "ORDER.BAD", Type: "business.failed", Message: "failed"},
+		{Code: "ORDER.CREATE.FAIL", Type: "", Message: "failed"},
+		{Code: "ORDER.CREATE.FAIL", Type: "db.failed", Message: "failed"},
+		{Code: "ORDER.CREATE.FAIL", Type: "business.failed", Message: " "},
+	}
+	for _, cfg := range tests {
+		if _, err := errs.NewBusinessError(cfg); err == nil {
+			t.Errorf("NewBusinessError(%+v) = nil error", cfg)
+		}
+	}
+}
+
 func TestNewSystemDefaults(t *testing.T) {
 	e := errs.NewSystem(errs.TypeDBConnectionError, "connect failed")
 	if e.Kind() != errs.KindSystem {
@@ -241,6 +339,65 @@ func TestNewSystemOptions(t *testing.T) {
 	var ae errs.AppError = e
 	if ae.ErrCode() != "ORDER.QUERY.TIMEOUT" {
 		t.Errorf("AppError.ErrCode() = %q, want %q", ae.ErrCode(), "ORDER.QUERY.TIMEOUT")
+	}
+}
+
+func TestNewSystemError(t *testing.T) {
+	cause := errors.New("deadline")
+	source := errs.Source{Function: "query", Filepath: "repo.go", Line: 30}
+	e, err := errs.NewSystemError(errs.SystemErrorConfig{
+		Type: errs.TypeDBQueryTimeout, Code: "ORDER.QUERY.TIMEOUT", Message: "  query failed ", Cause: cause,
+		Retryable: true, Retries: 3, RetriesExhausted: true, Upstream: "order-db", Stack: "custom", Source: source,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Error() != "query failed: deadline" || e.Kind() != errs.KindSystem || e.ErrorType() != errs.TypeDBQueryTimeout || e.ErrCode() != "ORDER.QUERY.TIMEOUT" {
+		t.Errorf("unexpected system error: %#v, Error()=%q", e, e.Error())
+	}
+	if !e.Retryable() || e.Retries() != 3 || !e.RetriesExhausted() || e.Upstream() != "order-db" || e.Stack() != "custom" || e.Source() != source || !errors.Is(e, cause) {
+		t.Error("system error config fields were not mapped")
+	}
+
+	auto, err := errs.NewSystemError(errs.SystemErrorConfig{Type: errs.TypeDBConnectionError, Message: "connect failed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auto.Stack() == "" {
+		t.Error("StackMust type did not auto-capture stack")
+	}
+	withoutCode, err := errs.NewSystemError(errs.SystemErrorConfig{Type: errs.TypeDataNotFound, Message: "not found"})
+	if err != nil || withoutCode.ErrCode() != "" || withoutCode.Stack() != "" {
+		t.Errorf("optional code/stack defaults = code %q stack %q err %v", withoutCode.ErrCode(), withoutCode.Stack(), err)
+	}
+
+	tests := []errs.SystemErrorConfig{
+		{Type: "", Message: "failed"},
+		{Type: "business.failed", Message: "failed"},
+		{Type: "validation.failed", Message: "failed"},
+		{Type: "DB.failed", Message: "failed"},
+		{Type: "db.failed", Code: "ORDER.BAD", Message: "failed"},
+		{Type: "db.failed", Message: " "},
+		{Type: "db.failed", Message: "failed", Retries: -1},
+		{Type: "db.failed", Message: "failed", Retries: 1},
+		{Type: "db.failed", Message: "failed", RetriesExhausted: true},
+	}
+	for _, cfg := range tests {
+		if _, err := errs.NewSystemError(cfg); err == nil {
+			t.Errorf("NewSystemError(%+v) = nil error", cfg)
+		}
+	}
+}
+
+func TestLegacyConstructorsRemainPermissive(t *testing.T) {
+	if got := errs.NewValidation(" ").Error(); got != " " {
+		t.Errorf("NewValidation changed legacy message behavior: %q", got)
+	}
+	if got := errs.NewBusiness("CODE", "not.strict", ""); got.ErrCode() != "CODE" || got.Error() != "" {
+		t.Errorf("NewBusiness changed legacy behavior: %#v", got)
+	}
+	if got := errs.NewSystem("business.too.many", "", errs.WithRetry(-1, true)); got.Retries() != -1 || !got.RetriesExhausted() {
+		t.Errorf("NewSystem changed legacy behavior: %#v", got)
 	}
 }
 

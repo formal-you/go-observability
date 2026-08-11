@@ -19,7 +19,7 @@ _Avoid_: 日志级别（Level 是另一维度）、EventName
 _Avoid_: 类别.模块.操作、随意字符串、message、EventType 前缀
 
 **ErrorCode**:
-可选的稳定具体错误码(业务错误码：（服务/模块）.（场景/操作）.（结果/具体错误）)，用于客服、业务查询和精确聚合，统一写入 app.error_code；它不决定 EventName，也不替代低基数 error.type。
+可选的稳定具体错误码，规范文法为 `SCOPE.OPERATION.REASON`，对应（服务/模块）.（场景/操作）.（结果/具体错误）；每段只允许大写字母、数字和下划线。它用于客服、业务查询和精确聚合，统一写入 app.error_code；不决定 EventName，也不替代低基数 error.type。
 _Avoid_: app.business_code、app.operation、从错误码自动生成 EventName
 
 **Level**:
@@ -147,7 +147,7 @@ _Avoid_: 完整事件内容
 _Avoid_: 日志级别（WARN/ERROR 是 Level 维度）、错误码
 
 **低基数失败类别（ErrorType）**:
-error.type 的低基数失败类别，采用 domain.reason 格式（db./redis./mq./http./runtime.…），用于聚合与告警路由。
+error.type 的低基数失败类别，严格采用两段 `domain.reason` 格式（db./redis./mq./http./runtime.…），用于聚合与告警路由。
 与业务错误码（ErrorCode）是「宏观分类 > 微观错误码」的多对一关系：多个三段式
 ErrorCode 归入同一个低基数 ErrorType，ErrorType 不是对 ErrorCode 的细化。
 _Avoid_: 错误消息（消息是高基数文本，类别是低基数标签）
@@ -167,6 +167,12 @@ _Avoid_: 重试逻辑（本仓库只记录元数据，不执行重试）
 **堆栈策略（StackPolicy）**:
 堆栈记录策略：must（构造点必记）/ optional（按需）/ none（不记），按 error.type 前缀生效，控制体积。
 _Avoid_: 一律记堆栈（会让高频类别体积失控）
+
+**堆栈边界（StackConfig）**:
+为 stacktrace 设置最大 UTF-8 字节数、路径策略（full/base/redacted）与 ErrorType 覆盖。超限使用稳定截断标记并输出 `app.stacktrace_truncated=true`；`runtime.panic` 不得被降为 none。
+
+**Subject / Actor**:
+Subject 是事件关联的用户与租户，输出为 `user.id` / `app.tenant_id`；Actor 是安全或审计动作的执行者，输出为 `app.actor_user_id` / `app.actor_role`。可信认证上下文通过 `IdentityExtractor` 注入，非空值优先于事件载荷；二者都不是 Metric 维度。
 
 **输入摘要（Input Summary）**:
 非法输入的关键字段名 / 哈希 / 截断文本，由接入方提取并经 `httperr.WithInputSummary`

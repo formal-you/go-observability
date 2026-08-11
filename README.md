@@ -185,7 +185,7 @@ http.request.completed
           ├── 🖥️ stdout   → 本地与容器标准输出
           └── 📡 OTLP     → OTel LogRecord + span context
 
-⚙️ telemetry.SetupFromEnvironment
+⚙️ telemetry.NewRuntime + InstallGlobal
 ├── 🔍 TracerProvider
 ├── 📊 MeterProvider
 ├── 📝 LoggerProvider
@@ -209,6 +209,15 @@ log 包以标准库 `log/slog` 为属性载体。OTel 依赖集中在转换、Wr
 ### 🧰 3. 日志治理默认显式注入
 
 `NewLogger` 不会悄悄开启采样或脱敏。接入方必须明确选择 `ResultKeepSampler`、`FieldMasker` 和错误回调，避免“以为已经安全”的错误默认值。
+
+认证边界可以把可信身份放入 `log.WithIdentityContext`，并在 Logger 上配置
+`log.WithIdentityExtractor(log.ContextIdentityExtractor{})`。`Subject.UserID` 新事件输出为
+`user.id`，租户为 `app.tenant_id`；Security/Audit 的 Actor 输出为 `app.actor_user_id` /
+`app.actor_role`，可信非空字段会覆盖伪造的事件属性。`FieldMasker{}` 内置处理凭证、Cookie、
+手机号、证件号和常见 request body 键，生产代码仍需显式启用并补充组织特有敏感键。
+
+系统错误的堆栈通过 `errs.SetStackConfig(errs.ProductionStackConfig())` 做大小和路径治理；
+超限会输出 `app.stacktrace_truncated=true`，panic 不允许关闭诊断堆栈。
 
 ### 🧨 4. 错误链是公共输入，不是实现细节
 
@@ -272,13 +281,15 @@ go-observability/
 
 ## 📡 从本地 JSONL 切到 OTLP
 
-不部署 Collector 的小单体可直接使用 `telemetry.SetupFile`：它不会创建 OTLP
+不部署 Collector 的小单体可直接使用 `telemetry.NewFileRuntime`：它不会创建 OTLP
 exporter，只生成本地有效 trace/span 用于日志关联，并把 `service.name`、
 `service.version`、`service.instance.id`、`deployment.environment.name` 写入每条 JSONL。
 完整 Trace 树不会落盘；需要 Tempo 查询时再切换到 OTLP 模式。配置模板见
 [`example/config/file-only.example.yaml`](example/config/file-only.example.yaml)。
 带最低级别、输出路径和文件轮转的可运行配置见
 [`example/blackbox/config.example.yaml`](example/blackbox/config.example.yaml)。
+
+需要 Collector 时，使用 `telemetry.NewRuntime` 并显式选择 `LogOutputOTLP`；本地文件、容器标准输出和禁用日志分别使用 `LogOutputFile`、`LogOutputStdout` 和 `LogOutputNone`。Runtime 构造不会修改 OTel 全局状态，应用需显式调用 `InstallGlobal` 并在退出时调用恢复函数。旧 `Setup*` 入口仅作为 Deprecated 兼容层保留。
 
 主示例通过环境变量选择出口：
 
