@@ -10,6 +10,7 @@
 | [adr/](adr/README.md) | 追溯关键架构决策（ADR）：错误模型等「为什么这么做」的记录 |
 | [proposals/logging-system-optimization.md](proposals/logging-system-optimization.md) | 审阅生产级日志优化提案、优先级、验收契约与待确认决策 |
 | [otel-logs-data-model.md](otel-logs-data-model.md) | OTel Logs LogRecord 各顶层字段与 go-observability 的映射 |
+| [testing.md](testing.md) | 需求、缺陷或公共行为变更时，如何用独立黑盒测试固化正式验收 |
 | [security.md](security.md) | 设计脱敏、采样和日志治理策略 |
 | [workflow.md](workflow.md) | 提交代码、测试与维护兼容性 |
 | [samber-comparison.md](samber-comparison.md) | 评估与 samber slog 生态的取舍 |
