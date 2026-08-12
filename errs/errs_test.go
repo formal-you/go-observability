@@ -65,6 +65,9 @@ func TestErrorCodeValidateAndParse(t *testing.T) {
 			t.Errorf("ParseErrorCode(%q) = %q, %v", code, got, err)
 		}
 	}
+	if !errs.ErrorCodePattern.MatchString("ORDER.CREATE.STOCK_INSUFFICIENT") || errs.ErrorCodePattern.MatchString("order.create.failed") || errs.ErrorCodePattern.MatchString("ORDER.CREATE") {
+		t.Error("ErrorCodePattern 未正确约束 SCOPE.OPERATION.REASON")
+	}
 	invalid := []string{"", "ORDER.CREATE", "ORDER.CREATE.FAIL.EXTRA", ".CREATE.FAIL", "ORDER..FAIL", "order.CREATE.FAIL", "ORDER.CREATE.stock", "ORDER.CREATE.BAD-REASON", " ORDER.CREATE.FAIL "}
 	for _, value := range invalid {
 		if err := errs.ErrorCode(value).Validate(); err == nil {

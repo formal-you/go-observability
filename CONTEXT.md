@@ -15,8 +15,8 @@ _Avoid_: 日志行、log message（指结构化事件时）
 _Avoid_: 日志级别（Level 是另一维度）、EventName
 
 **EventName**:
-事件的稳定事实名，三段式「领域.对象.事实」( domain.object.fact)（如 http.request.completed、order.payment.succeeded），写入 event.name；粗分类已由 msg/EventType 承载，事实名不得重复六类前缀。
-_Avoid_: 类别.模块.操作、随意字符串、message、EventType 前缀
+事件的稳定事实名，event.name MUST use the form <domain>.<subject>.<event>（如 http.request.completed、order.payment.succeeded）；<event> MUST 是注册的 Event Type（稳定语义发生，唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；写入 event.name，正则 EventNamePattern 校验；粗分类已由 msg/EventType 承载，首段不得重复六类前缀。
+_Avoid_: 类别.模块.操作、随意字符串、生命周期 Stage、EventType 前缀
 
 **ErrorType**:
 低基数失败类别，映射 OTel error.type，复用 OTel/gRPC 标准枚举（gRPC canonical code）：跨模块、闭合、单段 UPPER_SNAKE（如 NOT_FOUND / UNAVAILABLE / DEADLINE_EXCEEDED / INTERNAL）；以通用性换取工具链兼容与低维护成本，禁止自定义词表。
@@ -27,7 +27,7 @@ errs 内 ErrorCode → ErrorType 的固定映射注册表（多对一：一个 c
 _Avoid_: 自动派生、运行时可变映射
 
 **ErrorCode**:
-可选的稳定具体错误码，规范文法为 `SCOPE.OPERATION.REASON`，对应（服务/模块）.（场景/操作）.（结果/具体错误）；每段只允许大写字母、数字和下划线。它用于客服、业务查询和精确聚合，统一写入 app.error_code；不决定 EventName，也不替代低基数 error.type。已注册的 ErrorCode 恰好映射一个 ErrorType（多对一，见 Error Registry）。
+可选的稳定具体错误码，规范文法为 `err.code = SCOPE.OPERATION.REASON`，对应（服务/模块）.（场景/操作）.（结果/具体错误）；每段只允许大写字母、数字和下划线（正则 `ErrorCodePattern` 校验）。它用于客服、业务查询和精确聚合，统一写入 app.error_code；不决定 EventName，也不替代低基数 error.type。已注册的 ErrorCode 恰好映射一个 ErrorType（多对一，见 Error Registry）。
 _Avoid_: app.business_code、app.operation、从错误码自动生成 EventName
 
 **Level**:

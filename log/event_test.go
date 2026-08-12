@@ -232,6 +232,9 @@ func TestEventNameConventions(t *testing.T) {
 		}()
 		f()
 	}
+	if !EventNamePattern.MatchString("order.payment.succeeded") || EventNamePattern.MatchString("Order.payment.succeeded") || EventNamePattern.MatchString("order.payment.succeeded.extra") {
+		t.Error("EventNamePattern 未正确约束 <domain>.<subject>.<event>")
+	}
 	assertPanics("2 段", func() { NewEventName("http", "request") })
 	assertPanics("4 段", func() { NewEventName("http", "server", "request", "completed") })
 	assertPanics("大写", func() { NewEventName("HTTP", "request", "completed") })

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -128,20 +129,29 @@ func isBusinessErrorType(t ErrorType) bool {
 	}
 }
 
-// ErrorCode 是可选、稳定、具体的应用错误码，严格采用
-// （服务/模块）.（场景/操作）.（结果/具体错误）三段式，例如
-// ORDER.CREATE.STOCK_INSUFFICIENT。日志统一投影到 app.error_code，不用于推导
-// ErrorType 或 EventName。
+// ErrorCode（err.code）是可选、稳定、具体的应用错误码，规范文法为
+// err.code = SCOPE.OPERATION.REASON = （服务/模块）.（场景/操作）.（结果/具体错误），
+// 例如 ORDER.CREATE.STOCK_INSUFFICIENT。日志统一投影到 app.error_code，不用于推导
+// ErrorType 或 EventName。它不是 <domain>.<subject>.<reason>：<domain> 是旧 ErrorType
+// 自定义词表的术语，ErrorCode 第一段是服务/模块（SCOPE）。
 // 已注册的 ErrorCode 恰好映射一个 ErrorType（多对一，见 RegisterErrorCode）；未注册码不强制映射。
 // 仅 BizError 必须承载；SystemError 可通过 Code 关联可选业务码。
 type ErrorCode string
 
-// Validate 验证 ErrorCode 是否严格符合 SCOPE.OPERATION.REASON：恰好三段，且每段
+// ErrorCodePattern 是 ErrorCode 的规范正则：SCOPE.OPERATION.REASON = （服务/模块）.
+// （场景/操作）.（结果/具体错误），每段仅大写字母、数字或下划线。
+var ErrorCodePattern = regexp.MustCompile(`^[A-Z0-9_]+\.[A-Z0-9_]+\.[A-Z0-9_]+$`)
+
+// Validate 验证 ErrorCode 是否严格符合 SCOPE.OPERATION.REASON 正则：恰好三段，每段
 // 仅包含大写字母、数字或下划线。
 func (c ErrorCode) Validate() error {
-	return validateDottedIdentifier(string(c), 3, isUpperIdentifierByte, "error code")
+	if !ErrorCodePattern.MatchString(string(c)) {
+		return fmt.Errorf("error code %q must match SCOPE.OPERATION.REASON", string(c))
+	}
+	return nil
 }
 
+// ParseErrorCode 解析并验证严格的 SCOPE.OPERATION.REASON ErrorCode。
 // ParseErrorCode 解析并验证严格的 SCOPE.OPERATION.REASON ErrorCode。
 func ParseErrorCode(value string) (ErrorCode, error) {
 	c := ErrorCode(value)
@@ -201,28 +211,6 @@ func checkRegisteredCodeType(code ErrorCode, typ ErrorType) error {
 		return fmt.Errorf("error code %q maps to error type %q, got %q", code, registered, typ)
 	}
 	return nil
-}
-
-func validateDottedIdentifier(value string, segments int, validByte func(byte) bool, name string) error {
-	parts := strings.Split(value, ".")
-	if len(parts) != segments {
-		return fmt.Errorf("%s must contain exactly %d segments", name, segments)
-	}
-	for _, part := range parts {
-		if part == "" {
-			return fmt.Errorf("%s segments must not be empty", name)
-		}
-		for i := 0; i < len(part); i++ {
-			if !validByte(part[i]) {
-				return fmt.Errorf("%s contains invalid character %q", name, part[i])
-			}
-		}
-	}
-	return nil
-}
-
-func isUpperIdentifierByte(b byte) bool {
-	return b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_'
 }
 
 // Source 代码位置（OTel code.* 语义），用于定位错误产生点。
