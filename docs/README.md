@@ -22,6 +22,7 @@
 | [todo.md](todo.md) | 非代码待办与飞书项目管理迁移准备 |
 | [reports/](reports/README.md) | 查看 Issue 验收、性能和 mutation 基线证据 |
 | [go-observability-architecture.drawio](go-observability-architecture.drawio) | 可编辑架构图 |
+| [module-map.html](module-map.html) | 浏览器直接打开的 UML 模块地图 |
 
 可复制的部署配置位于 [`example/config`](../example/config/)；本地 LGTM 栈位于 [`observability`](../observability/)；分信号模板位于 [`observability/templates`](../observability/templates/)。
 

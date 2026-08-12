@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>go-observability 模块地图</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17212b;
+      --muted: #5e6b76;
+      --line: #73808c;
+      --paper: #f5f7f9;
+      --panel: #ffffff;
+      --app: #e8f1fb;
+      --core: #fff3d6;
+      --assembly: #eee8f6;
+      --output: #e8f5ed;
+      --external: #fcebed;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 1100px;
+      color: var(--ink);
+      background: var(--paper);
+      font: 15px/1.45 "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    header {
+      padding: 28px 42px 20px;
+      border-bottom: 1px solid #d8dee4;
+      background: var(--panel);
+    }
+    h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: 0; }
+    header p { margin: 0; color: var(--muted); }
+    main { padding: 24px 34px 38px; }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      margin: 0 auto 14px;
+      max-width: 1540px;
+      color: var(--muted);
+    }
+    .toolbar button {
+      border: 1px solid #c6cfd7;
+      border-radius: 5px;
+      padding: 7px 11px;
+      color: var(--ink);
+      background: #fff;
+      cursor: pointer;
+    }
+    .toolbar button:hover { background: #eef3f7; }
+    .canvas {
+      max-width: 1540px;
+      margin: 0 auto;
+      overflow: auto;
+      border: 1px solid #d4dce3;
+      border-radius: 6px;
+      background: #fff;
+      box-shadow: 0 5px 18px rgba(23, 33, 43, .06);
+    }
+    svg { display: block; width: 1500px; height: 1010px; }
+    .caption {
+      max-width: 1540px;
+      margin: 13px auto 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .caption code { color: var(--ink); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>go-observability 模块地图</h1>
+    <p>UML Package Diagram · 以当前仓库包边界和依赖方向为准 · generated from repository state</p>
+  </header>
+  <main>
+    <div class="toolbar" aria-label="图表操作">
+      <button type="button" id="reset">重置视图</button>
+      <span>实线：编译依赖　虚线：运行时数据流 / 外部系统</span>
+    </div>
+    <div class="canvas">
+      <svg id="map" viewBox="0 0 1500 1010" role="img" aria-labelledby="map-title map-desc">
+        <title id="map-title">go-observability UML 模块地图</title>
+        <desc id="map-desc">展示应用示例、中间件、核心 log 与 errs、telemetry 装配、writer 出口、内部映射和外部后端之间的依赖和运行时数据流。</desc>
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#73808c" />
+          </marker>
+          <marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#a34c55" />
+          </marker>
+          <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+            <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#17212b" flood-opacity=".10" />
+          </filter>
+        </defs>
+
+        <rect width="1500" height="1010" fill="#fbfcfd" />
+        <text x="38" y="42" font-size="18" font-weight="700" fill="#17212b">UML Package Diagram</text>
+        <text x="38" y="67" font-size="13" fill="#5e6b76">核心依赖方向：应用 → 中间件 / log / errs → writer / telemetry → OTel 后端</text>
+
+        <!-- Application and integration layer -->
+        <g class="package" filter="url(#shadow)">
+          <rect x="35" y="112" width="260" height="218" rx="6" fill="var(--app)" stroke="#5984ad" stroke-width="1.5" />
+          <path d="M35 112 h94 l18 25 h-112 z" fill="#d5e6f7" stroke="#5984ad" stroke-width="1.5" />
+          <text x="52" y="130" font-size="14" font-weight="700">&lt;&lt;package&gt;&gt; example/</text>
+          <text x="57" y="170" font-weight="700">应用接入示例</text>
+          <text x="57" y="195">main · mall · minimal</text>
+          <text x="57" y="218">nethttp · metrics · samber</text>
+          <text x="57" y="256" fill="#5e6b76">示范 Config、Runtime、Logger</text>
+          <text x="57" y="278" fill="#5e6b76">和领域事件注册表的使用方式</text>
+        </g>
+
+        <g class="package" filter="url(#shadow)">
+          <rect x="350" y="112" width="400" height="218" rx="6" fill="var(--app)" stroke="#5984ad" stroke-width="1.5" />
+          <path d="M350 112 h130 l18 25 h-148 z" fill="#d5e6f7" stroke="#5984ad" stroke-width="1.5" />
+          <text x="367" y="130" font-size="14" font-weight="700">&lt;&lt;package&gt;&gt; middleware/</text>
+          <text x="372" y="170" font-weight="700">框架适配与请求收口</text>
+          <text x="372" y="196">gin · http · grpc · kratos</text>
+          <text x="372" y="222">AccessLog · Recover · ErrorResponse</text>
+          <text x="372" y="246">SecurityLog · AuditLog · Trace · Metrics</text>
+          <text x="372" y="285" fill="#5e6b76">从 HTTP / RPC 上下文提取 Trace Context，</text>
+          <text x="372" y="304" fill="#5e6b76">生成 Access / Business / Error 等事件</text>
+        </g>
+
+        <!-- Domain/core layer -->
+        <g class="package" filter="url(#shadow)">
+          <rect x="805" y="112" width="300" height="218" rx="6" fill="var(--core)" stroke="#b18b37" stroke-width="1.5" />
+          <path d="M805 112 h106 l18 25 h-124 z" fill="#ffebbd" stroke="#b18b37" stroke-width="1.5" />
+          <text x="822" y="130" font-size="14" font-weight="700">&lt;&lt;package&gt;&gt; log/</text>
+          <text x="827" y="170" font-weight="700">事件核心（标准库零依赖）</text>
+          <text x="827" y="196">EventType · EventName · Payload</text>
+          <text x="827" y="222">normalize · Sampler · Masker</text>
+          <text x="827" y="248">Logger.Emit · Error projection</text>
+          <text x="827" y="285" fill="#5e6b76">统一事件契约与 file / OTLP 双投影输入</text>
+        </g>
+
+        <g class="package" filter="url(#shadow)">
+          <rect x="1140" y="112" width="325" height="218" rx="6" fill="var(--core)" stroke="#b18b37" stroke-width="1.5" />
+          <path d="M1140 112 h116 l18 25 h-134 z" fill="#ffebbd" stroke="#b18b37" stroke-width="1.5" />
+          <text x="1157" y="130" font-size="14" font-weight="700">&lt;&lt;package&gt;&gt; errs/</text>
+          <text x="1162" y="170" font-weight="700">错误领域模型</text>
+          <text x="1162" y="196">AppError · BizError · SystemError</text>
+          <text x="1162" y="222">ErrorType：domain.reason</text>
+          <text x="1162" y="248">ErrorCode：SCOPE.OPERATION.REASON</text>
+          <text x="1162" y="285" fill="#5e6b76">错误链、重试语义、Stack Policy</text>
+        </g>
+
+        <g class="package" filter="url(#shadow)">
+          <rect x="35" y="430" width="435" height="225" rx="6" fill="var(--assembly)" stroke="#896da5" stroke-width="1.5" />
+          <path d="M35 430 h132 l18 25 h-150 z" fill="#e1d4ef" stroke="#896da5" stroke-width="1.5" />
+          <text x="52" y="448" font-size="14" font-weight="700">&lt;&lt;package&gt;&gt; telemetry/</text>
+          <text x="57" y="489" font-weight="700">Telemetry Runtime 装配</text>
+          <text x="57" y="515">Config · Resource · Provider</text>
+          <text x="57" y="541">NewRuntime · NewFileRuntime</text>
+          <text x="57" y="567">InstallGlobal · Shutdown</text>
+          <text x="57" y="610" fill="#5e6b76">显式选择 file / otlp / stdout / none</text>
+          <text x="57" y="630" fill="#5e6b76">管理三信号生命周期和全局恢复</text>
+        </g>
+
+        <!-- Output layer -->
+        <g class="package" filter="url(#shadow)">
+          <rect x="520" y="430" width="585" height="225" rx="6" fill="var(--output)" stroke="#5c966e" stroke-width="1.5" />
+          <path d="M520 430 h130 l18 25 h-148 z" fill="#d9efdf" stroke="#5c966e" stroke-width="1.5" />
+          <text x="537" y="448" font-size="14" font-weight="700">&lt;&lt;package&gt;&gt; writer/</text>
+          <text x="542" y="489" font-weight="700">可替换日志出口</text>
+          <text x="542" y="517">file：JSONL + Mutex + Rotation</text>
+          <text x="542" y="543">otlp：OTel Logger + BatchProcessor</text>
+          <text x="542" y="569">stdout：本地诊断输出</text>
+          <text x="542" y="595">ManagedWriter：幂等 Close</text>
+          <text x="542" y="630" fill="#5e6b76">出口实现承担自身 I/O 并发语义</text>
+        </g>
+
+        <g class="package" filter="url(#shadow)">
+          <rect x="1155" y="430" width="310" height="225" rx="6" fill="#f0f3f6" stroke="#7e8c98" stroke-width="1.5" />
+          <path d="M1155 430 h120 l18 25 h-138 z" fill="#e2e8ed" stroke="#7e8c98" stroke-width="1.5" />
+          <text x="1172" y="448" font-size="14" font-weight="700">&lt;&lt;package&gt;&gt; internal/</text>
+          <text x="1177" y="489" font-weight="700">内部适配边界</text>
+          <text x="1177" y="517">attrkv：slog ↔ OTel Value</text>
+          <text x="1177" y="543">LogRecord 顶层字段映射</text>
+          <text x="1177" y="569">otlpendpoint：Endpoint 校验</text>
+          <text x="1177" y="610" fill="#5e6b76">不对外承诺；集中避免重复映射</text>
+        </g>
+
+        <!-- External systems -->
+        <g class="package" filter="url(#shadow)">
+          <rect x="235" y="785" width="1230" height="160" rx="6" fill="var(--external)" stroke="#ae5961" stroke-width="1.5" />
+          <path d="M235 785 h145 l18 25 h-163 z" fill="#f5d8dc" stroke="#ae5961" stroke-width="1.5" />
+          <text x="252" y="803" font-size="14" font-weight="700">&lt;&lt;external system&gt;&gt; OTel / LGTM</text>
+          <text x="260" y="850" font-weight="700">OTel Collector</text>
+          <text x="260" y="876">OTLP receiver · batch processor</text>
+          <text x="595" y="850" font-weight="700">Tempo</text>
+          <text x="595" y="876">Trace storage</text>
+          <text x="820" y="850" font-weight="700">Loki</text>
+          <text x="820" y="876">Log storage</text>
+          <text x="1045" y="850" font-weight="700">Mimir</text>
+          <text x="1045" y="876">Metric storage</text>
+          <text x="1260" y="850" font-weight="700">Grafana</text>
+          <text x="1260" y="876">Query / dashboard</text>
+        </g>
+
+        <!-- Compile-time dependencies -->
+        <path d="M295 210 H350" fill="none" stroke="#73808c" stroke-width="2" marker-end="url(#arrow)" />
+        <path d="M295 260 H805" fill="none" stroke="#73808c" stroke-width="2" marker-end="url(#arrow)" />
+        <path d="M750 205 H805" fill="none" stroke="#73808c" stroke-width="2" marker-end="url(#arrow)" />
+        <path d="M750 265 H1140" fill="none" stroke="#73808c" stroke-width="2" marker-end="url(#arrow)" />
+        <path d="M805 300 C700 350 680 390 680 430" fill="none" stroke="#73808c" stroke-width="2" marker-end="url(#arrow)" />
+        <path d="M1105 260 H1140" fill="none" stroke="#73808c" stroke-width="2" marker-end="url(#arrow)" />
+        <path d="M470 540 H520" fill="none" stroke="#73808c" stroke-width="2" marker-end="url(#arrow)" />
+        <path d="M1105 540 H1155" fill="none" stroke="#73808c" stroke-width="2" marker-end="url(#arrow)" />
+        <path d="M1140 590 C1080 650 1000 685 950 720" fill="none" stroke="#73808c" stroke-width="2" marker-end="url(#arrow)" />
+
+        <!-- Runtime data flow -->
+        <path d="M812 655 V748 H480 V785" fill="none" stroke="#a34c55" stroke-width="2.2" stroke-dasharray="8 6" marker-end="url(#flow-arrow)" />
+        <path d="M812 655 V748 H700 V785" fill="none" stroke="#a34c55" stroke-width="2.2" stroke-dasharray="8 6" marker-end="url(#flow-arrow)" />
+        <path d="M812 655 V748 H930 V785" fill="none" stroke="#a34c55" stroke-width="2.2" stroke-dasharray="8 6" marker-end="url(#flow-arrow)" />
+        <path d="M812 655 V748 H1150 V785" fill="none" stroke="#a34c55" stroke-width="2.2" stroke-dasharray="8 6" marker-end="url(#flow-arrow)" />
+        <path d="M1105 585 C1070 690 1290 725 1340 785" fill="none" stroke="#a34c55" stroke-width="2.2" stroke-dasharray="8 6" marker-end="url(#flow-arrow)" />
+
+        <!-- Relationships -->
+        <text x="302" y="199" font-size="12" fill="#5e6b76">uses</text>
+        <text x="580" y="251" font-size="12" fill="#5e6b76">emits events</text>
+        <text x="488" y="530" font-size="12" fill="#5e6b76">selects</text>
+        <text x="1110" y="735" font-size="12" fill="#a34c55">OTLP runtime flow</text>
+
+        <!-- Legend -->
+        <line x1="45" y1="972" x2="95" y2="972" stroke="#73808c" stroke-width="2" marker-end="url(#arrow)" />
+        <text x="108" y="977" font-size="12" fill="#5e6b76">编译依赖</text>
+        <line x1="230" y1="972" x2="280" y2="972" stroke="#a34c55" stroke-width="2.2" stroke-dasharray="8 6" marker-end="url(#flow-arrow)" />
+        <text x="293" y="977" font-size="12" fill="#5e6b76">运行时数据流</text>
+        <text x="1240" y="977" font-size="12" fill="#5e6b76">Source: repository architecture.md</text>
+      </svg>
+    </div>
+    <p class="caption">建议从仓库根目录打开：<code>docs/module-map.html</code>。图表是静态 UML 视图，代码变更后应同步审阅包边界。</p>
+  </main>
+  <script>
+    const svg = document.getElementById('map');
+    const reset = document.getElementById('reset');
+    let scale = 1;
+    let view = { x: 0, y: 0 };
+    function applyView() {
+      svg.style.transformOrigin = 'top left';
+      svg.style.transform = `translate(${view.x}px, ${view.y}px) scale(${scale})`;
+    }
+    reset.addEventListener('click', () => { scale = 1; view = { x: 0, y: 0 }; applyView(); });
+    svg.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      scale = Math.min(1.5, Math.max(.65, scale + (event.deltaY < 0 ? .08 : -.08)));
+      applyView();
+    }, { passive: false });
+  </script>
+</body>
+</html>
