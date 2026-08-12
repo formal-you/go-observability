@@ -158,8 +158,6 @@ func clientIP(r *http.Request) net.IP {
 	return net.ParseIP(host)
 }
 
-func closeWriter(ctx context.Context, w log.Writer) {
-	if c, ok := w.(interface{ Close(context.Context) error }); ok {
-		_ = c.Close(ctx)
-	}
+func closeWriter(ctx context.Context, w log.ManagedWriter) {
+	_ = w.Close(ctx)
 }

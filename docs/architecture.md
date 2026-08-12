@@ -204,14 +204,14 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 - `NewRuntime`：创建独立 Provider，不安装全局状态；`InstallGlobal` 显式安装并返回幂等恢复函数。
 - `NewFileRuntime`：不创建 exporter，仅提供 `ParentBased(NeverSample())` 的本地 TraceProvider；生成有效 trace/span 供 JSONL 关联，但不保存完整 Trace 树。
 - `SetupFromEnvironment`（Deprecated）：从 `OTEL_SDK_DISABLED` 读启用状态、`OTEL_EXPORTER_OTLP_ENDPOINT` 读 endpoint（缺省 `127.0.0.1:4317`）。
-- `Runtime.NewWriter`：按 `LogOutput` 显式选择 file、OTLP、stdout 或 no-op；file/stdout 注入同一份 Resource，OTLP 复用 Runtime LoggerProvider。
+- `Runtime.NewWriter`：按 `LogOutput` 显式选择 file、OTLP、stdout 或 no-op，返回具备幂等 `Close` 的 `log.ManagedWriter`；file/stdout 注入同一份 Resource，OTLP 复用 Runtime LoggerProvider。
 - `Providers.Shutdown`：进程退出前调用；顺序刻意先 log 再 metric 后 trace，保证日志携带的 span 上下文关联完整。
 
 ## 8. 扩展边界（接入方）
 
 1. 在业务自己的 observability 包中声明 `EventName` 常量（`NewEventName` 或经 `Validate`），并写测试校验格式。
 2. 使用 `BusinessPayload.ExtraAttrs` 注入领域属性（`app.*` 键），避免把领域字段加入核心注册表；canonical 键与保留键会被过滤。
-3. 新增写出后端：在 `writer/` 下新建包，实现 `log.Writer`（明确并发语义，提供 `Close`）。
+3. 新增写出后端：在 `writer/` 下新建包，实现 `log.Writer`（明确并发语义）；若拥有资源则提供 `Close`，由 `Runtime.NewWriter` 或 `log.ManageWriter` 统一暴露托管生命周期。
 4. 公共 schema 或 API 改动必须同步 README、docs、示例与 CHANGELOG（改代码与改文档应在同一提交内完成）。
 
 ## 9. 代码 Review 检查点

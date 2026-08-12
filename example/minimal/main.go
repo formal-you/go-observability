@@ -47,11 +47,9 @@ func main() {
 	})
 	span.End()
 
-	if closer, ok := w.(interface{ Close(context.Context) error }); ok {
-		if err := closer.Close(ctx); err != nil {
-			fmt.Fprintln(os.Stderr, "close log writer:", err)
-			os.Exit(1)
-		}
+	if err := w.Close(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, "close log writer:", err)
+		os.Exit(1)
 	}
 	if err := providers.Shutdown(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "shutdown telemetry:", err)

@@ -122,10 +122,8 @@ func TestNewWriterFileInjectsResourceMetadata(t *testing.T) {
 	if err := w.Write(context.Background(), "business", slog.String("event.name", "order.payment.succeeded")); err != nil {
 		t.Fatal(err)
 	}
-	if closer, ok := w.(interface{ Close(context.Context) error }); ok {
-		if err := closer.Close(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+	if err := w.Close(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -150,10 +148,8 @@ func TestNewWriterStdoutUsesResourceAndOutput(t *testing.T) {
 	if err := w.Write(context.Background(), "access"); err != nil {
 		t.Fatal(err)
 	}
-	if closer, ok := w.(interface{ Close(context.Context) error }); ok {
-		if err := closer.Close(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+	if err := w.Close(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 	if out := buf.String(); !strings.Contains(out, "stdout-svc") || !strings.Contains(out, "access") {
 		t.Fatalf("stdout output missing resource or event: %s", out)

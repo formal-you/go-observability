@@ -2,11 +2,13 @@ package telemetry
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 
 	"github.com/formal-you/go-observability/log"
 	"github.com/formal-you/go-observability/writer/file"
+	"github.com/formal-you/go-observability/writer/otlp"
 )
 
 // Setup creates a Runtime using legacy endpoint-based output selection and
@@ -56,7 +58,15 @@ func SetupFromEnvironment(ctx context.Context, cfg Config) (*Runtime, error) {
 // Deprecated: use Runtime.NewWriter.
 func (r *Runtime) NewLogWriter(ctx context.Context, jsonlPath string, fileOpts ...file.Option) (log.Writer, error) {
 	if r != nil && r.logOutput == LogOutputOTLP {
-		return r.NewWriter(ctx, WriterConfig{})
+		if r.loggerProvider == nil {
+			return nil, errors.New("telemetry: otlp output requires logger provider")
+		}
+		return otlp.New(ctx, otlp.WithLoggerProvider(r.loggerProvider), otlp.WithResource(r.resource))
 	}
-	return r.NewWriter(ctx, WriterConfig{FilePath: jsonlPath, FileOptions: fileOpts})
+	if r == nil {
+		return nil, errors.New("telemetry: nil runtime")
+	}
+	opts := append([]file.Option(nil), fileOpts...)
+	opts = append(opts, file.WithResourceMetadata(r.fileMetadata))
+	return file.New(jsonlPath, opts...)
 }

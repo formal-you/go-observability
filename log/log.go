@@ -21,6 +21,13 @@ type Writer interface {
 	Write(ctx context.Context, msg string, attrs ...slog.Attr) error
 }
 
+// ManagedWriter 在 Writer Seam 上增加幂等资源关闭能力。Runtime 创建的 Writer
+// 和 NewMultiWriter 返回该 Interface；只实现 Writer 的既有 Adapter 仍保持兼容。
+type ManagedWriter interface {
+	Writer
+	Close(ctx context.Context) error
+}
+
 // ErrorHandler 观察 Writer 写入失败。Logger 不会把该错误返回给业务代码。
 // attrs 是本次写入切片的浅副本，ErrorHandler 可以安全调整切片本身；属性中通过
 // slog.Any 保存的 map、slice 或指针仍可能与原事件共享底层数据。回调在调用日志的
