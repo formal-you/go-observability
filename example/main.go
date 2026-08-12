@@ -90,7 +90,7 @@ func mustBusinessError(cfg errs.BusinessErrorConfig) errs.BizError {
 
 // newLogWriter 优先 OTLP（OTEL_EXPORTER_OTLP_ENDPOINT），否则写入当前工作目录的 logs/events.jsonl。
 // OTLP 路径注入 telemetry 的 Resource 与 LoggerProvider，三信号共享同一份资源与装配。
-func newLogWriter(ctx context.Context, p *telemetry.Providers) (log.Writer, error) {
+func newLogWriter(ctx context.Context, p *telemetry.Providers) (log.ManagedWriter, error) {
 	if p == nil {
 		return nil, errors.New("nil telemetry runtime")
 	}
@@ -100,9 +100,7 @@ func newLogWriter(ctx context.Context, p *telemetry.Providers) (log.Writer, erro
 	return p.NewWriter(ctx, telemetry.WriterConfig{FilePath: filepath.Join("logs", "events.jsonl")})
 }
 
-// closeWriter 关闭实现了 Close(ctx) 的 writer。
-func closeWriter(ctx context.Context, w log.Writer) {
-	if c, ok := w.(interface{ Close(context.Context) error }); ok {
-		_ = c.Close(ctx)
-	}
+// closeWriter 关闭 Runtime 创建的托管 writer。
+func closeWriter(ctx context.Context, w log.ManagedWriter) {
+	_ = w.Close(ctx)
 }

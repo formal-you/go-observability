@@ -8,6 +8,7 @@
 | [environment.md](environment.md) | 查询库实际读取的环境变量 |
 | [architecture.md](architecture.md) | 理解包边界和事件数据流 |
 | [adr/](adr/README.md) | 追溯关键架构决策（ADR）：错误模型等「为什么这么做」的记录 |
+| [issues/](issues/README.md) | 阅读需要随代码版本管理的复杂需求与可观察验收；任务状态仍以 GitHub Issue 为准 |
 | [pr/](pr/README.md) | 查看进行中的复杂 PR 实施规格及其归档规则 |
 | [history/](history/README.md) | 追溯已完成、放弃或被取代的实施文档；不作为当前真源 |
 | [otel-logs-data-model.md](otel-logs-data-model.md) | OTel Logs LogRecord 各顶层字段与 go-observability 的映射 |

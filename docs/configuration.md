@@ -109,7 +109,7 @@ writer, err := providers.NewWriter(ctx, telemetry.WriterConfig{FilePath: "logs/e
 
 出口由 `Config.LogOutput` 固化；后续修改环境变量不会改变已有 Runtime，需要重新构造后再切换。
 
-应用应检查构造错误，配置 `log.WithErrorHandler` 观察异步写入失败，并关闭实现了 `Close(context.Context)` 的 Writer。需要同时写多个出口（如 stdout + 文件 + OTLP）时，用 `log.NewMultiWriter(writers...)` 组合 Writer，任一失败不阻断其余。完整代码见 [README](../README.md) 和 [`example/main.go`](../example/main.go)。
+应用应检查构造错误，配置 `log.WithErrorHandler` 观察异步写入失败，并在退出时调用 `ManagedWriter.Close(ctx)`。`Runtime.NewWriter` 返回 `log.ManagedWriter`，其关闭操作幂等。需要同时写多个出口（如 stdout + 文件 + OTLP）时，用 `log.NewMultiWriter(writers...)` 组合 Writer；它会尝试关闭全部可关闭子 Writer 并聚合关闭错误，任一写入失败也不阻断其余。仅实现 `log.Writer` 的自定义 Adapter 可通过 `log.ManageWriter` 获得 no-op 关闭能力。完整代码见 [README](../README.md) 和 [`example/main.go`](../example/main.go)。
 
 ## Logger 选项
 

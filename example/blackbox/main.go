@@ -156,11 +156,8 @@ func runOTLPMode(ctx context.Context, endpoint string, cfg blackboxConfig) error
 	return nil
 }
 
-func closeLogWriter(ctx context.Context, writer log.Writer) error {
-	if closer, ok := writer.(interface{ Close(context.Context) error }); ok {
-		return closer.Close(ctx)
-	}
-	return nil
+func closeLogWriter(ctx context.Context, writer log.ManagedWriter) error {
+	return writer.Close(ctx)
 }
 
 func printTraceReport(report *scenarioReport) {

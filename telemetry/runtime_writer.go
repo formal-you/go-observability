@@ -14,7 +14,7 @@ import (
 )
 
 // NewWriter creates the explicitly selected log output.
-func (r *Runtime) NewWriter(ctx context.Context, cfg WriterConfig) (log.Writer, error) {
+func (r *Runtime) NewWriter(ctx context.Context, cfg WriterConfig) (log.ManagedWriter, error) {
 	if r == nil {
 		return nil, errors.New("telemetry: nil runtime")
 	}
@@ -28,7 +28,11 @@ func (r *Runtime) NewWriter(ctx context.Context, cfg WriterConfig) (log.Writer, 
 		}
 		opts := append([]file.Option(nil), cfg.FileOptions...)
 		opts = append(opts, file.WithResourceMetadata(r.fileMetadata))
-		return file.New(cfg.FilePath, opts...)
+		writer, err := file.New(cfg.FilePath, opts...)
+		if err != nil {
+			return nil, err
+		}
+		return log.ManageWriter(writer), nil
 	case LogOutputOTLP:
 		if cfg.FilePath != "" || len(cfg.FileOptions) != 0 || len(cfg.StdoutOptions) != 0 {
 			return nil, errors.New("telemetry: writer options do not apply to otlp output")
@@ -36,19 +40,27 @@ func (r *Runtime) NewWriter(ctx context.Context, cfg WriterConfig) (log.Writer, 
 		if r.loggerProvider == nil {
 			return nil, errors.New("telemetry: otlp output requires logger provider")
 		}
-		return otlp.New(ctx, otlp.WithLoggerProvider(r.loggerProvider), otlp.WithResource(r.resource))
+		writer, err := otlp.New(ctx, otlp.WithLoggerProvider(r.loggerProvider), otlp.WithResource(r.resource))
+		if err != nil {
+			return nil, err
+		}
+		return log.ManageWriter(writer), nil
 	case LogOutputStdout:
 		if cfg.FilePath != "" || len(cfg.FileOptions) != 0 {
 			return nil, errors.New("telemetry: file options do not apply to stdout output")
 		}
 		opts := append([]stdoutwriter.Option(nil), cfg.StdoutOptions...)
 		opts = append(opts, stdoutwriter.WithResource(r.resource))
-		return stdoutwriter.New(ctx, opts...)
+		writer, err := stdoutwriter.New(ctx, opts...)
+		if err != nil {
+			return nil, err
+		}
+		return log.ManageWriter(writer), nil
 	case LogOutputNone:
 		if cfg.FilePath != "" || len(cfg.FileOptions) != 0 || len(cfg.StdoutOptions) != 0 {
 			return nil, errors.New("telemetry: writer options do not apply to none output")
 		}
-		return noopWriter{}, nil
+		return log.ManageWriter(noopWriter{}), nil
 	default:
 		return nil, fmt.Errorf("telemetry: invalid log output %q", r.logOutput)
 	}
