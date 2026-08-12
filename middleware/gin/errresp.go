@@ -45,6 +45,19 @@ type ErrorConfig struct {
 	InputGuard httperr.InputGuard
 }
 
+var fallbackInternalError = mustBuildFallbackError()
+
+func mustBuildFallbackError() error {
+	internal, err := errs.NewSystemError(errs.SystemErrorConfig{
+		Type:    errs.TypeUnknown,
+		Message: "internal error",
+	})
+	if err != nil {
+		panic("ginmw: invalid fallback error contract: " + err.Error())
+	}
+	return internal
+}
+
 // ErrorResponse 返回收口显式业务/系统错误的 Gin 中间件。
 // 它在 handler 外层注册，于 c.Next() 后读取 c.Errors.Last()：
 // 无错误直接放行；有错误则按 errs.Kind 映射状态码与响应体，经 log.EventFromError
@@ -99,18 +112,13 @@ func ErrorResponse(cfg ErrorConfig) gin.HandlerFunc {
 }
 
 // Abort 中止当前 Gin 链并把错误交给统一错误中间件。
-// nil 会被替换为固定内部错误（errs.TypeUnknown → 500 SYS_ERROR）；普通错误在
-// HTTP 边界由中间件按 errs.Kind 映射状态码与响应体，handler 不应自行决定状态码。
+// 非 nil 错误会原样写入 c.Errors，不在这里改写分类；nil 才会被替换为固定内部错误
+// （errs.TypeUnknown → 500 SYS_ERROR）。固定错误在包初始化时构造并验证，因此请求路径
+// 不会因库内固定契约无效而 panic。不实现 errs.AppError 的普通 error 会在 HTTP 投影
+// 边界按未知系统故障兜底，handler 不应自行决定状态码。
 func Abort(c *gin.Context, err error) {
 	if err == nil {
-		internal, buildErr := errs.NewSystemError(errs.SystemErrorConfig{
-			Type:    errs.TypeUnknown,
-			Message: "internal error",
-		})
-		if buildErr != nil {
-			panic("ginmw: invalid fallback error contract: " + buildErr.Error())
-		}
-		err = internal
+		err = fallbackInternalError
 	}
 	_ = c.Error(err)
 	c.Abort()

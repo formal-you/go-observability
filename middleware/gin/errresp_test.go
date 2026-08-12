@@ -3,6 +3,7 @@ package ginmw
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -173,6 +174,19 @@ func TestAbortNilFallback(t *testing.T) {
 	attrString(t, attrs, "error.type", "error.unknown")
 	attrString(t, attrs, "exception.message", "internal error")
 	attrString(t, attrs, "level", "ERROR")
+}
+
+func TestFallbackInternalErrorIsInitialized(t *testing.T) {
+	if fallbackInternalError == nil {
+		t.Fatal("fallbackInternalError = nil")
+	}
+	var appErr errs.AppError
+	if !errors.As(fallbackInternalError, &appErr) {
+		t.Fatalf("fallbackInternalError type = %T, want errs.AppError", fallbackInternalError)
+	}
+	if appErr.Kind() != errs.KindSystem || appErr.ErrorType() != errs.TypeUnknown {
+		t.Fatalf("fallbackInternalError = kind %q type %q, want system/error.unknown", appErr.Kind(), appErr.ErrorType())
+	}
 }
 
 // TestErrorResponseNoErrorPassthrough 验证无错误时中间件直接放行：不改响应、不写事件。
