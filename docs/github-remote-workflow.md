@@ -18,6 +18,26 @@
 - PR 合并不等于 Issue 必然完成。合并后读取 Issue 状态和剩余清单；未完成则保持 Open 并创建后续任务。
 - 关闭重复、无效或被替代 Issue 时写明原因和替代链接，不只改变状态。
 
+### Issue 分类
+
+`formal-you/go-observability` 属于个人账号仓库，GitHub Organization Issue Types API
+对其返回 `404`。本仓库使用互斥的 `type:*` Labels 作为分类真源：
+
+| Label | 使用场景 | 与旧标签的关系 |
+| --- | --- | --- |
+| `type:feature` | 新能力、公共 API、架构增强或未来规划 | 可以同时保留 GitHub 默认 `enhancement` |
+| `type:bug` | 可复现的实现、兼容性、文档或回归缺陷 | 可以同时保留 GitHub 默认 `bug` |
+| `type:task` | 不改变产品行为的维护、治理、调研和基础设施任务 | 不强制添加 `enhancement` / `bug` |
+
+创建或更新 Issue 时先读取当前 Labels，再执行以下分类：
+
+1. 根据用户问题选择且只选择一个 `type:*` Label；无法确定时使用 `type:task`，并在 Issue 正文写明待确认边界。
+2. 目标 Label 不存在时创建上述固定名称、说明和颜色，再应用到 Issue；不能因为 GitHub Issue Types 不可用而省略分类。
+3. Issue 性质发生变化时移除旧的 `type:*` Label 后设置新值，保持互斥；`enhancement` / `bug` 只作为 GitHub 生态兼容标签，不是分类真源。
+4. 仓库未来转移到 Organization 并启用原生 Issue Types 后，先制定迁移映射，再停止使用 `type:*`；迁移完成前不得维护两套互相冲突的分类状态。
+
+完成标准：每个新建 Issue 恰有一个 `type:*` Label；Issue Forms 和远程 Issue 的标签一致；读取 Issue 即可判断其分类，不依赖标题前缀。
+
 ## 分支与已 Squash 历史
 
 本仓库默认 squash merge。PR 合并后，原 feature 分支保留的是多提交历史，`origin/main` 只有一个新的 squash commit；继续在旧分支开发会显示双方分叉。直接 `git rebase origin/main` 可能重放已合并提交。

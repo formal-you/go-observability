@@ -1,7 +1,7 @@
 name: Bug 报告
 description: 报告可复现的功能、兼容性或文档问题
 title: "[Bug] "
-labels: [bug]
+labels: [bug, "type:bug"]
 body:
   - type: markdown
     attributes:
