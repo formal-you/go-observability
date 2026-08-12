@@ -3,6 +3,7 @@
 - 状态：Accepted
 - 日期：2026-08-11
 - 关联：ADR-0001、ADR-0002、ADR-0009
+- 注：ErrorType 文法与命名空间部分已被 [ADR-0016](0016-errortype-otel-grpc-standard-enum.md) 取代；ErrorCode 的 SCOPE.OPERATION.REASON 部分保持有效。
 
 ## 背景（Context）
 

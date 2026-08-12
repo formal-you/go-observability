@@ -16,7 +16,7 @@
 | 编号 | 标题 | 状态 | 日期 |
 | --- | --- | --- | --- |
 | [0001](0001-errorcode-three-segment-format.md) | ErrorCode 采用三段式（服务/模块）.（场景/操作）.（结果/具体错误） | Accepted | 2026-08-11 |
-| [0002](0002-errortype-low-cardinality-domain-reason.md) | ErrorType 映射 OTel error.type，保持低基数，采用 domain.reason 格式 | Accepted | 2026-08-11 |
+| [0002](0002-errortype-low-cardinality-domain-reason.md) | ErrorType 映射 OTel error.type，保持低基数，采用 domain.reason 格式 | Superseded（ADR-0016） | 2026-08-11 |
 | [0003](0003-move-root-log-package-to-log-subdir.md) | 核心 log 包迁移至 log/ 子目录，导入路径改为 .../go-observability/log | Accepted | 2026-08-11 |
 | [0004](0004-eventtype-as-logrecord-body.md) | msg/event_type 映射 OTel LogRecord.Body，事件字段进属性 | Accepted | 2026-08-11 |
 | [0005](0005-error-middleware-httperr-core.md) | 错误收口中间件抽取 httperr 契约核心 + 框架薄壳 | Accepted | 2026-08-11 |
@@ -30,6 +30,7 @@
 | [0013](0013-bounded-stack-policy.md) | 有界 StackPolicy 与路径治理 | Accepted | 2026-08-11 |
 | [0014](0014-managed-writer-lifecycle.md) | 通过 ManagedWriter 统一 Writer 生命周期 | Accepted | 2026-08-12 |
 | [0015](0015-error-registry.md) | Error Registry：error.code 到 error.type 的固定映射 | Accepted | 2026-08-12 |
+| [0016](0016-errortype-otel-grpc-standard-enum.md) | ErrorType 复用 OTel/gRPC 标准枚举（跨模块） | Accepted | 2026-08-13 |
 
 ## 模板
 

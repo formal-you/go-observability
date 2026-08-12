@@ -48,7 +48,7 @@ func TestRecoverCatchesPanicAndEmitsErrorEvent(t *testing.T) {
 	}
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "runtime.panic.occurred")
-	attrString(t, attrs, "error.type", "runtime.panic")
+	attrString(t, attrs, "error.type", "INTERNAL")
 	attrString(t, attrs, "level", "ERROR")
 	attrString(t, attrs, "exception.message", "boom")
 	if stack, ok := attrs["exception.stacktrace"].(slog.Value); !ok || stack.String() == "" {

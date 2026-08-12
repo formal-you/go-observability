@@ -125,7 +125,7 @@ func Recover(cfg ErrorConfig) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if recovered := recover(); recovered != nil {
-					err := httperr.SystemErrorFromPanic(errs.TypeRuntimePanic, recovered)
+					err := httperr.SystemErrorFromPanic(errs.TypeInternal, recovered)
 					requestID := ""
 					if cfg.GetRequestID != nil {
 						requestID = cfg.GetRequestID(r)

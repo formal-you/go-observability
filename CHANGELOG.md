@@ -7,12 +7,13 @@
 ### Changed
 
 - Gin `Abort(nil)` 的固定系统错误改为包初始化时构造并验证，请求路径只复用已验证错误，避免在请求处理中触发库内固定契约构造失败。
+- ErrorType 由 `domain.reason` 自定义词表迁移为 OTel/gRPC 标准枚举（gRPC canonical code，跨模块闭合枚举）：旧常量移除，映射如 `db.query_timeout → DEADLINE_EXCEEDED`、`db.connection_error → UNAVAILABLE`、`runtime.panic → INTERNAL`、`business.* → FAILED_PRECONDITION`；`SetStackPolicy` 改为按精确 code 覆盖。
 
 ### Added
 
 - 新增 Error Registry：`errs.RegisterErrorCode` 注册 ErrorCode→ErrorType 固定映射（多对一），`ErrorCode.RegisteredErrorType` 反查；严格构造器对已注册码强制类型一致，未注册码保持既有行为。
 - 新增 `log.ManagedWriter`、`log.ManageWriter` 与托管 `MultiWriter`；`telemetry.Runtime.NewWriter` 现在返回具备幂等关闭能力的 Writer，保留仅实现 `Write` 的旧 Adapter 兼容性。
-- 新增严格错误值验证与配置式构造器：ErrorCode 使用 `SCOPE.OPERATION.REASON`，ErrorType 使用低基数 `domain.reason`，并支持保留 cause 链。
+- 新增严格错误值验证与配置式构造器：ErrorCode 使用 `SCOPE.OPERATION.REASON`，ErrorType 复用 OTel/gRPC 标准枚举（gRPC canonical code），并支持保留 cause 链。
 - 六类类型化事件、`Logger` / `Writer` 接口，以及 JSONL、stdout、OTLP Writer。
 - `AccessPayload` 新增 `RPCInfo`（semconv `rpc.*`）与框架级事件名 `rpc.request.completed` / `rpc.request.failed`，支持 gRPC 传输层访问/错误事件。
 - `errresp` 与 `recover` 中间件新增 `ResponseProjector` 配置：响应体与状态码可注入（默认保持扁平 `{code,message,request_id?}`），接入方可按自身 HTTP 契约投影。
@@ -57,7 +58,7 @@
 - `Subject.UserID` 的新事件输出从 `app.user_id` 迁移到 semconv `user.id`；旧常量保留为 Deprecated 兼容输入。
 - 升级 OpenTelemetry 依赖至 otel v1.45.0 / log v0.21.0（破坏性 API：log 包移除 `Value`/`KeyValue`，`attrkv` 迁移到 `attribute` 包）；Go 要求升至 1.26。
 
-- `errs` 堆栈策略可配置：新增 `errs.SetStackPolicy`，使用方可按 `error.type` 前缀覆盖默认策略（最长前缀优先，空 map = 库内置默认）；`NewSystem` 构造采集与 `error_project` 事件渲染均跟随同一策略。
+- `errs` 堆栈策略可配置：新增 `errs.SetStackPolicy`，使用方可按 `error.type` 精确 code 覆盖默认策略（空 map = 库内置默认）；`NewSystem` 构造采集与 `error_project` 事件渲染均跟随同一策略。
 - 项目字段前缀统一为 `app.*`；电商等领域事件从核心包移至使用方示例。
 - OpenTelemetry 属性键对齐 Semantic Conventions 1.41.0。
 - file/stdout 与 OTLP 使用各自适合的字段投影，OTLP 顶层承载时间、严重级别、EventName 和 span context。

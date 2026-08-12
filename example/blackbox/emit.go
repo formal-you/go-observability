@@ -129,7 +129,7 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 	engine.POST("/api/v1/orders", func(c *gin.Context) {
 		pauseForLatency()
 		ginmw.Abort(c, mustBusinessError(errs.BusinessErrorConfig{
-			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "business.stock_insufficient", Message: "商品库存不足",
+			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "FAILED_PRECONDITION", Message: "商品库存不足",
 		}))
 	})
 
@@ -142,7 +142,7 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 		})
 		c.Request = c.Request.WithContext(ctx)
 		ginmw.Abort(c, mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeDBQueryTimeout, Message: "update user role: database timeout",
+			Type: errs.TypeDeadlineExceeded, Message: "update user role: database timeout",
 		}))
 	})
 
@@ -205,7 +205,7 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	logger.Emit(mqCtx, log.EventFromError(
 		log.NewEventName("messaging", "publish", "failed"),
 		mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeMQPublishFailed, Message: "publish order.created: deadline exceeded",
+			Type: errs.TypeUnavailable, Message: "publish order.created: deadline exceeded",
 			Upstream: "kafka", Retryable: true, Retries: 3, RetriesExhausted: true,
 		}),
 		log.EventMetadata{},
@@ -217,7 +217,7 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	logger.Emit(lockCtx, log.EventFromError(
 		log.NewEventName("lock", "acquire", "failed"),
 		mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeLockConflict, Message: "acquire lock order:pay:42 conflict",
+			Type: errs.TypeAborted, Message: "acquire lock order:pay:42 conflict",
 		}),
 		log.EventMetadata{},
 	))

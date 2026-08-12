@@ -151,9 +151,9 @@ go-observability/
   -> log.EventFromError(eventName, err, md) 沿错误链提取 AppError 并按 Kind 分派：
        ├─ KindValidation / KindBusiness → BusinessEvent（Result=failed，Level=WARN）
        ├─ KindSystem / 普通 error → ErrorEvent（Result=error，Level=LevelOf(err)）
-       └─ StackMust 类别在 errs.NewSystem 构造点自动采集堆栈（runtime/db/redis/mq/http 前缀，
-           runtime.context_cancelled 降为 optional 不自动采集）；投影仅渲染已采集的 StackTrace；
-           默认策略可用 errs.SetStackConfig 按 error.type 前缀覆盖，并限制大小与路径；旧 SetStackPolicy 仅兼容
+        └─ StackMust 类别在 errs.NewSystem 构造点自动采集堆栈（UNKNOWN/INTERNAL/UNAVAILABLE/DEADLINE_EXCEEDED/DATA_LOSS，
+           CANCELLED/ABORTED 降为 optional 不自动采集）；投影仅渲染已采集的 StackTrace；
+            默认策略可用 errs.SetStackConfig 按 error.type 精确 code 覆盖，并限制大小与路径；旧 SetStackPolicy 仅兼容
   -> 进入 4.1 同一条 Emit 管线写出
 ```
 

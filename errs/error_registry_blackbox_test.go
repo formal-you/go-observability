@@ -11,7 +11,7 @@ import (
 func TestErrorRegistryRegisterAndLookup(t *testing.T) {
 	const (
 		code errs.ErrorCode = "PAYMENT.REFUND.INSUFFICIENT_BALANCE"
-		typ                 = errs.ErrorType("business.insufficient_balance")
+		typ                 = errs.ErrorType("FAILED_PRECONDITION")
 	)
 	if err := errs.RegisterErrorCode(code, typ); err != nil {
 		t.Fatalf("RegisterErrorCode(%q, %q) = %v", code, typ, err)
@@ -32,9 +32,9 @@ func TestErrorRegistryRejectsInvalidInput(t *testing.T) {
 		code errs.ErrorCode
 		typ  errs.ErrorType
 	}{
-		{"empty code", "", "business.failed"},
-		{"two segment code", "ORDER.FAIL", "business.failed"},
-		{"lowercase code", "order.create.failed", "business.failed"},
+		{"empty code", "", "FAILED_PRECONDITION"},
+		{"two segment code", "ORDER.FAIL", "FAILED_PRECONDITION"},
+		{"lowercase code", "order.create.failed", "FAILED_PRECONDITION"},
 		{"empty type", "ORDER.CREATE.FAILED", ""},
 		{"three segment type", "ORDER.CREATE.FAILED", "business.too.many"},
 	}
@@ -51,13 +51,13 @@ func TestErrorRegistryRejectsInvalidInput(t *testing.T) {
 // 相同映射幂等成功；不同映射返回错误（error.code → exactly one error.type）。
 func TestErrorRegistryConflict(t *testing.T) {
 	const code errs.ErrorCode = "PAYMENT.CAPTURE.UPSTREAM_TIMEOUT"
-	if err := errs.RegisterErrorCode(code, "http.upstream_timeout"); err != nil {
+	if err := errs.RegisterErrorCode(code, "DEADLINE_EXCEEDED"); err != nil {
 		t.Fatalf("首次注册 = %v", err)
 	}
-	if err := errs.RegisterErrorCode(code, "http.upstream_timeout"); err != nil {
+	if err := errs.RegisterErrorCode(code, "DEADLINE_EXCEEDED"); err != nil {
 		t.Fatalf("相同映射重复注册 = %v, want nil", err)
 	}
-	if err := errs.RegisterErrorCode(code, "db.query_timeout"); err == nil {
+	if err := errs.RegisterErrorCode(code, "UNAVAILABLE"); err == nil {
 		t.Fatal("不同映射重复注册 = nil, want error")
 	}
 }
@@ -66,19 +66,19 @@ func TestErrorRegistryConflict(t *testing.T) {
 func TestStrictConstructorsEnforceRegisteredCodeType(t *testing.T) {
 	const (
 		code errs.ErrorCode = "ORDER.PAYMENT.UPSTREAM_5XX"
-		typ                 = errs.ErrorType("http.upstream_5xx")
+		typ                 = errs.ErrorType("UNAVAILABLE")
 	)
 	if err := errs.RegisterErrorCode(code, typ); err != nil {
 		t.Fatalf("RegisterErrorCode = %v", err)
 	}
 
 	if _, err := errs.NewBusinessError(errs.BusinessErrorConfig{
-		Code: code, Type: "business.upstream_5xx", Message: "x",
+		Code: code, Type: "FAILED_PRECONDITION", Message: "x",
 	}); err == nil {
 		t.Fatal("NewBusinessError 已注册 code 使用不同 type = nil, want error")
 	}
 	if _, err := errs.NewSystemError(errs.SystemErrorConfig{
-		Type: errs.TypeDBQueryTimeout, Code: code, Message: "x",
+		Type: errs.TypeDeadlineExceeded, Code: code, Message: "x",
 	}); err == nil {
 		t.Fatal("NewSystemError 已注册 code 使用不同 type = nil, want error")
 	}
@@ -93,12 +93,12 @@ func TestStrictConstructorsEnforceRegisteredCodeType(t *testing.T) {
 // TestUnregisteredCodeRemainsPermissive 验收未注册 code 不强制映射（注册是使用方显式选择）。
 func TestUnregisteredCodeRemainsPermissive(t *testing.T) {
 	if _, err := errs.NewBusinessError(errs.BusinessErrorConfig{
-		Code: "ORDER.QUERY.NOT_REGISTERED", Type: "business.stock_insufficient", Message: "x",
+		Code: "ORDER.QUERY.NOT_REGISTERED", Type: "FAILED_PRECONDITION", Message: "x",
 	}); err != nil {
 		t.Fatalf("未注册 code 的严格构造 = %v, want nil", err)
 	}
 	if _, err := errs.NewSystemError(errs.SystemErrorConfig{
-		Type: errs.TypeDBQueryTimeout, Code: "ORDER.QUERY.NOT_REGISTERED", Message: "x",
+		Type: errs.TypeDeadlineExceeded, Code: "ORDER.QUERY.NOT_REGISTERED", Message: "x",
 	}); err != nil {
 		t.Fatalf("未注册 code 的严格构造 = %v, want nil", err)
 	}
@@ -107,14 +107,14 @@ func TestUnregisteredCodeRemainsPermissive(t *testing.T) {
 // TestLegacyConstructorsSkipRegistryCheck 验收旧构造器保持宽松：不做注册映射校验。
 func TestLegacyConstructorsSkipRegistryCheck(t *testing.T) {
 	const code errs.ErrorCode = "ORDER.REFUND.LEGACY_CODE"
-	if err := errs.RegisterErrorCode(code, "business.refund_failed"); err != nil {
+	if err := errs.RegisterErrorCode(code, "NOT_FOUND"); err != nil {
 		t.Fatalf("RegisterErrorCode = %v", err)
 	}
 	legacy := errs.NewBusiness(code, "business.other_failed", "x")
 	if legacy.ErrCode() != code || legacy.ErrorType() != "business.other_failed" {
 		t.Fatal("NewBusiness 不应被注册映射拦截")
 	}
-	sys := errs.NewSystem(errs.TypeDBQueryTimeout, "x", errs.WithCode(code))
+	sys := errs.NewSystem(errs.TypeDeadlineExceeded, "x", errs.WithCode(code))
 	if sys.ErrCode() != code {
 		t.Fatal("NewSystem + WithCode 不应被注册映射拦截")
 	}

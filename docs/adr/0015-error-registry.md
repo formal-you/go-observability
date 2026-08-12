@@ -2,7 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-08-12
-- 关联：ADR-0001（ErrorCode 三段式）、ADR-0002（ErrorType domain.reason）、ADR-0010（严格错误构造）
+- 关联：ADR-0001（ErrorCode 三段式）、ADR-0016（ErrorType OTel/gRPC 标准枚举，取代 ADR-0002）、ADR-0010（严格错误构造）
 
 ## 背景（Context）
 

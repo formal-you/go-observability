@@ -32,7 +32,7 @@ func TestErrorResponseBusinessErrorWritesEventAndResponse(t *testing.T) {
 	r.GET("/orders/:id", func(c *gin.Context) {
 		Abort(c, errs.NewBusiness(
 			"ORDER.CREATE.STOCK_INSUFFICIENT",
-			"business.stock_insufficient",
+			"FAILED_PRECONDITION",
 			"stock insufficient",
 		))
 	})
@@ -61,7 +61,7 @@ func TestErrorResponseBusinessErrorWritesEventAndResponse(t *testing.T) {
 	}
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "http.request.rejected")
-	attrString(t, attrs, "error.type", "business.stock_insufficient")
+	attrString(t, attrs, "error.type", "FAILED_PRECONDITION")
 	attrString(t, attrs, "app.error_code", "ORDER.CREATE.STOCK_INSUFFICIENT")
 	attrString(t, attrs, "app.business_message", "stock insufficient")
 	attrString(t, attrs, "app.result", "failed")
@@ -98,7 +98,7 @@ func TestErrorResponseValidationErrorWritesEventAndResponse(t *testing.T) {
 	}
 
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "error.type", "validation.failed")
+	attrString(t, attrs, "error.type", "INVALID_ARGUMENT")
 	attrString(t, attrs, "app.result", "failed")
 	attrString(t, attrs, "level", "WARN")
 }
@@ -112,7 +112,7 @@ func TestErrorResponseSystemErrorHidesMessage(t *testing.T) {
 	r := gin.New()
 	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
 	r.GET("/orders/:id", func(c *gin.Context) {
-		Abort(c, errs.NewSystem(errs.TypeDBQueryTimeout, "dial tcp 10.0.0.1:3306: timeout"))
+		Abort(c, errs.NewSystem(errs.TypeDeadlineExceeded, "dial tcp 10.0.0.1:3306: timeout"))
 	})
 
 	rec := doRequest(r, "/orders/1")
@@ -139,7 +139,7 @@ func TestErrorResponseSystemErrorHidesMessage(t *testing.T) {
 	}
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "http.request.failed")
-	attrString(t, attrs, "error.type", "db.query_timeout")
+	attrString(t, attrs, "error.type", "DEADLINE_EXCEEDED")
 	attrString(t, attrs, "exception.message", "dial tcp 10.0.0.1:3306: timeout")
 	attrString(t, attrs, "app.result", "error")
 	attrString(t, attrs, "level", "ERROR")
@@ -171,7 +171,7 @@ func TestAbortNilFallback(t *testing.T) {
 	}
 
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "error.type", "error.unknown")
+	attrString(t, attrs, "error.type", "UNKNOWN")
 	attrString(t, attrs, "exception.message", "internal error")
 	attrString(t, attrs, "level", "ERROR")
 }
@@ -279,7 +279,7 @@ func TestErrorResponseCustomStatusForError(t *testing.T) {
 		StatusForError: func(error) int { return http.StatusTeapot },
 	}))
 	r.GET("/orders/:id", func(c *gin.Context) {
-		Abort(c, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "business.stock_insufficient", "stock insufficient"))
+		Abort(c, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "FAILED_PRECONDITION", "stock insufficient"))
 	})
 
 	rec := doRequest(r, "/orders/1")
@@ -395,7 +395,7 @@ func TestErrorResponseInputGuardEmitsSecurityAuditEvents(t *testing.T) {
 	}))
 	engine.GET("/x", func(c *gin.Context) {
 		c.Request = c.Request.WithContext(httperr.WithInputSummary(c.Request.Context(), httperr.InputSummary{Fields: []string{"order_id"}, Hash: "sha256:abc"}))
-		Abort(c, errs.NewSystem(errs.TypeDBQueryTimeout, "dial tcp: timeout"))
+		Abort(c, errs.NewSystem(errs.TypeDeadlineExceeded, "dial tcp: timeout"))
 	})
 
 	tid, err := trace.TraceIDFromHex("0123456789abcdef0123456789abcdef")

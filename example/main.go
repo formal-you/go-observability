@@ -72,7 +72,7 @@ func main() {
 	r.POST("/api/v1/orders", func(c *gin.Context) {
 		// 业务拒绝：errresp.Abort 挂载错误，收口中间件决定状态码/响应体并写错误事件。
 		ginmw.Abort(c, mustBusinessError(errs.BusinessErrorConfig{
-			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "business.stock_insufficient", Message: "库存不足",
+			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "FAILED_PRECONDITION", Message: "库存不足",
 		}))
 	})
 	if err := r.Run(":8080"); err != nil {

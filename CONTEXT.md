@@ -19,7 +19,7 @@ _Avoid_: 日志级别（Level 是另一维度）、EventName
 _Avoid_: 类别.模块.操作、随意字符串、message、EventType 前缀
 
 **ErrorType**:
-低基数失败类别，映射 OTel error.type，采用 `domain.reason` 格式（如 db.query_timeout、business.stock_insufficient）；由 errs 固定枚举与 business.* 开放命名空间承载。
+低基数失败类别，映射 OTel error.type，复用 OTel/gRPC 标准枚举（gRPC canonical code）：跨模块、闭合、单段 UPPER_SNAKE（如 NOT_FOUND / UNAVAILABLE / DEADLINE_EXCEEDED / INTERNAL）；以通用性换取工具链兼容与低维护成本，禁止自定义词表。
 _Avoid_: ErrorCode（高基数具体码）、error message
 
 **Error Registry**:
@@ -155,9 +155,9 @@ _Avoid_: 完整事件内容
 _Avoid_: 日志级别（WARN/ERROR 是 Level 维度）、错误码
 
 **低基数失败类别（ErrorType）**:
-error.type 的低基数失败类别，严格采用两段 `domain.reason` 格式（db./redis./mq./http./runtime.…），用于聚合与告警路由。
+error.type 的低基数失败类别，复用 OTel/gRPC 标准枚举（gRPC canonical code，跨模块、闭合、单段 UPPER_SNAKE，如 NOT_FOUND / UNAVAILABLE / DEADLINE_EXCEEDED / INTERNAL），用于聚合与告警路由。
 与业务错误码（ErrorCode）是「宏观分类 > 微观错误码」的多对一关系：多个三段式
-ErrorCode 归入同一个低基数 ErrorType，ErrorType 不是对 ErrorCode 的细化。
+ErrorCode 归入同一个标准枚举 ErrorType，ErrorType 不是对 ErrorCode 的细化。
 _Avoid_: 错误消息（消息是高基数文本，类别是低基数标签）
 
 **业务错误码（ErrorCode）**:
@@ -173,11 +173,11 @@ system 错误的重试元数据：retryable、retries、retries_exhausted、upst
 _Avoid_: 重试逻辑（本仓库只记录元数据，不执行重试）
 
 **堆栈策略（StackPolicy）**:
-堆栈记录策略：must（构造点必记）/ optional（按需）/ none（不记），按 error.type 前缀生效，控制体积。
+堆栈记录策略：must（构造点必记）/ optional（按需）/ none（不记），按 error.type 精确 code 生效，控制体积。
 _Avoid_: 一律记堆栈（会让高频类别体积失控）
 
 **堆栈边界（StackConfig）**:
-为 stacktrace 设置最大 UTF-8 字节数、路径策略（full/base/redacted）与 ErrorType 覆盖。超限使用稳定截断标记并输出 `app.stacktrace_truncated=true`；`runtime.panic` 不得被降为 none。
+为 stacktrace 设置最大 UTF-8 字节数、路径策略（full/base/redacted）与 ErrorType 覆盖。超限使用稳定截断标记并输出 `app.stacktrace_truncated=true`；`INTERNAL`（含 panic）不得被降为 none。
 
 **Subject / Actor**:
 Subject 是事件关联的用户与租户，输出为 `user.id` / `app.tenant_id`；Actor 是安全或审计动作的执行者，输出为 `app.actor_user_id` / `app.actor_role`。可信认证上下文通过 `IdentityExtractor` 注入，非空值优先于事件载荷；二者都不是 Metric 维度。

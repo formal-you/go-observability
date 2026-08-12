@@ -73,7 +73,7 @@ func TestErrorEncoder(t *testing.T) {
 		}
 	})
 	t.Run("system AppError hides detail", func(t *testing.T) {
-		err := errs.NewSystem(errs.TypeDBQueryTimeout, "find user: context deadline exceeded")
+		err := errs.NewSystem(errs.TypeDeadlineExceeded, "find user: context deadline exceeded")
 		status, body := encode(t, ErrorEncoder(), err)
 		if status != http.StatusInternalServerError {
 			t.Fatalf("status = %d, want 500", status)
@@ -82,7 +82,7 @@ func TestErrorEncoder(t *testing.T) {
 			t.Fatalf("message = %v, want fixed（不透传内部细节）", body["message"])
 		}
 		md, _ := body["metadata"].(map[string]any)
-		if md["error.type"] != "db.query_timeout" {
+		if md["error.type"] != "DEADLINE_EXCEEDED" {
 			t.Fatalf("metadata = %v", body["metadata"])
 		}
 	})
@@ -95,7 +95,7 @@ func TestErrorEncoder(t *testing.T) {
 			t.Fatalf("message = %v, want fixed", body["message"])
 		}
 		md, _ := body["metadata"].(map[string]any)
-		if md["error.type"] != "error.unknown" {
+		if md["error.type"] != "UNKNOWN" {
 			t.Fatalf("metadata = %v", body["metadata"])
 		}
 	})
@@ -228,7 +228,7 @@ func TestGRPCErrorMapper(t *testing.T) {
 		}
 	})
 	t.Run("system AppError hides detail", func(t *testing.T) {
-		err := errs.NewSystem(errs.TypeDBQueryTimeout, "find user: context deadline exceeded")
+		err := errs.NewSystem(errs.TypeDeadlineExceeded, "find user: context deadline exceeded")
 		mw := GRPCErrorMapper()
 		_, got := mw(func(context.Context, any) (any, error) { return nil, err })(context.Background(), nil)
 		st, _ := status.FromError(got)

@@ -24,7 +24,7 @@ func TestStatusForError(t *testing.T) {
 	}{
 		{"validation", errs.NewValidation("bad param"), http.StatusBadRequest},
 		{"business", errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", errs.ErrorType("business.order.stock_insufficient"), "库存不足"), http.StatusConflict},
-		{"system", errs.NewSystem(errs.TypeDBConnectionError, "connection refused"), http.StatusInternalServerError},
+		{"system", errs.NewSystem(errs.TypeUnavailable, "connection refused"), http.StatusInternalServerError},
 		{"plain", errors.New("boom"), http.StatusInternalServerError},
 		{"nil", nil, http.StatusInternalServerError},
 	}
@@ -45,7 +45,7 @@ func TestDefaultEventNameResolver(t *testing.T) {
 	}{
 		{"validation", errs.NewValidation("bad param"), log.EventNameHTTPRequestRejected},
 		{"business", errs.NewBusiness("ORDER.CREATE.REJECTED", errs.ErrorType("business.order.rejected"), "rejected"), log.EventNameHTTPRequestRejected},
-		{"system", errs.NewSystem(errs.TypeDBConnectionError, "connection refused"), log.EventNameHTTPRequestFailed},
+		{"system", errs.NewSystem(errs.TypeUnavailable, "connection refused"), log.EventNameHTTPRequestFailed},
 		{"plain", errors.New("boom"), log.EventNameHTTPRequestFailed},
 		{"nil", nil, log.EventNameHTTPRequestFailed},
 	}
@@ -64,7 +64,7 @@ func TestClassifyError(t *testing.T) {
 		if reason != "validation_error" || msg != "用户名为空" {
 			t.Errorf("got (%q,%q), want validation_error/用户名为空", reason, msg)
 		}
-		if md["error.type"] != "validation.failed" {
+		if md["error.type"] != "INVALID_ARGUMENT" {
 			t.Errorf("metadata = %v, want error.type=validation.failed", md)
 		}
 	})
@@ -81,11 +81,11 @@ func TestClassifyError(t *testing.T) {
 		}
 	})
 	t.Run("system does not leak detail", func(t *testing.T) {
-		reason, msg, md := ClassifyError(errs.NewSystem(errs.TypeDBConnectionError, "dial tcp 127.0.0.1:5432: connection refused"))
+		reason, msg, md := ClassifyError(errs.NewSystem(errs.TypeUnavailable, "dial tcp 127.0.0.1:5432: connection refused"))
 		if reason != "system_error" || msg != "internal server error" {
 			t.Errorf("got (%q,%q), want system_error/internal server error", reason, msg)
 		}
-		if md["error.type"] != "db.connection_error" {
+		if md["error.type"] != "UNAVAILABLE" {
 			t.Errorf("metadata = %v, want error.type=db.connection_error", md)
 		}
 	})
@@ -94,7 +94,7 @@ func TestClassifyError(t *testing.T) {
 		if reason != "system_error" || msg != "internal server error" {
 			t.Errorf("got (%q,%q), want system_error/internal server error", reason, msg)
 		}
-		if md["error.type"] != "error.unknown" {
+		if md["error.type"] != "UNKNOWN" {
 			t.Errorf("metadata = %v, want error.type=error.unknown", md)
 		}
 	})
@@ -120,7 +120,7 @@ func TestResponseBody(t *testing.T) {
 		}
 	})
 	t.Run("system fixed", func(t *testing.T) {
-		body := ResponseBody(errs.NewSystem(errs.TypeDBConnectionError, "secret detail"), "")
+		body := ResponseBody(errs.NewSystem(errs.TypeUnavailable, "secret detail"), "")
 		if body["code"] != "SYS_ERROR" || body["message"] != "系统繁忙，请稍后重试" {
 			t.Errorf("body = %v", body)
 		}
@@ -177,11 +177,11 @@ func TestEventMetadataFromContext(t *testing.T) {
 }
 
 func TestSystemErrorFromPanic(t *testing.T) {
-	err := SystemErrorFromPanic(errs.TypeRuntimePanic, "boom: nil pointer")
+	err := SystemErrorFromPanic(errs.TypeInternal, "boom: nil pointer")
 	if err.Kind() != errs.KindSystem {
 		t.Errorf("Kind = %q, want system", err.Kind())
 	}
-	if err.ErrorType() != errs.TypeRuntimePanic {
+	if err.ErrorType() != errs.TypeInternal {
 		t.Errorf("ErrorType = %q, want runtime.panic", err.ErrorType())
 	}
 	if err.Error() != "boom: nil pointer" {
@@ -243,7 +243,7 @@ func TestEmitGuardEvents(t *testing.T) {
 	c := &captureLogger{}
 	l := log.NewLogger(c)
 	ctx := WithInputSummary(context.Background(), InputSummary{Fields: []string{"order_id"}})
-	err := errs.NewSystem(errs.TypeDBConnectionError, "dial tcp: refused")
+	err := errs.NewSystem(errs.TypeUnavailable, "dial tcp: refused")
 
 	t.Run("nil guard no-op", func(t *testing.T) {
 		EmitGuardEvents(l, ctx, httptest.NewRequest(http.MethodGet, "/x", nil), err, nil)

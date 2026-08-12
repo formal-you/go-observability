@@ -20,9 +20,9 @@ func TestLevelOfBlackBox(t *testing.T) {
 	}{
 		{"CASE-B3-01 validation → WARN", errs.NewValidation("v"), log.LevelWarn},
 		{"CASE-B3-02 business → WARN", errs.NewBusiness("C", errs.ErrorType("business.x"), "b"), log.LevelWarn},
-		{"CASE-B3-03 system retrying → WARN", errs.NewSystem(errs.TypeDBQueryTimeout, "t", errs.WithRetry(1, false)), log.LevelWarn},
-		{"CASE-B3-04 system exhausted → ERROR", errs.NewSystem(errs.TypeMQRetryExhausted, "e", errs.WithRetry(5, true)), log.LevelError},
-		{"CASE-B3-05 system not retryable → ERROR", errs.NewSystem(errs.TypeRuntimePanic, "p"), log.LevelError},
+		{"CASE-B3-03 system retrying → WARN", errs.NewSystem(errs.TypeDeadlineExceeded, "t", errs.WithRetry(1, false)), log.LevelWarn},
+		{"CASE-B3-04 system exhausted → ERROR", errs.NewSystem(errs.TypeResourceExhausted, "e", errs.WithRetry(5, true)), log.LevelError},
+		{"CASE-B3-05 system not retryable → ERROR", errs.NewSystem(errs.TypeInternal, "p"), log.LevelError},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

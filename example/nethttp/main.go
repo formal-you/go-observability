@@ -62,7 +62,7 @@ func main() {
 	mux.HandleFunc("POST /api/v1/orders", func(rw http.ResponseWriter, _ *http.Request) {
 		// 显式错误统一收口：SetError 挂载，nethttp.ErrorResponse 决定状态码/响应体并写错误事件。
 		httpmw.SetError(rw, mustBusinessError(errs.BusinessErrorConfig{
-			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "business.stock_insufficient", Message: "库存不足",
+			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "FAILED_PRECONDITION", Message: "库存不足",
 		}))
 	})
 

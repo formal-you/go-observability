@@ -163,7 +163,7 @@ func TestErrorResponseInputGuardEmitsSecurityAuditEvents(t *testing.T) {
 			}
 		},
 	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		SetError(w, errs.NewSystem(errs.TypeDBQueryTimeout, "dial tcp: timeout"))
+		SetError(w, errs.NewSystem(errs.TypeDeadlineExceeded, "dial tcp: timeout"))
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)
