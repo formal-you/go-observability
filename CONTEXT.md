@@ -6,6 +6,11 @@ go-observability 是 Go 语义化日志与可观测装配库：定义事件如�
 
 ### 事件模型
 
+事件模型分三层：
+① **Event Semantics**：event.name 唯一标识 Event Structure（发生了什么）；
+② **Error Semantics**：失败/异常事件的 error.type（OTel/gRPC 标准分类）+ error.code（企业级具体错误）；
+③ **Sampling / Retention**：高价值事件（failed/error/blocked/denied、security 等）的采样优先级与保留策略，独立于①②，不编码进 event.name / error.type 语义。
+
 **事件（Event）**:
 一次语义化日志记录，由粗分类（EventType）、细名（EventName）与扁平属性组成，经 Logger 治理后由 Writer 输出。
 _Avoid_: 日志行、log message（指结构化事件时）
@@ -35,11 +40,11 @@ _Avoid_: app.business_code、app.operation、从错误码自动生成 EventName
 _Avoid_: HTTP 状态码
 
 **Result**:
-跨事件类型的业务结果：success / failed / error / blocked / denied / unknown。
+跨事件类型的业务结果（vendor 键 app.result，保留作为跨事件直接过滤/采样列）：success / failed / error / blocked / denied / unknown；失败语义另由 error.type 表达。
 _Avoid_: HTTP 状态码（状态码是访问事件的传输字段，不等于 Result）
 
 **高价值结果（High-value Result）**:
-failed / error / blocked / denied 四类，采样器强制保留。
+failed / error / blocked / denied 四类，属于高价值失败/异常事件；由独立的 Sampling/Retention Policy 高优先级保留（SHOULD be retained，操作上需要时保证保留），不编码进 event.name / error.type 语义。
 _Avoid_: 错误（仅指 error 一类）、异常
 
 **安全/审计事件并存（Security/Audit Co-occurrence）**:
@@ -49,6 +54,10 @@ _Avoid_: 错误（仅指 error 一类）、异常
 _Avoid_: 用多条错误事件表达同一失败
 
 ### 数据治理
+
+**Sampling / Retention Policy（采样保留策略）**:
+独立于事件/错误语义的策略层：高价值失败/异常事件（failed/error/blocked/denied）SHOULD be retained by the telemetry pipeline；sampling policy SHOULD prioritize or guarantee retention where operationally required；不把采样策略编码进 event.name / error.type 定义。
+_Avoid_: 把「100% 保留」写进 Event Semantic Convention、用采样描述事件语义
 
 **采样（Sampling）**:
 按策略选择哪些事件保留、哪些丢弃的选择性减量；采样率（如 0.1）表示保留比例。
@@ -71,7 +80,7 @@ Collector 侧等 trace 完整到达后按错误 / 概率 / 属性策略决定保
 _Avoid_: 后端采样（模糊）
 
 **Sampler**:
-采样判定器，返回保留或丢弃；ResultKeepSampler 按 Result 判定，EventTypeKeepSampler 按 msg/EventType 粗分类判定，EventKeepSampler 按 event.name 领域前缀判定。
+采样判定器，返回保留或丢弃；ResultKeepSampler 按 Result 高优先级保留（SHOULD），EventTypeKeepSampler 按 msg/EventType 粗分类判定，EventKeepSampler 按 event.name 领域前缀判定。
 _Avoid_: 采样频率、过滤器
 
 **Masker（脱敏）**:

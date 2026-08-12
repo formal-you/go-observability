@@ -109,7 +109,7 @@ const (
 	LevelError Level = "ERROR"
 )
 
-// Result 跨事件类型通用业务结果；failed/error/blocked/denied 为高价值结果，采样器强制保留。
+// Result 跨事件类型通用业务结果（vendor 键 app.result，保留用于直接过滤/采样）；failed/error/blocked/denied 为高价值结果，由 Sampling/Retention Policy 高优先级保留（SHOULD）。
 type Result string
 
 const (

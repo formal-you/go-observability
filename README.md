@@ -239,7 +239,7 @@ log 包以标准库 `log/slog` 为属性载体。OTel 依赖集中在转换、Wr
 
 AccessEvent 记录 method、path、status、latency 等请求事实，BusinessEvent 记录领域动作与结果，两者不是重复日志。即使业务结果为 success，运营仍需要 AccessEvent 计算请求量、成功率、延迟和容量，并在 trace 被采样时保留可检索的请求全貌。
 
-高流量服务只有在已有网关全量 access，或明确接受成功请求的事件关联不完整时，才应显式启用 access 采样；一旦启用，就不再保证每个 HTTP 语义事件都有 AccessEvent。失败结果仍由 `ResultKeepSampler` 强制保留：
+高流量服务只有在已有网关全量 access，或明确接受成功请求的事件关联不完整时，才应显式启用 access 采样；一旦启用，就不再保证每个 HTTP 语义事件都有 AccessEvent。失败结果仍由 `ResultKeepSampler` 高优先级保留（Sampling/Retention Policy 层 SHOULD）：
 
 ```go
 log.WithSampler(log.NewEventTypeKeepSampler(

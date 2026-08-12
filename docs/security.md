@@ -32,7 +32,7 @@ LogValuer。它仍无法识别所有业务语义、自定义类型或嵌入字�
 
 默认 trace 头部采样率为 `0.1`。未被头部采样选中的 trace 不会导出到 Collector，后续 `tail_sampling` 无法恢复，因此不能宣称“错误 trace 必留”。
 
-若安全调查或错误追踪要求 Collector 基于完整 trace 决策，应把应用侧采样率设为 `1.0`，再配置尾部采样，并容量评估 Collector。日志 Sampler 应对 failed、error、blocked、denied 等高价值结果强制保留，但这仍不保证对应 trace 存在。
+日志 Sampler 应按 Sampling/Retention Policy 对 failed、error、blocked、denied 等高价值结果高优先级保留（SHOULD be retained，操作上需要时保证保留），但这仍不保证对应 trace 存在。
 
 ## 发布和漏洞报告
 

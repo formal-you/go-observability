@@ -6,9 +6,10 @@ import (
 	"strings"
 )
 
-// ResultKeepSampler 按 app.result 强制保留高价值结果，其余按 ratio 概率保留。
-// ratio 落在 (0,1]；<=0 时等价于只保留高价值；>1 按 1 处理。
-// 未设置 app.result 或值为 unknown 时按 ratio 采样（不强制丢弃）。
+// ResultKeepSampler 按 app.result 高优先级保留高价值结果，其余按 ratio 概率保留。
+// 保留属 Sampling/Retention Policy 层建议：高价值失败/异常事件 SHOULD be retained
+// by the telemetry pipeline；sampling policy SHOULD prioritize or guarantee retention
+// where operationally required，不编码进 Event Semantic Convention。
 // 默认随机源并发安全；包内测试注入的随机源由注入方保证并发安全。
 type ResultKeepSampler struct {
 	// Ratio 非高价值事件的保留概率。
@@ -19,7 +20,7 @@ type ResultKeepSampler struct {
 	randFloat func() float64
 }
 
-// highValueResults 采样器强制保留的 Result 集合。
+// highValueResults Sampling/Retention Policy 高优先级保留的 Result 集合（SHOULD 保留）。
 var highValueResults = map[string]struct{}{
 	string(ResultFailed):  {},
 	string(ResultError):   {},
@@ -85,7 +86,7 @@ func (s EventKeepSampler) Sample(ctx context.Context, attrs []slog.Attr) bool {
 	return s.Fallback.Sample(ctx, attrs)
 }
 
-// EventTypeKeepSampler 按 EventType 粗分类强制保留事件，其余委托 Fallback。
+// EventTypeKeepSampler 按 EventType 粗分类高优先级保留事件（Sampling/Retention Policy 层），其余委托 Fallback。
 // 推荐用它表达 business/error/security/audit/probe 全量、access 显式采样策略。
 type EventTypeKeepSampler struct {
 	KeepTypes []EventType

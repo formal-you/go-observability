@@ -24,7 +24,7 @@ type SecurityConfig struct {
 	// GetRequestID 从请求提取 request_id 补到事件 metadata；可选，未提供则不输出该字段。
 	GetRequestID func(c *gin.Context) string
 
-	// Level 缺省级别；空值默认 WARN（安全事件属告警性质，可被采样器按结果强制保留）。
+	// Level 缺省级别；空值默认 WARN（安全事件属告警性质，可被采样器按结果高优先级保留）。
 	Level log.Level
 }
 
