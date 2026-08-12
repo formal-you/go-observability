@@ -8,7 +8,7 @@ import (
 	log "github.com/formal-you/go-observability/log"
 )
 
-// 业务事实名（领域.对象.事实；粗分类由 BusinessEvent/msg 承载）。
+// 业务事实名（<domain>.<subject>.<event>；粗分类由 BusinessEvent 的 type 承载）。
 const (
 	EventOrderCreated   log.EventName = "order.lifecycle.created"
 	EventOrderPaid      log.EventName = "order.payment.succeeded"

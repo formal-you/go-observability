@@ -2,7 +2,7 @@
   {
     "timestamp": "2026-08-11T20:57:20.6574698+08:00",
     "level": "INFO",
-    "msg": "business",
+    "type": "business",
     "service.name": "go-observability-blackbox",
     "service.version": "dev",
     "service.instance.id": "blackbox-local",
@@ -18,7 +18,7 @@
   {
     "timestamp": "2026-08-11T20:57:20.6547697+08:00",
     "level": "INFO",
-    "msg": "access",
+    "type": "access",
     "service.name": "go-observability-blackbox",
     "service.version": "dev",
     "service.instance.id": "blackbox-local",
@@ -38,7 +38,7 @@
   {
     "timestamp": "2026-08-11T20:57:20.6699438+08:00",
     "level": "WARN",
-    "msg": "business",
+    "type": "business",
     "service.name": "go-observability-blackbox",
     "service.version": "dev",
     "service.instance.id": "blackbox-local",
@@ -55,7 +55,7 @@
   {
     "timestamp": "2026-08-11T20:57:20.6678404+08:00",
     "level": "WARN",
-    "msg": "access",
+    "type": "access",
     "service.name": "go-observability-blackbox",
     "service.version": "dev",
     "service.instance.id": "blackbox-local",
@@ -75,7 +75,7 @@
   {
     "timestamp": "2026-08-11T20:57:20.6726173+08:00",
     "level": "ERROR",
-    "msg": "error",
+    "type": "error",
     "service.name": "go-observability-blackbox",
     "service.version": "dev",
     "service.instance.id": "blackbox-local",
@@ -94,7 +94,7 @@
   {
     "timestamp": "2026-08-11T20:57:20.6726173+08:00",
     "level": "WARN",
-    "msg": "security",
+    "type": "security",
     "service.name": "go-observability-blackbox",
     "service.version": "dev",
     "service.instance.id": "blackbox-local",
@@ -113,7 +113,7 @@
   {
     "timestamp": "2026-08-11T20:57:20.6726173+08:00",
     "level": "INFO",
-    "msg": "audit",
+    "type": "audit",
     "service.name": "go-observability-blackbox",
     "service.version": "dev",
     "service.instance.id": "blackbox-local",
@@ -136,7 +136,7 @@
   {
     "timestamp": "2026-08-11T20:57:20.6699438+08:00",
     "level": "ERROR",
-    "msg": "access",
+    "type": "access",
     "service.name": "go-observability-blackbox",
     "service.version": "dev",
     "service.instance.id": "blackbox-local",
@@ -156,7 +156,7 @@
   {
     "timestamp": "2026-08-11T20:57:20.6753367+08:00",
     "level": "ERROR",
-    "msg": "error",
+    "type": "error",
     "service.name": "go-observability-blackbox",
     "service.version": "dev",
     "service.instance.id": "blackbox-local",
@@ -178,7 +178,7 @@
   {
     "timestamp": "2026-08-11T20:57:20.673177+08:00",
     "level": "ERROR",
-    "msg": "access",
+    "type": "access",
     "service.name": "go-observability-blackbox",
     "service.version": "dev",
     "service.instance.id": "blackbox-local",
@@ -198,7 +198,7 @@
   {
     "timestamp": "2026-08-11T20:57:20.6753367+08:00",
     "level": "ERROR",
-    "msg": "error",
+    "type": "error",
     "service.name": "go-observability-blackbox",
     "service.version": "dev",
     "service.instance.id": "blackbox-local",
@@ -218,7 +218,7 @@
   {
     "timestamp": "2026-08-11T20:57:20.6753367+08:00",
     "level": "ERROR",
-    "msg": "error",
+    "type": "error",
     "service.name": "go-observability-blackbox",
     "service.version": "dev",
     "service.instance.id": "blackbox-local",

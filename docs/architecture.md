@@ -138,7 +138,7 @@ go-observability/
   -> 写入失败不返回业务代码，只交给 ErrorHandler 观察
 ```
 
-- `msg` 即 `event_type`；`attrs` 是完整扁平字段（公共 metadata + payload）。
+- `type`（Writer 首个参数）即 `event_type`；`attrs` 是完整扁平字段（公共 metadata + payload）。
 - Logger 构造后配置只读，无需加锁；`Writer` / `Sampler` / `Masker` 需自行满足并发契约（服务端 Writer 必须支持多 goroutine 并发写）。
 - `NewLogger` 默认不配置 Sampler，所有事件全量写出。HTTP 接入推荐保持该默认，确保每个 HTTP 来源的 Business / Error / Security / Audit 事件都有同 trace/request 的 AccessEvent；显式启用 access 成功采样即表示接入方接受该关联不再完整。
 - Gin 注册顺序为 `Trace -> AccessLog -> Recover -> 其他链尾中间件`：AccessLog 必须包在 Recover / ErrorResponse / SecurityLog / AuditLog 外层，才能在 2xx、4xx、5xx 与 panic 收口后记录最终响应。健康检查由 `SkipPaths` 排除，不进入概率采样。
@@ -186,11 +186,11 @@ go-observability/
 
 顶层字段映射集中在 `internal/attrkv.Record`（唯一核心映射层）。**不要**为 OTLP 把顶层字段塞回属性，也**不要**为 file 把属性拆掉；两边共享同一份归一化 attrs。
 
-file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `level` → `msg` → `trace_id`/`span_id`/`request_id`/`latency_ms` → `event.name` → 其余事件字段 → `app.result` 收尾；跨事件保持一致，避免同一字段（尤其 `app.result`）在不同日志里相对位置漂移。由 `writer/file` 实现，`example/blackbox` 测试锁定。
+file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `level` → `type` → `trace_id`/`span_id`/`request_id`/`latency_ms` → `event.name` → 其余事件字段 → `app.result` 收尾；跨事件保持一致，避免同一字段（尤其 `app.result`）在不同日志里相对位置漂移。由 `writer/file` 实现，`example/blackbox` 测试锁定。
 
 ## 6. 关键设计决策与不可违反边界
 
-1. **事件名 Convention**：`event.name MUST use the form <domain>.<subject>.<event>`；`<event>` MUST 是注册的 Event Type（唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；正则 `EventNamePattern` 校验；`msg` 已承载六类粗分类，因此首段不得使用 `access/business/error/security/audit/probe`。框架级事件登记在 `types.go`，领域事件由接入方自建注册表（见 `example/mall`），禁止在中间件/生产埋点里散落手写字符串。
+1. **事件名 Convention**：`event.name MUST use the form <domain>.<subject>.<event>`；`<event>` MUST 是注册的 Event Type（唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；正则 `EventNamePattern` 校验；`type`（Writer 首个参数）已承载六类粗分类，因此首段不得使用 `access/business/error/security/audit/probe`。框架级事件登记在 `types.go`，领域事件由接入方自建注册表（见 `example/mall`），禁止在中间件/生产埋点里散落手写字符串。
 2. **semconv 1.41.0 键名**：路径用 `url.path`（不是 `http.request.path`）；代码位置用 `code.function.name` / `code.file.path` / `code.line.number`。
 3. **顶层映射集中**：新增保留键必须同时更新 `attrkv.recordAttrKeys` 与 `normalize.reservedKeys`，保证 OTLP 剥离与 file 保留一致。
 4. **公共字段登记**：核心公共字段必须在 `keys.go` 登记；vendor 一律 `app.*`；领域专属键（`order_id` 等）由接入方自建，不进核心 `keys.go`。

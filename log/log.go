@@ -12,13 +12,13 @@ import (
 // send_batch_size 二次凑批。本层每次 Emit 直接调用 Writer，不内置批处理或定时器。
 
 // Writer 接收已归一化并扁平化的语义日志事件。
-// msg 当前等于事件的 event_type；attrs 同时包含公共 metadata 与 payload 字段。
+// eventType（首个参数）当前等于事件的 event_type；attrs 同时包含公共 metadata 与 payload 字段。
 // Writer 位于核心治理管线末端，因此看到的字段已经完成采样判定和可选脱敏。
 // Logger 不会序列化并发写入：Writer 实现应明确自己的并发语义，面向服务端使用时
 // 通常必须允许多个 goroutine 并发调用。Writer 返回的错误只用于诊断输出故障，
 // 不会作为业务方法返回值向上传播。
 type Writer interface {
-	Write(ctx context.Context, msg string, attrs ...slog.Attr) error
+	Write(ctx context.Context, eventType string, attrs ...slog.Attr) error
 }
 
 // ManagedWriter 在 Writer Seam 上增加幂等资源关闭能力。Runtime 创建的 Writer
@@ -32,7 +32,7 @@ type ManagedWriter interface {
 // attrs 是本次写入切片的浅副本，ErrorHandler 可以安全调整切片本身；属性中通过
 // slog.Any 保存的 map、slice 或指针仍可能与原事件共享底层数据。回调在调用日志的
 // goroutine 中同步执行，不应长期阻塞，也不应 panic。
-type ErrorHandler func(ctx context.Context, msg string, attrs []slog.Attr, err error)
+type ErrorHandler func(ctx context.Context, eventType string, attrs []slog.Attr, err error)
 
 // Sampler 采样判定：返回 false 丢弃该事件。
 // failed/error/blocked/denied 等高价值结果应强制保留（实现按 app.result 属性判定）。
@@ -192,10 +192,10 @@ func NewLogger(writer Writer, opts ...Option) *Logger {
 	return l
 }
 
-// Emit 写出一个事件。msg 为 event_type，attrs 为完整扁平字段。
+// Emit 写出一个事件。eventType 为 event_type，attrs 为完整扁平字段。
 // 写入失败不会返回给调用方，只交给 ErrorHandler（若有）观察。
 func (l *Logger) Emit(ctx context.Context, ev EventPayload) {
-	msg := string(ev.EventType())
+	eventType := string(ev.EventType())
 	attrs := mergeBaseMetadata(ev.Attrs(), l.options.baseMetadata)
 	attrs = ensureTimestamp(attrs)
 	if l.options.traceExtractor != nil {
@@ -221,8 +221,8 @@ func (l *Logger) Emit(ctx context.Context, ev EventPayload) {
 			return
 		}
 	}
-	if err := l.writer.Write(ctx, msg, attrs...); err != nil && l.options.errorHandler != nil {
-		l.options.errorHandler(ctx, msg, attrs, err)
+	if err := l.writer.Write(ctx, eventType, attrs...); err != nil && l.options.errorHandler != nil {
+		l.options.errorHandler(ctx, eventType, attrs, err)
 	}
 }
 

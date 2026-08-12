@@ -56,8 +56,8 @@ func TestErrorResponseBusinessErrorWritesEventAndResponse(t *testing.T) {
 		t.Errorf("request_id = %v, want req-biz-1", resp["request_id"])
 	}
 
-	if len(w.msgs) != 1 || w.msgs[0] != "business" {
-		t.Fatalf("msgs = %v, want [business]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "business" {
+		t.Fatalf("eventTypes = %v, want [business]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "http.request.rejected")
@@ -134,8 +134,8 @@ func TestErrorResponseSystemErrorHidesMessage(t *testing.T) {
 		t.Errorf("响应体不应泄露内部细节: %s", got)
 	}
 
-	if len(w.msgs) != 1 || w.msgs[0] != "error" {
-		t.Fatalf("msgs = %v, want [error]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "error" {
+		t.Fatalf("eventTypes = %v, want [error]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "http.request.failed")
@@ -206,8 +206,8 @@ func TestErrorResponseNoErrorPassthrough(t *testing.T) {
 	if rec.Body.String() != "ok" {
 		t.Errorf("body = %q, want ok", rec.Body.String())
 	}
-	if len(w.msgs) != 0 {
-		t.Errorf("无错误不应写事件，实际 %v", w.msgs)
+	if len(w.eventTypes) != 0 {
+		t.Errorf("无错误不应写事件，实际 %v", w.eventTypes)
 	}
 }
 
@@ -261,8 +261,8 @@ func TestErrorResponseWithRecoverNoDoubleWrite(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
 	}
-	if len(w.msgs) != 1 || w.msgs[0] != "error" {
-		t.Fatalf("msgs = %v, want 仅 recover 写 1 条 [error]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "error" {
+		t.Fatalf("eventTypes = %v, want 仅 recover 写 1 条 [error]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "runtime.panic.occurred")
@@ -362,8 +362,8 @@ func TestErrorResponseProjectorOverride(t *testing.T) {
 	if body["error"]["code"] != "invalid_credentials" || body["error"]["message"] == "" {
 		t.Fatalf("body = %#v, want nested invalid_credentials", body)
 	}
-	if len(w.msgs) != 1 || w.msgs[0] != "business" {
-		t.Fatalf("events = %v, want one business event", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "business" {
+		t.Fatalf("events = %v, want one business event", w.eventTypes)
 	}
 }
 
@@ -417,8 +417,8 @@ func TestErrorResponseInputGuardEmitsSecurityAuditEvents(t *testing.T) {
 	if !reflect.DeepEqual(gotSummary.Fields, []string{"order_id"}) || gotSummary.Hash != "sha256:abc" {
 		t.Errorf("guard 摘要 = %+v, want order_id/sha256:abc", gotSummary)
 	}
-	if len(w.msgs) != 3 || !reflect.DeepEqual(w.msgs, []string{"error", "security", "audit"}) {
-		t.Fatalf("msgs = %v, want [error security audit]", w.msgs)
+	if len(w.eventTypes) != 3 || !reflect.DeepEqual(w.eventTypes, []string{"error", "security", "audit"}) {
+		t.Fatalf("eventTypes = %v, want [error security audit]", w.eventTypes)
 	}
 	for i, want := range []string{"http.request.failed", "input.threat.detected", "input.anomaly.recorded"} {
 		attrs := attrMap(w.attrsList[i])
@@ -452,8 +452,8 @@ func TestRecoverInputGuardEmitsSecurityEvent(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
 	}
-	if len(w.msgs) != 2 || !reflect.DeepEqual(w.msgs, []string{"error", "security"}) {
-		t.Fatalf("msgs = %v, want [error security]", w.msgs)
+	if len(w.eventTypes) != 2 || !reflect.DeepEqual(w.eventTypes, []string{"error", "security"}) {
+		t.Fatalf("eventTypes = %v, want [error security]", w.eventTypes)
 	}
 	attrString(t, attrMap(w.attrsList[1]), "event.name", "input.threat.detected")
 }

@@ -120,8 +120,8 @@ logger := log.NewLogger(w,
 	log.WithIdentityExtractor(log.ContextIdentityExtractor{}),
 	log.WithMasker(log.FieldMasker{Keys: []string{"app.phone"}}),
 	log.WithBaseMetadata(log.EventMetadata{Level: log.LevelInfo}),
-	log.WithErrorHandler(func(ctx context.Context, msg string, attrs []slog.Attr, err error) {
-		slog.ErrorContext(ctx, "observability write failed", "event", msg, "err", err)
+	log.WithErrorHandler(func(ctx context.Context, eventType string, attrs []slog.Attr, err error) {
+		slog.ErrorContext(ctx, "observability write failed", "event", eventType, "err", err)
 	}),
 )
 ```

@@ -11,13 +11,13 @@ import (
 	"github.com/formal-you/go-observability/log"
 )
 
-// recordingWriter 记录通过采样判定并写出的事件类型（msg=event_type）。
+// recordingWriter 记录通过采样判定并写出的事件类型（type=event_type）。
 type recordingWriter struct {
-	msgs []string
+	eventTypes []string
 }
 
-func (w *recordingWriter) Write(_ context.Context, msg string, _ ...slog.Attr) error {
-	w.msgs = append(w.msgs, msg)
+func (w *recordingWriter) Write(_ context.Context, eventType string, _ ...slog.Attr) error {
+	w.eventTypes = append(w.eventTypes, eventType)
 	return nil
 }
 
@@ -57,8 +57,8 @@ func TestEventKeepSamplerPolicyBlackBox(t *testing.T) {
 		},
 	})
 
-	want := []string{"business", "access"} // msg = event_type；access success 应被丢弃
-	if !reflect.DeepEqual(w.msgs, want) {
-		t.Errorf("written = %v, want %v", w.msgs, want)
+	want := []string{"business", "access"} // type = event_type；access success 应被丢弃
+	if !reflect.DeepEqual(w.eventTypes, want) {
+		t.Errorf("written = %v, want %v", w.eventTypes, want)
 	}
 }

@@ -16,11 +16,11 @@ go-observability 是 Go 语义化日志与可观测装配库：定义事件如�
 _Avoid_: 日志行、log message（指结构化事件时）
 
 **EventType**:
-事件的粗分类，固定六类：access / business / error / security / audit / probe；随事件写为 msg。
+事件的粗分类，固定六类：access / business / error / security / audit / probe；随事件写为 type。
 _Avoid_: 日志级别（Level 是另一维度）、EventName
 
 **EventName**:
-事件的稳定事实名，event.name MUST use the form <domain>.<subject>.<event>（如 http.request.completed、order.payment.succeeded）；<event> MUST 是注册的 Event Type（稳定语义发生，唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；写入 event.name，正则 EventNamePattern 校验；粗分类已由 msg/EventType 承载，首段不得重复六类前缀。
+事件的稳定事实名，event.name MUST use the form <domain>.<subject>.<event>（如 http.request.completed、order.payment.succeeded）；<event> MUST 是注册的 Event Type（稳定语义发生，唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；写入 event.name，正则 EventNamePattern 校验；粗分类已由 type/EventType 承载，首段不得重复六类前缀。
 _Avoid_: 类别.模块.操作、随意字符串、生命周期 Stage、EventType 前缀
 
 **ErrorType**:
@@ -80,7 +80,7 @@ Collector 侧等 trace 完整到达后按错误 / 概率 / 属性策略决定保
 _Avoid_: 后端采样（模糊）
 
 **Sampler**:
-采样判定器，返回保留或丢弃；ResultKeepSampler 按 Result 高优先级保留（SHOULD），EventTypeKeepSampler 按 msg/EventType 粗分类判定，EventKeepSampler 按 event.name 领域前缀判定。
+采样判定器，返回保留或丢弃；ResultKeepSampler 按 Result 高优先级保留（SHOULD），EventTypeKeepSampler 按 type/EventType 粗分类判定，EventKeepSampler 按 event.name 领域前缀判定。
 _Avoid_: 采样频率、过滤器
 
 **Masker（脱敏）**:

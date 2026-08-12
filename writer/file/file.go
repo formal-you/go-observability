@@ -104,15 +104,15 @@ func validateRotation(config RotationConfig) error {
 	return nil
 }
 
-// Write 把事件写为一行 JSON（扁平字段 + msg=event_type）。
+// Write 把事件写为一行 JSON（扁平字段 + type=event_type）。
 // 字段按固定顺序输出，跨事件保持一致，便于人眼扫描与工具解析：
 //
-//	timestamp → level → msg → trace_id/span_id/request_id/latency_ms → event.name
+//	timestamp → level → type → trace_id/span_id/request_id/latency_ms → event.name
 //	→ 其余 payload 字段（按事件构造顺序）→ app.result 恒为最后。
 //
 // 键已存在时保留首次出现位置、以最后一次值为准（与 map 语义一致）。
-func (w *Writer) Write(_ context.Context, msg string, attrs ...slog.Attr) error {
-	line, err := marshalLine(msg, attrs, w.metadata)
+func (w *Writer) Write(_ context.Context, eventType string, attrs ...slog.Attr) error {
+	line, err := marshalLine(eventType, attrs, w.metadata)
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (w *Writer) Write(_ context.Context, msg string, attrs ...slog.Attr) error 
 
 // marshalLine 按规范字段顺序序列化一行 JSON（含换行）。
 // 任何值无法序列化时返回错误，不写出部分内容。
-func marshalLine(msg string, attrs []slog.Attr, metadata ResourceMetadata) ([]byte, error) {
+func marshalLine(eventType string, attrs []slog.Attr, metadata ResourceMetadata) ([]byte, error) {
 	order := make([]string, 0, len(attrs)+1)
 	values := make(map[string]any, len(attrs)+1)
 	for _, a := range attrs {
@@ -193,7 +193,7 @@ func marshalLine(msg string, attrs []slog.Attr, metadata ResourceMetadata) ([]by
 			return nil, err
 		}
 	}
-	if err := writeKV("msg", msg); err != nil {
+	if err := writeKV("type", eventType); err != nil {
 		return nil, err
 	}
 	for _, item := range metadataValues {

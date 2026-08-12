@@ -77,7 +77,7 @@ func TestBlackboxJSONL(t *testing.T) {
 func assertBusinessRejectionCode(t *testing.T, events []map[string]any) {
 	t.Helper()
 	for _, event := range eventsForRequest(events, requestBusinessFailed) {
-		if event["msg"] == "business" {
+		if event["type"] == "business" {
 			assertString(t, event, "app.error_code", "ORDER.CREATE.STOCK_INSUFFICIENT")
 			return
 		}
@@ -107,12 +107,12 @@ func assertRequestScenario(
 		if _, exists := event["parent_span_id"]; exists {
 			t.Errorf("日志不应重复写入 parent_span_id: %v", event)
 		}
-		assertString(t, event, "msg", wantTypes[i])
+		assertString(t, event, "type", wantTypes[i])
 		assertString(t, event, "event.name", wantNames[i])
 		assertString(t, event, "trace_id", traceInfo.TraceID)
 		assertString(t, event, "span_id", traceInfo.SpanID)
 		assertString(t, event, "request_id", requestID)
-		if event["msg"] == "access" {
+		if event["type"] == "access" {
 			assertAccessShape(t, event)
 		} else {
 			assertNoHTTPFields(t, event)
@@ -136,7 +136,7 @@ func assertNoHTTPFields(t *testing.T, event map[string]any) {
 	t.Helper()
 	for _, key := range []string{"http.request.method", "url.path", "http.route", "http.response.status_code", "latency_ms"} {
 		if _, ok := event[key]; ok {
-			t.Errorf("%s 事件不应重复 access 字段 %s", event["msg"], key)
+			t.Errorf("%s 事件不应重复 access 字段 %s", event["type"], key)
 		}
 	}
 }
@@ -277,7 +277,7 @@ func assertCanonicalOrder(t *testing.T, lines []string) {
 			continue
 		}
 		levelIndex := slices.Index(keys, "level")
-		msgIndex := slices.Index(keys, "msg")
+		msgIndex := slices.Index(keys, "type")
 		if levelIndex < 0 || msgIndex != levelIndex+1 {
 			t.Errorf("line %d keys=%v, want level 紧邻 msg", i+1, keys)
 		}

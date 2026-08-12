@@ -28,6 +28,7 @@ func requestIDFromTraceID(traceID string) string {
 var reservedKeys = map[string]struct{}{
 	"timestamp":                   {},
 	"level":                       {},
+	"type":                        {},
 	"request_id":                  {},
 	"latency_ms":                  {},
 	"trace_id":                    {},

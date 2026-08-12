@@ -67,13 +67,13 @@ func NewMultiWriter(writers ...Writer) ManagedWriter {
 }
 
 // Write 依次写出到全部 Writer：单个失败继续其余，最后聚合所有错误。
-func (m MultiWriter) Write(ctx context.Context, msg string, attrs ...slog.Attr) error {
+func (m MultiWriter) Write(ctx context.Context, eventType string, attrs ...slog.Attr) error {
 	var errs []error
 	for _, w := range m {
 		if w == nil {
 			continue
 		}
-		if err := w.Write(ctx, msg, attrs...); err != nil {
+		if err := w.Write(ctx, eventType, attrs...); err != nil {
 			errs = append(errs, err)
 		}
 	}

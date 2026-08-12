@@ -8,9 +8,9 @@ import (
 )
 
 type captureWriter struct {
-	msgs      []string
-	attrsList [][]slog.Attr
-	err       error
+	eventTypes []string
+	attrsList  [][]slog.Attr
+	err        error
 }
 
 func TestNewLoggerRejectsNilWriter(t *testing.T) {
@@ -22,8 +22,8 @@ func TestNewLoggerRejectsNilWriter(t *testing.T) {
 	NewLogger(nil)
 }
 
-func (w *captureWriter) Write(_ context.Context, msg string, attrs ...slog.Attr) error {
-	w.msgs = append(w.msgs, msg)
+func (w *captureWriter) Write(_ context.Context, eventType string, attrs ...slog.Attr) error {
+	w.eventTypes = append(w.eventTypes, eventType)
 	w.attrsList = append(w.attrsList, attrs)
 	return w.err
 }
@@ -45,8 +45,8 @@ func TestLoggerEmitWritesNormalizedAttrs(t *testing.T) {
 		},
 	}
 	l.Emit(context.Background(), ev)
-	if len(w.msgs) != 1 || w.msgs[0] != "access" {
-		t.Fatalf("msg = %v, want [access]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "access" {
+		t.Fatalf("eventType = %v, want [access]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
 	for _, k := range []string{"timestamp", "trace_id", "span_id", "event.name", "http.request.method", "app.result"} {
@@ -82,7 +82,7 @@ func TestLoggerMaskerAndSampler(t *testing.T) {
 	l.Emit(context.Background(), BusinessEvent{
 		Data: BusinessPayload{EventName: EventName("order.payment.succeeded"), Result: ResultSuccess},
 	})
-	if len(w.msgs) != 0 {
+	if len(w.eventTypes) != 0 {
 		t.Error("sampler 返回 false 时不应写入")
 	}
 }
@@ -151,8 +151,8 @@ func TestLoggerMinLevel(t *testing.T) {
 			Result:    ResultError,
 		},
 	})
-	if len(w.msgs) != 1 || w.msgs[0] != "error" {
-		t.Fatalf("WARN 最低级别应丢弃 INFO、保留 ERROR，实际 %v", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "error" {
+		t.Fatalf("WARN 最低级别应丢弃 INFO、保留 ERROR，实际 %v", w.eventTypes)
 	}
 }
 

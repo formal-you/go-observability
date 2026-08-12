@@ -105,8 +105,8 @@ func (w *Writer) Close(ctx context.Context) error {
 // timestamp/level 映射为 LogRecord 顶层字段；trace_id/span_id 由 ctx 的 span context 关联，
 // 不写入属性。批量导出由 SDK 的 log batch processor 控制（Collector 侧另有 batch 二次凑批），
 // 本方法同步 Emit 即返回。
-func (w *Writer) Write(ctx context.Context, msg string, attrs ...slog.Attr) error {
-	rec, rest := attrkv.Record(msg, attrs)
+func (w *Writer) Write(ctx context.Context, eventType string, attrs ...slog.Attr) error {
+	rec, rest := attrkv.Record(eventType, attrs)
 	rec.AddAttributes(attrkv.ToKeyValues(rest)...)
 	w.logger.Emit(ctx, rec)
 	return nil

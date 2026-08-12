@@ -192,11 +192,11 @@ func TestSystemErrorFromPanic(t *testing.T) {
 	}
 }
 
-// captureLogger 捕获写出的 msg，用于验证 EmitGuardEvents 的写出行为。
-type captureLogger struct{ msgs []string }
+// captureLogger 捕获写出的 eventType，用于验证 EmitGuardEvents 的写出行为。
+type captureLogger struct{ eventTypes []string }
 
-func (c *captureLogger) Write(_ context.Context, msg string, _ ...slog.Attr) error {
-	c.msgs = append(c.msgs, msg)
+func (c *captureLogger) Write(_ context.Context, eventType string, _ ...slog.Attr) error {
+	c.eventTypes = append(c.eventTypes, eventType)
 	return nil
 }
 
@@ -247,8 +247,8 @@ func TestEmitGuardEvents(t *testing.T) {
 
 	t.Run("nil guard no-op", func(t *testing.T) {
 		EmitGuardEvents(l, ctx, httptest.NewRequest(http.MethodGet, "/x", nil), err, nil)
-		if len(c.msgs) != 0 {
-			t.Errorf("nil guard 不应写出事件, got %v", c.msgs)
+		if len(c.eventTypes) != 0 {
+			t.Errorf("nil guard 不应写出事件, got %v", c.eventTypes)
 		}
 	})
 	t.Run("guard events emitted in order", func(t *testing.T) {
@@ -259,8 +259,8 @@ func TestEmitGuardEvents(t *testing.T) {
 			}
 		}
 		EmitGuardEvents(l, ctx, httptest.NewRequest(http.MethodGet, "/x", nil), err, guard)
-		if !reflect.DeepEqual(c.msgs, []string{"security", "audit"}) {
-			t.Errorf("events = %v, want [security audit]", c.msgs)
+		if !reflect.DeepEqual(c.eventTypes, []string{"security", "audit"}) {
+			t.Errorf("events = %v, want [security audit]", c.eventTypes)
 		}
 	})
 }

@@ -18,10 +18,10 @@ type flakyWriter struct {
 	maxOK   int
 }
 
-func (w *flakyWriter) Write(_ context.Context, msg string, _ ...slog.Attr) error {
+func (w *flakyWriter) Write(_ context.Context, eventType string, _ ...slog.Attr) error {
 	w.written++
 	if w.written > w.maxOK {
-		return fmt.Errorf("flaky writer failed on event #%d (%s)", w.written, msg)
+		return fmt.Errorf("flaky writer failed on event #%d (%s)", w.written, eventType)
 	}
 	return nil
 }
@@ -31,9 +31,9 @@ func main() {
 
 	var observed []error
 	logger := log.NewLogger(&flakyWriter{maxOK: 2},
-		log.WithErrorHandler(func(_ context.Context, msg string, _ []slog.Attr, err error) {
+		log.WithErrorHandler(func(_ context.Context, eventType string, _ []slog.Attr, err error) {
 			observed = append(observed, err)
-			fmt.Fprintln(os.Stderr, "error handler observed: msg =", msg, "| err =", err)
+			fmt.Fprintln(os.Stderr, "error handler observed: eventType =", eventType, "| err =", err)
 		}),
 	)
 

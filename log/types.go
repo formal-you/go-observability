@@ -25,7 +25,7 @@ const (
 // <event> MUST 是注册的 Event Type（稳定语义发生，唯一标识一个 Event Structure），
 // 不是自由文本，也不是 Operation Lifecycle Stage；生命周期经 Span 建模，
 // 除非该生命周期转换本身就是要记录的语义事件。
-// EventType 已由 msg 承载，因此 event.name 首段禁止 access/business/error/security/audit/probe。
+// EventType 已由 type（Writer 首个参数）承载，因此 event.name 首段禁止 access/business/error/security/audit/probe。
 // 本文件只登记框架级事件（Event Type 注册表）；领域事件由接入方自建注册表
 // （见 example/mall），用 NewEventName 或经 Validate 的常量，禁止散落手写字符串。
 // OTLP 路径由 attrkv 映射到 LogRecord 的 EventName 顶层字段；file/stdout 扁平投影保留 event.name 键。
@@ -85,7 +85,7 @@ func NewEventName(segments ...string) EventName {
 var EventNamePattern = regexp.MustCompile(`^[a-z0-9_]+\.[a-z0-9_]+\.[a-z0-9_]+$`)
 
 // Validate 校验 EventName 是否符合 <domain>.<subject>.<event> 正则（每段仅小写字母/数字/下划线），
-// 并拒绝以 EventType 粗分类作为首段，避免与 msg 重复表达类别。
+// 并拒绝以 EventType 粗分类作为首段，避免与 type 重复表达类别。
 func (e EventName) Validate() error {
 	if !EventNamePattern.MatchString(string(e)) {
 		return fmt.Errorf("event name %q 必须符合 <domain>.<subject>.<event> 正则", string(e))
@@ -93,7 +93,7 @@ func (e EventName) Validate() error {
 	parts := strings.Split(string(e), ".")
 	switch EventType(parts[0]) {
 	case EventAccess, EventBusiness, EventError, EventSecurity, EventAudit, EventProbe:
-		return fmt.Errorf("event name %q 不得重复 msg 粗分类 %q", string(e), parts[0])
+		return fmt.Errorf("event name %q 不得重复 type 粗分类 %q", string(e), parts[0])
 	}
 	return nil
 }

@@ -18,14 +18,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// captureWriter 捕获 Logger 写出的 msg 与扁平 attrs，用于断言中间件发出的事件形状。
+// captureWriter 捕获 Logger 写出的 eventType 与扁平 attrs，用于断言中间件发出的事件形状。
 type captureWriter struct {
-	msgs      []string
-	attrsList [][]slog.Attr
+	eventTypes []string
+	attrsList  [][]slog.Attr
 }
 
-func (w *captureWriter) Write(_ context.Context, msg string, attrs ...slog.Attr) error {
-	w.msgs = append(w.msgs, msg)
+func (w *captureWriter) Write(_ context.Context, eventType string, attrs ...slog.Attr) error {
+	w.eventTypes = append(w.eventTypes, eventType)
 	w.attrsList = append(w.attrsList, attrs)
 	return nil
 }

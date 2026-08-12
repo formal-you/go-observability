@@ -56,4 +56,4 @@ OTLP 模式固定 `TraceSampleRatio=1`、`service.name=go-observability-blackbox
 
 ## 字段顺序
 
-file/stdout 固定为 `timestamp -> level -> msg -> service metadata -> trace/span/request/latency -> event.name -> payload -> app.result`。黑盒测试会锁定 timestamp 首列及关键字段相对位置。
+file/stdout 固定为 `timestamp -> level -> type -> service metadata -> trace/span/request/latency -> event.name -> payload -> app.result`。黑盒测试会锁定 timestamp 首列及关键字段相对位置。

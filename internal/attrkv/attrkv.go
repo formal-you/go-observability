@@ -63,14 +63,14 @@ var recordAttrKeys = map[string]struct{}{
 // trace_id/span_id 直接剥离——sdk/log 的 Logger.Emit 会从 ctx 的 span context 自动关联到
 // LogRecord（见 go.opentelemetry.io/otel/sdk/log 的 newRecord），事件 metadata 中的这两个值
 // 仅供 file/stdout 等扁平投影使用，不写入 OTLP 属性。
-func Record(msg string, attrs []slog.Attr) (otelog.Record, []slog.Attr) {
+func Record(eventType string, attrs []slog.Attr) (otelog.Record, []slog.Attr) {
 	rec := otelog.Record{}
 	rec.SetTimestamp(time.Now())
 	rec.SetObservedTimestamp(time.Now())
 	severity, text := Severity(attrs)
 	rec.SetSeverity(severity)
 	rec.SetSeverityText(text)
-	rec.SetBody(attribute.StringValue(msg))
+	rec.SetBody(attribute.StringValue(eventType))
 
 	rest := make([]slog.Attr, 0, len(attrs))
 	for _, a := range attrs {
