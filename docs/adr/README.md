@@ -29,6 +29,7 @@
 | [0012](0012-subject-actor-context-and-privacy.md) | Subject / Actor 可信上下文与隐私边界 | Accepted | 2026-08-11 |
 | [0013](0013-bounded-stack-policy.md) | 有界 StackPolicy 与路径治理 | Accepted | 2026-08-11 |
 | [0014](0014-managed-writer-lifecycle.md) | 通过 ManagedWriter 统一 Writer 生命周期 | Accepted | 2026-08-12 |
+| [0015](0015-error-registry.md) | Error Registry：error.code 到 error.type 的固定映射 | Accepted | 2026-08-12 |
 
 ## 模板
 

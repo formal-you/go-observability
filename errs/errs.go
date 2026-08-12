@@ -40,6 +40,7 @@ const (
 // ErrorCode 按失效模式归为同一大类（多对一），用于聚合、告警路由与堆栈策略。
 // 系统侧为固定枚举（本文件下方常量），business.* 为开放命名空间，本包不穷举，
 // 调用方可用 ErrorType("business.stock_insufficient") 或自定义常量。
+// 已注册的 ErrorCode 经 Error Registry 反查归属的 ErrorType（多对一，见 RegisterErrorCode）。
 type ErrorType string
 
 // Validate 验证 ErrorType 是否严格符合 domain.reason：恰好两段，且每段仅包含
@@ -106,6 +107,7 @@ const (
 // （服务/模块）.（场景/操作）.（结果/具体错误）三段式，例如
 // ORDER.CREATE.STOCK_INSUFFICIENT。日志统一投影到 app.error_code，不用于推导
 // ErrorType 或 EventName。
+// 已注册的 ErrorCode 恰好映射一个 ErrorType（多对一，见 RegisterErrorCode）；未注册码不强制映射。
 // 仅 BizError 必须承载；SystemError 可通过 Code 关联可选业务码。
 type ErrorCode string
 
@@ -122,6 +124,58 @@ func ParseErrorCode(value string) (ErrorCode, error) {
 		return "", err
 	}
 	return c, nil
+}
+
+// Error Registry：ErrorCode → ErrorType 的固定映射注册表。
+// 每个注册的 ErrorCode 恰好映射一个 ErrorType（多对一：多个 code 可共用一个 type），
+// 用于反查、告警路由与构造期一致性校验；未注册的 code 不强制映射（保持既有行为）。
+var (
+	errorCodeRegistryMu sync.RWMutex
+	errorCodeRegistry   = map[ErrorCode]ErrorType{}
+)
+
+// RegisterErrorCode 把 ErrorCode 注册到恰好一个 ErrorType，返回错误而非 panic。
+// 同一 code 重复注册时 type 必须一致（幂等成功），不一致返回错误——error.code → exactly
+// one error.type 是查询/告警依据，漂移应尽早暴露。code 或 type 不合文法时返回错误。
+// 应在进程启动期、构造错误前完成注册（与 SetStackPolicy 同类）；Registry 并发安全。
+func RegisterErrorCode(code ErrorCode, typ ErrorType) error {
+	if err := code.Validate(); err != nil {
+		return err
+	}
+	if err := typ.Validate(); err != nil {
+		return err
+	}
+	errorCodeRegistryMu.Lock()
+	defer errorCodeRegistryMu.Unlock()
+	if existing, ok := errorCodeRegistry[code]; ok {
+		if existing != typ {
+			return fmt.Errorf("error code %q already registered with error type %q", code, existing)
+		}
+		return nil
+	}
+	errorCodeRegistry[code] = typ
+	return nil
+}
+
+// RegisteredErrorType 返回该 ErrorCode 注册的 ErrorType；未注册返回 false。
+func (c ErrorCode) RegisteredErrorType() (ErrorType, bool) {
+	errorCodeRegistryMu.RLock()
+	defer errorCodeRegistryMu.RUnlock()
+	typ, ok := errorCodeRegistry[c]
+	return typ, ok
+}
+
+// checkRegisteredCodeType 校验已注册 code 的类型映射；未注册的 code 直接通过。
+// 供严格构造器（NewBusinessError / NewSystemError）在文法校验后调用。
+func checkRegisteredCodeType(code ErrorCode, typ ErrorType) error {
+	if code == "" {
+		return nil
+	}
+	registered, ok := code.RegisteredErrorType()
+	if ok && registered != typ {
+		return fmt.Errorf("error code %q maps to error type %q, got %q", code, registered, typ)
+	}
+	return nil
 }
 
 func validateDottedIdentifier(value string, segments int, validByte func(byte) bool, name string) error {
@@ -519,6 +573,9 @@ func NewBusinessError(cfg BusinessErrorConfig) (BizError, error) {
 	if !strings.HasPrefix(string(cfg.Type), "business.") {
 		return BizError{}, errors.New("business error type must use the business.* namespace")
 	}
+	if err := checkRegisteredCodeType(cfg.Code, cfg.Type); err != nil {
+		return BizError{}, err
+	}
 	return BizError{
 		appError: appError{message: message, cause: cfg.Cause},
 		code:     cfg.Code,
@@ -687,6 +744,9 @@ func NewSystemError(cfg SystemErrorConfig) (SystemError, error) {
 	}
 	if cfg.Code != "" {
 		if err := cfg.Code.Validate(); err != nil {
+			return SystemError{}, err
+		}
+		if err := checkRegisteredCodeType(cfg.Code, cfg.Type); err != nil {
 			return SystemError{}, err
 		}
 	}
