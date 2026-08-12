@@ -22,7 +22,7 @@ git diff --check
 
 ## Issue / PR 开放流程
 
-本节是 Codex 处理 GitHub 任务的执行真源。技术需求与进度使用 GitHub Issue；跨工具流程待办才写入 [`todo.md`](todo.md)。复杂实施规格可暂存于 [`pr/`](pr/README.md)。执行远程 Issue/PR、CI、squash merge、已合并分支重放或主分支同步时，读取 [GitHub 远程协作实操](github-remote-workflow.md)。
+本节是 Codex 处理 GitHub 任务的执行真源。技术需求与进度使用 GitHub Issue；需要随代码版本管理的复杂需求与验收契约写入 [`issues/`](issues/README.md)，但远程 Issue 仍是任务状态和讨论真源。跨工具流程待办才写入 [`todo.md`](todo.md)，复杂实施规格可暂存于 [`pr/`](pr/README.md)。执行远程 Issue/PR、CI、squash merge、已合并分支重放或主分支同步时，读取 [GitHub 远程协作实操](github-remote-workflow.md)。
 
 ### 1. 建立 Issue
 
@@ -30,6 +30,7 @@ git diff --check
 2. 功能、缺陷、公共行为、兼容性或跨多个文件的工作必须有 Issue；单纯拼写修正可以直接在 PR 说明中记录。
 3. Issue 至少写明问题、范围与非范围、可观察验收条件、兼容性/安全影响和验证方式。不能用预设实现细节替代用户问题。
 4. 只有全部验收已实现并有证据时才关闭 Issue。多个 PR 共同完成一个 Issue 时，中间 PR 使用 `Refs #N`，最终 PR 才使用 `Closes #N`。
+5. 复杂需求在 `docs/issues/` 保存详细契约并回链远程 Issue；简单任务只建远程 Issue，避免为每个任务复制一份本地文档。
 
 ### 2. 实施与创建 PR
 
