@@ -42,6 +42,7 @@
 - Error / Security / Audit payload 新增 `ExtraAttrs`（canonical 键守卫 + 保留键过滤）；新增框架级事实名 `input.threat.detected` / `input.anomaly.recorded` 与键 `app.input_field` / `app.input_hash` / `app.input_truncated`。
 
 ### Changed
+- 收紧 `telemetry.Runtime` 的推荐公共表面：`Resource()` / `LoggerProvider()` 标记 Deprecated 并移入兼容层；仓库内部与正式黑盒改用 `Tracer`、`Meter`、`NewWriter`、`Stats` 和生命周期方法，不再探测或持有 Runtime 内部 Provider。
 - `telemetry` 新增独立 `Runtime`、显式 `LogOutput` 与 `WriterConfig`；构造不再修改 OTel 全局状态，需显式 `InstallGlobal`，旧 `Setup*` 入口标记 Deprecated。
 - 仓库生产示例和正式黑盒迁移到严格错误构造器；旧错误构造器与 SystemOption 保留为 Deprecated 兼容入口。
 - `event.name` 从重复 `msg` 的「类别.模块.操作」调整为「领域.对象.事实」，并禁止六类 EventType 作为首段；HTTP 错误出口按错误 Kind 默认选择 `http.request.rejected` / `http.request.failed`。

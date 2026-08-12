@@ -162,21 +162,3 @@ func (r *Runtime) Meter(name string) metric.Meter {
 	}
 	return r.meterProvider.Meter(name)
 }
-
-// Resource 返回 Runtime 的 Provider 与 Writer 共享的 OTel Resource。
-// 调用方应把返回值视为只读，不负责关闭。
-func (r *Runtime) Resource() *resource.Resource {
-	if r == nil {
-		return nil
-	}
-	return r.resource
-}
-
-// LoggerProvider 返回 Runtime 的 OTLP LoggerProvider；非 OTLP 日志出口返回 nil。
-// Provider 由 Runtime 拥有，调用方不得单独 Shutdown。
-func (r *Runtime) LoggerProvider() *sdklog.LoggerProvider {
-	if r == nil {
-		return nil
-	}
-	return r.loggerProvider
-}

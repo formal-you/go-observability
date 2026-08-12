@@ -46,7 +46,7 @@ func main() {
 	defer restore()
 	defer func() { _ = providers.Shutdown(ctx) }()
 
-	w, err := newLogWriter(ctx, providers)
+	w, err := newLogWriter(ctx, providers, output)
 	if err != nil {
 		slog.Error("init log writer", "err", err)
 		os.Exit(1)
@@ -88,13 +88,12 @@ func mustBusinessError(cfg errs.BusinessErrorConfig) errs.BizError {
 	return err
 }
 
-// newLogWriter 优先 OTLP（OTEL_EXPORTER_OTLP_ENDPOINT），否则写入当前工作目录的 logs/events.jsonl。
-// OTLP 路径注入 telemetry 的 Resource 与 LoggerProvider，三信号共享同一份资源与装配。
-func newLogWriter(ctx context.Context, p *telemetry.Providers) (log.ManagedWriter, error) {
+// newLogWriter 根据应用已选定的出口组装 Writer；Runtime 隐藏 Provider 与 Resource 实现。
+func newLogWriter(ctx context.Context, p *telemetry.Providers, output telemetry.LogOutput) (log.ManagedWriter, error) {
 	if p == nil {
 		return nil, errors.New("nil telemetry runtime")
 	}
-	if p.LoggerProvider() != nil {
+	if output == telemetry.LogOutputOTLP {
 		return p.NewWriter(ctx, telemetry.WriterConfig{})
 	}
 	return p.NewWriter(ctx, telemetry.WriterConfig{FilePath: filepath.Join("logs", "events.jsonl")})

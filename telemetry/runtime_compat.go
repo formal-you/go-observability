@@ -6,6 +6,9 @@ import (
 	"os"
 	"strings"
 
+	sdklog "go.opentelemetry.io/otel/sdk/log"
+	"go.opentelemetry.io/otel/sdk/resource"
+
 	"github.com/formal-you/go-observability/log"
 	"github.com/formal-you/go-observability/writer/file"
 	"github.com/formal-you/go-observability/writer/otlp"
@@ -73,4 +76,25 @@ func (r *Runtime) NewLogWriter(ctx context.Context, jsonlPath string, fileOpts .
 	opts := append([]file.Option(nil), fileOpts...)
 	opts = append(opts, file.WithResourceMetadata(r.fileMetadata))
 	return file.New(jsonlPath, opts...)
+}
+
+// Resource 返回 Runtime 内部 Provider 与 Writer 使用的 OTel Resource。
+// 返回的 Resource 不可变，但新代码通常不需要读取它：Config 负责输入，NewWriter 负责
+// 把同一 Resource 应用到出口。
+// Deprecated: 通过 Config.Resource 注入资源，并通过 Runtime.NewWriter 使用。
+func (r *Runtime) Resource() *resource.Resource {
+	if r == nil {
+		return nil
+	}
+	return r.resource
+}
+
+// LoggerProvider 返回 Runtime 内部的 OTLP LoggerProvider。
+// 返回值仍由 Runtime 拥有，调用方不得单独 Shutdown。
+// Deprecated: 使用 Runtime.NewWriter 创建与 Runtime 生命周期一致的 OTLP Writer。
+func (r *Runtime) LoggerProvider() *sdklog.LoggerProvider {
+	if r == nil {
+		return nil
+	}
+	return r.loggerProvider
 }
