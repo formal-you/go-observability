@@ -37,27 +37,6 @@ func TestStatusForError(t *testing.T) {
 	}
 }
 
-func TestDefaultEventNameResolver(t *testing.T) {
-	cases := []struct {
-		name string
-		err  error
-		want log.EventName
-	}{
-		{"validation", errs.NewValidation("bad param"), log.EventNameHTTPRequestRejected},
-		{"business", errs.NewBusiness("ORDER.CREATE.REJECTED", errs.ErrorType("business.order.rejected"), "rejected"), log.EventNameHTTPRequestRejected},
-		{"system", errs.NewSystem(errs.TypeUnavailable, "connection refused"), log.EventNameHTTPRequestFailed},
-		{"plain", errors.New("boom"), log.EventNameHTTPRequestFailed},
-		{"nil", nil, log.EventNameHTTPRequestFailed},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := DefaultEventNameResolver(tc.err); got != tc.want {
-				t.Errorf("DefaultEventNameResolver() = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
 func TestClassifyError(t *testing.T) {
 	t.Run("validation", func(t *testing.T) {
 		reason, msg, md := ClassifyError(errs.NewValidation("用户名为空"))

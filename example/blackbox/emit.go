@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -103,6 +104,17 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 			Logger:       logger,
 			GetRequestID: requestID,
 			InputGuard:   blackboxInputGuard,
+			// ADR-0018：框架不提供泛化错误事件名，接入方经 resolver 提供具体事实名。
+			EventNameResolver: func(err error) log.EventName {
+				var appErr errs.AppError
+				if errors.As(err, &appErr) {
+					switch appErr.Kind() {
+					case errs.KindValidation, errs.KindBusiness:
+						return log.NewEventName("order", "create", "stock_insufficient")
+					}
+				}
+				return log.NewEventName("user", "role_update", "database_timeout")
+			},
 		}),
 	)
 
@@ -203,7 +215,7 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	mqCtx, mqSpan := tracer.Start(ctx, "background mq publish")
 	report.record("background-mq", mqSpan.SpanContext())
 	logger.Emit(mqCtx, log.EventFromError(
-		log.NewEventName("messaging", "publish", "failed"),
+		log.NewEventName("messaging", "publish", "deadline_exceeded"),
 		mustSystemError(errs.SystemErrorConfig{
 			Type: errs.TypeDeadlineExceeded, Message: "publish order.created: deadline exceeded",
 			Upstream: "kafka", Retryable: true, Retries: 3, RetriesExhausted: true,
@@ -215,7 +227,7 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	lockCtx, lockSpan := tracer.Start(ctx, "background lock conflict")
 	report.record("background-lock", lockSpan.SpanContext())
 	logger.Emit(lockCtx, log.EventFromError(
-		log.NewEventName("lock", "acquire", "failed"),
+		log.NewEventName("lock", "acquire", "conflict"),
 		mustSystemError(errs.SystemErrorConfig{
 			Type: errs.TypeAborted, Message: "acquire lock order:pay:42 conflict",
 		}),

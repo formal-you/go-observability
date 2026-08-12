@@ -127,10 +127,10 @@ func TestErrorEventFromSystemError(t *testing.T) {
 		TraceID: "0123456789abcdef0123456789abcdef",
 		SpanID:  "0123456789abcdef",
 	}
-	ev := sysEventFromError(EventNameDatabaseQueryTimedOut, err, md)
+	ev := sysEventFromError(EventName("database.query.deadline_exceeded"), err, md)
 
-	if ev.Data.EventName != EventNameDatabaseQueryTimedOut {
-		t.Errorf("EventName = %q, want %q", ev.Data.EventName, EventNameDatabaseQueryTimedOut)
+	if ev.Data.EventName != EventName("database.query.deadline_exceeded") {
+		t.Errorf("EventName = %q, want %q", ev.Data.EventName, EventName("database.query.deadline_exceeded"))
 	}
 	if ev.Data.ErrorType != "DEADLINE_EXCEEDED" {
 		t.Errorf("ErrorType = %q, want db.query_timeout", ev.Data.ErrorType)
@@ -211,7 +211,7 @@ func TestErrorEventStackOnlyWhenMust(t *testing.T) {
 		errs.WithRetry(1, false),
 		errs.WithStack("不应投影的堆栈"),
 	)
-	ev := sysEventFromError(EventNameDatabaseQueryTimedOut, err, EventMetadata{})
+	ev := sysEventFromError(EventName("database.query.deadline_exceeded"), err, EventMetadata{})
 	if ev.Data.StackTrace != "" {
 		t.Errorf("StackTrace = %q, want empty（stock.race 非 StackMust）", ev.Data.StackTrace)
 	}
@@ -283,7 +283,7 @@ func TestCallerLevelNotOverridden(t *testing.T) {
 		t.Errorf("business Level = %q, want ERROR（调用方已设）", got)
 	}
 
-	sys := EventFromError(EventNameDatabaseQueryTimedOut,
+	sys := EventFromError(EventName("database.query.deadline_exceeded"),
 		errs.NewSystem(errs.TypeDeadlineExceeded, "t", errs.WithRetry(1, false)),
 		EventMetadata{Level: LevelError})
 	if got := eventLevel(sys); got != LevelError {
@@ -328,7 +328,7 @@ func TestErrorProjectionConcreteForms(t *testing.T) {
 		{name: "wrapped pointer", err: wrapper},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ev := sysEventFromError(EventNameDatabaseQueryTimedOut, tc.err, EventMetadata{})
+			ev := sysEventFromError(EventName("database.query.deadline_exceeded"), tc.err, EventMetadata{})
 			if !ev.Data.Retryable || ev.Data.RetryCount != 3 {
 				t.Errorf("retry = %v/%d, want true/3", ev.Data.Retryable, ev.Data.RetryCount)
 			}
@@ -377,7 +377,7 @@ func TestEventFromWrappedErrors(t *testing.T) {
 		errs.WithSource(systemSource),
 	)
 	systemEvent, ok := EventFromError(
-		EventNameDatabaseQueryTimedOut,
+		EventName("database.query.deadline_exceeded"),
 		fmt.Errorf("checkout failed: %w", &system),
 		EventMetadata{},
 	).(ErrorEvent)
@@ -411,7 +411,7 @@ func TestEventFromWrappedErrors(t *testing.T) {
 
 // TestEventFromPlainError 验证非 AppError 仍按系统错误安全投影。
 func TestEventFromPlainError(t *testing.T) {
-	ev, ok := EventFromError(EventNameDatabaseQueryTimedOut, fmt.Errorf("plain"), EventMetadata{}).(ErrorEvent)
+	ev, ok := EventFromError(EventName("database.query.deadline_exceeded"), fmt.Errorf("plain"), EventMetadata{}).(ErrorEvent)
 	if !ok {
 		t.Fatal("plain error did not project to ErrorEvent")
 	}
@@ -431,7 +431,7 @@ func TestErrorProjectionTypedNilFallsBackSafely(t *testing.T) {
 		{name: "wrapped", err: typedNilErrorWrapper{cause: systemErr}, wantMessage: "wrapped typed-nil error"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ev, ok := EventFromError(EventNameDatabaseQueryTimedOut, tc.err, EventMetadata{}).(ErrorEvent)
+			ev, ok := EventFromError(EventName("database.query.deadline_exceeded"), tc.err, EventMetadata{}).(ErrorEvent)
 			if !ok {
 				t.Fatalf("typed-nil error projected as %T, want ErrorEvent", ev)
 			}
@@ -504,7 +504,7 @@ func TestErrorEventStackRespectsStackPolicyOverride(t *testing.T) {
 	t.Cleanup(func() { errs.SetStackPolicy(nil) })
 
 	err := errs.NewSystem(errs.TypeDeadlineExceeded, "query timeout after 5s", errs.WithStack("不应投影的堆栈"))
-	ev := sysEventFromError(EventNameDatabaseQueryTimedOut, err, EventMetadata{})
+	ev := sysEventFromError(EventName("database.query.deadline_exceeded"), err, EventMetadata{})
 	if ev.Data.StackTrace != "" {
 		t.Errorf("StackTrace = %q, want empty（DEADLINE_EXCEEDED 覆盖为 none）", ev.Data.StackTrace)
 	}

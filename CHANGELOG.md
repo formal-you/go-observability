@@ -8,6 +8,7 @@
 
 - Gin `Abort(nil)` 的固定系统错误改为包初始化时构造并验证，请求路径只复用已验证错误，避免在请求处理中触发库内固定契约构造失败。
 - ErrorType 由 `domain.reason` 自定义词表迁移为 OTel/gRPC 标准枚举（gRPC canonical code，跨模块闭合枚举）：旧常量移除，映射如 `db.query_timeout → DEADLINE_EXCEEDED`、`db.connection_error → UNAVAILABLE`、`runtime.panic → INTERNAL`、`business.* → FAILED_PRECONDITION`；`SetStackPolicy` 改为按精确 code 覆盖。
+- 框架不再提供泛化错误事件名（ADR-0018 / 方案 C）：移除 `http.request.failed` / `http.request.rejected` / `rpc.request.failed` / `database.query.timed_out` 常量；HTTP/Gin/Kratos 错误出口必须由接入方经 `EventName` / `EventNameResolver` 提供具体事实名，`EventFromError` 对事件名做 `EventNamePattern` 正则校验（非法 panic）。
 - `error.code` 与 `event.name` 增加正则约束：`errs.ErrorCodePattern`（SCOPE.OPERATION.REASON）与 `log.EventNamePattern`（<domain>.<subject>.<event>），`Validate` 使用正则校验；EventName 注释明确 `<event>` 必须是注册的 Event Type、非自由文本、非生命周期 Stage。
 - 保留 `Result` / `app.result`
 - Writer 首个参数由 `msg` 改名为 `eventType`；file/stdout JSONL 输出键 `msg` 改为 `type`（粗分类列），`type` 加入保留键防 payload 覆盖；OTLP 仍映射 LogRecord.Body。
@@ -20,7 +21,7 @@
 - 新增 `log.ManagedWriter`、`log.ManageWriter` 与托管 `MultiWriter`；`telemetry.Runtime.NewWriter` 现在返回具备幂等关闭能力的 Writer，保留仅实现 `Write` 的旧 Adapter 兼容性。
 - 新增严格错误值验证与配置式构造器：ErrorCode 使用 `SCOPE.OPERATION.REASON`，ErrorType 复用 OTel/gRPC 标准枚举（gRPC canonical code），并支持保留 cause 链。
 - 六类类型化事件、`Logger` / `Writer` 接口，以及 JSONL、stdout、OTLP Writer。
-- `AccessPayload` 新增 `RPCInfo`（semconv `rpc.*`）与框架级事件名 `rpc.request.completed` / `rpc.request.failed`，支持 gRPC 传输层访问/错误事件。
+- `AccessPayload` 新增 `RPCInfo`（semconv `rpc.*`）与框架级事件名 `rpc.request.completed`，支持 gRPC 传输层访问事件。
 - `errresp` 与 `recover` 中间件新增 `ResponseProjector` 配置：响应体与状态码可注入（默认保持扁平 `{code,message,request_id?}`），接入方可按自身 HTTP 契约投影。
 - 新增 `middleware/nethttp`：net/http 版统一错误收口（`ErrorResponse`/`Recover`/`SetError`，支持 `ResponseProjector`；Logger 为 nil 时只渲染不写事件）。
 - 新增 `middleware/metrics`：HTTP（net/http/Gin）与 gRPC 服务器指标中间件（`http.server.request.duration` / `rpc.server.duration`，semconv 1.41.0，默认全局 Meter，可注入）。

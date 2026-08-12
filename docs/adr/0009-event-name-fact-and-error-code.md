@@ -9,10 +9,10 @@
 
 ## 决策（Decision）
 
-- EventName 保留严格三段式，语义改为「领域.对象.事实」，例如 `order.payment.succeeded`、`http.request.rejected`、`runtime.panic.occurred`。
+- EventName 保留严格三段式，语义改为「领域.对象.事实」，例如 `order.payment.succeeded`、`order.create.stock_insufficient`、`runtime.panic.occurred`。
 - `access` / `business` / `error` / `security` / `audit` / `probe` 只由 `msg` / EventType 表达，禁止作为 EventName 首段；事件身份由 `(msg, event.name)` 共同确定。
 - `error.type` 表达低基数失败类别，`app.error_code` 表达可选的稳定具体错误码；两者都不用于自动生成 EventName。
-- BizError 与 SystemError 的 `ErrCode()` 统一投影到 `app.error_code`。HTTP 错误出口按 Kind 默认解析为 `http.request.rejected` 或 `http.request.failed`，领域接入方可注入 resolver 返回更具体的事实名。
+- BizError 与 SystemError 的 `ErrCode()` 统一投影到 `app.error_code`。HTTP 错误出口不再提供泛化错误事件名（见 ADR-0018），接入方必须经 `EventNameResolver` 提供符合 `EventNamePattern` 的具体事实名。
 
 ## 结果（Consequences）
 

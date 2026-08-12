@@ -129,7 +129,7 @@ func TestErrorLog(t *testing.T) {
 	t.Run("emits event and propagates error", func(t *testing.T) {
 		w := &captureWriter{}
 		logger := log.NewLogger(w)
-		mw := ErrorLog(logger)
+		mw := ErrorLog(logger, WithEventName(log.NewEventName("todo", "lookup", "rejected")))
 
 		wantErr := errs.NewBusiness("todo_not_found", errs.ErrorType("business.todo.not_found"), "todo not found")
 		next := func(context.Context, any) (any, error) { return nil, wantErr }
@@ -145,7 +145,7 @@ func TestErrorLog(t *testing.T) {
 			t.Fatalf("events = %d, want 1", len(w.attrsList))
 		}
 		attrs := attrMapOf(w.attrsList[0])
-		if attrs["event.name"] != "http.request.rejected" {
+		if attrs["event.name"] != "todo.lookup.rejected" {
 			t.Fatalf("event.name = %v", attrs["event.name"])
 		}
 		if attrs["error.type"] != "business.todo.not_found" {
@@ -182,7 +182,7 @@ func TestErrorLog(t *testing.T) {
 	t.Run("success emits nothing", func(t *testing.T) {
 		w := &captureWriter{}
 		logger := log.NewLogger(w)
-		mw := ErrorLog(logger)
+		mw := ErrorLog(logger, WithEventName(log.NewEventName("todo", "lookup", "rejected")))
 		_, err := mw(func(context.Context, any) (any, error) { return "ok", nil })(context.Background(), nil)
 		if err != nil {
 			t.Fatalf("err = %v, want nil", err)

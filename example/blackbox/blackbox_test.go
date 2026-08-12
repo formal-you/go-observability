@@ -62,11 +62,11 @@ func TestBlackboxJSONL(t *testing.T) {
 	assertRequestScenario(t, events, report, requestBusinessSuccess,
 		[]string{"business", "access"}, []string{"order.payment.succeeded", "http.request.completed"})
 	assertRequestScenario(t, events, report, requestBusinessFailed,
-		[]string{"business", "access"}, []string{"http.request.rejected", "http.request.completed"})
+		[]string{"business", "access"}, []string{"order.create.stock_insufficient", "http.request.completed"})
 	assertBusinessRejectionCode(t, events)
 	assertRequestScenario(t, events, report, requestSystemError,
 		[]string{"error", "security", "audit", "access"},
-		[]string{"http.request.failed", "input.threat.detected", "input.anomaly.recorded", "http.request.completed"})
+		[]string{"user.role_update.database_timeout", "input.threat.detected", "input.anomaly.recorded", "http.request.completed"})
 	assertRequestScenario(t, events, report, requestPanic,
 		[]string{"error", "access"}, []string{"runtime.panic.occurred", "http.request.completed"})
 	assertBackgroundScenarios(t, events, report)
@@ -149,8 +149,8 @@ func assertBackgroundScenarios(t *testing.T, events []map[string]any, report *sc
 		eventName string
 		wantStack bool
 	}{
-		{"background-mq", "messaging.publish.failed", true},
-		{"background-lock", "lock.acquire.failed", false},
+		{"background-mq", "messaging.publish.deadline_exceeded", true},
+		{"background-lock", "lock.acquire.conflict", false},
 	} {
 		var found map[string]any
 		for _, event := range events {

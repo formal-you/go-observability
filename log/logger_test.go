@@ -146,7 +146,7 @@ func TestLoggerMinLevel(t *testing.T) {
 	l.Emit(context.Background(), ErrorEvent{
 		EventMetadata: EventMetadata{Level: LevelError},
 		Data: ErrorPayload{
-			EventName: EventNameErrorDBTimeout,
+			EventName: EventName("database.query.deadline_exceeded"),
 			ErrorType: "db.timeout",
 			Result:    ResultError,
 		},

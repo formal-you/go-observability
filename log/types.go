@@ -26,7 +26,7 @@ const (
 // 不是自由文本，也不是 Operation Lifecycle Stage；生命周期经 Span 建模，
 // 除非该生命周期转换本身就是要记录的语义事件。
 // EventType 已由 type（Writer 首个参数）承载，因此 event.name 首段禁止 access/business/error/security/audit/probe。
-// 本文件只登记框架级事件（Event Type 注册表）；领域事件由接入方自建注册表
+// 本文件只登记框架级事件（Event Type 注册表，不含泛化错误事件名——错误事件名由接入方经 resolver 提供并正则校验）；领域事件由接入方自建注册表
 // （见 example/mall），用 NewEventName 或经 Validate 的常量，禁止散落手写字符串。
 // OTLP 路径由 attrkv 映射到 LogRecord 的 EventName 顶层字段；file/stdout 扁平投影保留 event.name 键。
 type EventName string
@@ -34,18 +34,10 @@ type EventName string
 const (
 	// EventNameHTTPRequestCompleted 注册的 Event Type：HTTP 请求处理完成（<event>=completed，生命周期转换本身即语义事件）。
 	EventNameHTTPRequestCompleted EventName = "http.request.completed"
-	// EventNameDatabaseQueryTimedOut 注册的 Event Type：数据库查询超时。
-	EventNameDatabaseQueryTimedOut EventName = "database.query.timed_out"
 	// EventNameRuntimePanicOccurred 注册的 Event Type：运行时 panic 已发生。
 	EventNameRuntimePanicOccurred EventName = "runtime.panic.occurred"
-	// EventNameHTTPRequestFailed 注册的 Event Type：HTTP 请求因系统或未知错误失败。
-	EventNameHTTPRequestFailed EventName = "http.request.failed"
-	// EventNameHTTPRequestRejected 注册的 Event Type：HTTP 请求因校验或业务规则被拒绝。
-	EventNameHTTPRequestRejected EventName = "http.request.rejected"
 	// EventNameRPCRequestCompleted 注册的 Event Type：RPC 请求处理完成（<event>=completed）。
 	EventNameRPCRequestCompleted EventName = "rpc.request.completed"
-	// EventNameRPCRequestFailed 注册的 Event Type：RPC 请求失败。
-	EventNameRPCRequestFailed EventName = "rpc.request.failed"
 	// EventNameInputThreatDetected 注册的 Event Type：输入威胁已被安全检测发现。
 	EventNameInputThreatDetected EventName = "input.threat.detected"
 	// EventNameInputAnomalyRecorded 注册的 Event Type：输入异常已进入审计记录。
@@ -53,16 +45,10 @@ const (
 
 	// EventNameAccessHTTPRequest 已弃用：请使用 EventNameHTTPRequestCompleted。
 	EventNameAccessHTTPRequest = EventNameHTTPRequestCompleted
-	// EventNameErrorDBTimeout 已弃用：请使用 EventNameDatabaseQueryTimedOut。
-	EventNameErrorDBTimeout = EventNameDatabaseQueryTimedOut
 	// EventNameErrorRuntimePanic 已弃用：请使用 EventNameRuntimePanicOccurred。
 	EventNameErrorRuntimePanic = EventNameRuntimePanicOccurred
-	// EventNameErrorHTTPRequest 已弃用：请使用 EventNameHTTPRequestFailed 或 resolver。
-	EventNameErrorHTTPRequest = EventNameHTTPRequestFailed
 	// EventNameAccessRPCRequest 已弃用：请使用 EventNameRPCRequestCompleted。
 	EventNameAccessRPCRequest = EventNameRPCRequestCompleted
-	// EventNameErrorRPCRequest 已弃用：请使用 EventNameRPCRequestFailed。
-	EventNameErrorRPCRequest = EventNameRPCRequestFailed
 	// EventNameSecurityInputAnomaly 已弃用：请使用 EventNameInputThreatDetected。
 	EventNameSecurityInputAnomaly = EventNameInputThreatDetected
 	// EventNameAuditInputAnomaly 已弃用：请使用 EventNameInputAnomalyRecorded。

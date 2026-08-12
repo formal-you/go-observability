@@ -14,10 +14,12 @@ import (
 	"github.com/formal-you/go-observability/middleware/httperr"
 )
 
+var testErrEventName = log.NewEventName("order", "creation", "rejected")
+
 func TestErrorResponseRendersDefaultBodyAndEmitsEvent(t *testing.T) {
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
-	handler := ErrorResponse(ErrorConfig{Logger: logger})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := ErrorResponse(ErrorConfig{Logger: logger, EventName: testErrEventName})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		SetError(w, errs.NewBusiness("email_exists", errs.ErrorType("business.auth.email_exists"), "email is already registered"))
 	}))
 
@@ -36,13 +38,13 @@ func TestErrorResponseRendersDefaultBodyAndEmitsEvent(t *testing.T) {
 	if len(w.eventTypes) != 1 || w.eventTypes[0] != "business" {
 		t.Fatalf("events = %v, want one business event", w.eventTypes)
 	}
-	attrString(t, attrMap(w.attrsList[0]), "event.name", "http.request.rejected")
+	attrString(t, attrMap(w.attrsList[0]), "event.name", string(testErrEventName))
 }
 
 func TestErrorResponseNoErrorPassesThrough(t *testing.T) {
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
-	handler := ErrorResponse(ErrorConfig{Logger: logger})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := ErrorResponse(ErrorConfig{Logger: logger, EventName: testErrEventName})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	rec := httptest.NewRecorder()
@@ -90,7 +92,8 @@ func TestResponseProjectorOverride(t *testing.T) {
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	handler := ErrorResponse(ErrorConfig{
-		Logger: logger,
+		Logger:    logger,
+		EventName: testErrEventName,
 		ResponseProjector: func(err error, _ string) (int, any) {
 			return http.StatusUnauthorized, map[string]any{"error": map[string]string{"code": "invalid_credentials", "message": err.Error()}}
 		},
@@ -148,7 +151,8 @@ func TestErrorResponseInputGuardEmitsSecurityAuditEvents(t *testing.T) {
 	logger := log.NewLogger(w)
 	var gotSummary httperr.InputSummary
 	handler := ErrorResponse(ErrorConfig{
-		Logger: logger,
+		Logger:    logger,
+		EventName: testErrEventName,
 		InputGuard: func(_ context.Context, _ *http.Request, _ error, s httperr.InputSummary) []log.EventPayload {
 			gotSummary = s
 			return []log.EventPayload{
@@ -180,7 +184,7 @@ func TestErrorResponseInputGuardEmitsSecurityAuditEvents(t *testing.T) {
 	if len(w.eventTypes) != 3 || !reflect.DeepEqual(w.eventTypes, []string{"error", "security", "audit"}) {
 		t.Fatalf("eventTypes = %v, want [error security audit]", w.eventTypes)
 	}
-	for i, want := range []string{"http.request.failed", "input.threat.detected", "input.anomaly.recorded"} {
+	for i, want := range []string{string(testErrEventName), "input.threat.detected", "input.anomaly.recorded"} {
 		attrString(t, attrMap(w.attrsList[i]), "event.name", want)
 	}
 }
@@ -190,7 +194,8 @@ func TestRecoverInputGuardEmitsSecurityEvent(t *testing.T) {
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	handler := Recover(ErrorConfig{
-		Logger: logger,
+		Logger:    logger,
+		EventName: testErrEventName,
 		InputGuard: func(_ context.Context, _ *http.Request, _ error, _ httperr.InputSummary) []log.EventPayload {
 			return []log.EventPayload{
 				log.SecurityEvent{

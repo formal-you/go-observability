@@ -69,9 +69,13 @@ func ErrorResponse(cfg ErrorConfig) gin.HandlerFunc {
 	eventNameResolver := cfg.EventNameResolver
 	if eventNameResolver == nil {
 		if cfg.EventName != "" {
+			if err := cfg.EventName.Validate(); err != nil {
+				panic("ginmw: invalid EventName: " + err.Error())
+			}
 			eventNameResolver = func(error) log.EventName { return cfg.EventName }
 		} else {
-			eventNameResolver = httperr.DefaultEventNameResolver
+			// ADR-0018：框架不提供泛化错误事件名，错误事件名由接入方定义并经正则校验。
+			panic("ginmw: ErrorConfig 必须提供 EventName 或 EventNameResolver")
 		}
 	}
 	statusForError := cfg.StatusForError

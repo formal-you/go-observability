@@ -93,7 +93,7 @@ func TestAccessLogOutsideRecoverRecordsPanicResponse(t *testing.T) {
 	r := gin.New()
 	r.Use(AccessLog(AccessConfig{Logger: logger}))
 	r.Use(Recover(RecoverConfig{Logger: logger}))
-	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger, EventName: testErrEventName}))
 	r.GET("/panic", func(*gin.Context) { panic("boom") })
 
 	req := httptest.NewRequest(http.MethodGet, "/panic", nil)

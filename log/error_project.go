@@ -76,9 +76,13 @@ func sysEventFromError(eventName EventName, err errs.AppError, md EventMetadata)
 
 // EventFromError 沿错误链提取 errs.AppError 并按 Kind 分派投影：KindValidation /
 // KindBusiness → BusinessEvent，KindSystem → ErrorEvent；普通 error 与未知 Kind 按系统错误处理。
-// EventName 必须由调用方从 types.go 常量注册表传入，本函数不自动派生事件名（AGENTS.md
-// 规则 1）；TraceID / SpanID 由调用方从 span context 提取后填入 md，本函数不自动关联链路。
+// EventName 必须由调用方从注册表传入并符合 EventNamePattern 正则，本函数不自动派生事件名；
+// 非法事件名（格式或六类前缀）会 panic（与 NewEventName 同类的配置错误尽早暴露）。
+// TraceID / SpanID 由调用方从 span context 提取后填入 md，本函数不自动关联链路。
 func EventFromError(eventName EventName, err error, md EventMetadata) EventPayload {
+	if err := eventName.Validate(); err != nil {
+		panic("log: EventFromError invalid event name: " + err.Error())
+	}
 	appErr, ok := appErrorOf(err)
 	if !ok {
 		if md.Level == "" {

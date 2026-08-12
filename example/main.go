@@ -64,7 +64,7 @@ func main() {
 		ginmw.AccessLog(ginmw.AccessConfig{Logger: logger}),
 		ginmw.Recover(ginmw.RecoverConfig{Logger: logger}),
 		ginmw.Metrics(ginmw.MetricsConfig{}),
-		ginmw.ErrorResponse(ginmw.ErrorConfig{Logger: logger}),
+		ginmw.ErrorResponse(ginmw.ErrorConfig{Logger: logger, EventName: log.NewEventName("order", "create", "stock_insufficient")}),
 	)
 	r.GET("/api/v1/products/:id", func(c *gin.Context) {
 		c.JSON(200, gin.H{"id": c.Param("id")})

@@ -24,21 +24,8 @@ import (
 type Projector func(err error, requestID string) (int, any)
 
 // EventNameResolver 根据实际错误选择稳定事实名。HTTP/Gin/Kratos 错误出口使用本类型，
-// 领域接入方可返回比默认传输事实更具体的领域事实。
+// 框架不提供泛化错误事件名（ADR-0018），接入方必须经 resolver 提供符合 EventNamePattern 的具体事实名。
 type EventNameResolver func(err error) log.EventName
-
-// DefaultEventNameResolver 按错误 Kind 返回 HTTP 错误事实名：校验/业务拒绝使用
-// http.request.rejected，系统/普通错误使用 http.request.failed。
-func DefaultEventNameResolver(err error) log.EventName {
-	appErr, ok := asAppError(err)
-	if ok {
-		switch appErr.Kind() {
-		case errs.KindValidation, errs.KindBusiness:
-			return log.EventNameHTTPRequestRejected
-		}
-	}
-	return log.EventNameHTTPRequestFailed
-}
 
 // StatusForError 按 errs.Kind 映射缺省 HTTP 状态码：validation→400（参数/入参校验失败）、
 // business→409（业务规则拒绝）、system 与普通 error→500（非预期故障）。

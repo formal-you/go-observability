@@ -72,7 +72,7 @@ func TestErrorEventKeepsFalseRetryable(t *testing.T) {
 	ev := ErrorEvent{
 		EventMetadata: EventMetadata{Level: LevelError},
 		Data: ErrorPayload{
-			EventName:    EventNameDatabaseQueryTimedOut,
+			EventName:    EventName("database.query.deadline_exceeded"),
 			ErrorType:    "db.timeout",
 			ErrorMessage: "dial tcp: connection refused",
 			Retryable:    false,
@@ -210,7 +210,7 @@ func TestEventNameConventions(t *testing.T) {
 	names := []EventName{
 		EventNameHTTPRequestCompleted,
 		EventName("order.payment.succeeded"),
-		EventNameDatabaseQueryTimedOut,
+		EventName("database.query.deadline_exceeded"),
 		EventNameInputThreatDetected,
 		EventNameInputAnomalyRecorded,
 	}
@@ -323,7 +323,7 @@ func TestErrorSecurityAuditPayloadExtraAttrs(t *testing.T) {
 			payload: ErrorEvent{
 				EventMetadata: EventMetadata{Level: LevelError},
 				Data: ErrorPayload{
-					EventName:    EventNameErrorDBTimeout,
+					EventName:    EventName("database.query.deadline_exceeded"),
 					ErrorType:    "db.timeout",
 					ErrorMessage: "dial tcp: timeout",
 					Result:       ResultError,
