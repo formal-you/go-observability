@@ -32,6 +32,7 @@
 | [0015](0015-error-registry.md) | Error Registry：error.code 到 error.type 的固定映射 | Accepted | 2026-08-12 |
 | [0016](0016-errortype-otel-grpc-standard-enum.md) | ErrorType 复用 OTel/gRPC 标准枚举（跨模块） | Accepted | 2026-08-13 |
 | [0017](0017-retain-app-result-sampling-policy.md) | 保留 app.result 结果列，Sampling/Retention 独立策略层 | Accepted | 2026-08-13 |
+| [0018](0018-event-name-convention.md) | Event Name Convention：<event> 必须是注册的 Event Type | Accepted | 2026-08-13 |
 
 ## 模板
 

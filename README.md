@@ -156,15 +156,15 @@ if err := w.Close(ctx); err != nil {
 | 🩺 | `ProbeEvent` | 健康检查与运行状态 | readiness、liveness、依赖探测 |
 
 ```text
-事件名三段式结构（`msg` 已承载粗分类）
+事件名结构：event.name MUST use the form <domain>.<subject>.<event>（`msg` 已承载粗分类）
 
 http.request.completed
-   │      │      └── 动作 action
-   │      └───────── 对象 object
-   └──────────────── 领域 domain
+   │      │      └── <event> 注册的 Event Type
+   │      └───────── <subject> 对象
+   └──────────────── <domain> 领域
 ```
 
-`event.name` 使用「领域.对象.事实」三段式，首段不得是 `access` / `business` / `error` / `security` / `audit` / `probe`；这些粗分类只由 `msg` 表达。框架级事件名由核心包维护，领域事件由接入方自建注册表。
+`event.name` MUST use the form `<domain>.<subject>.<event>`（正则 `EventNamePattern` 校验）；`<event>` MUST 是注册的 Event Type（稳定语义发生，唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；首段不得是 `access` / `business` / `error` / `security` / `audit` / `probe`，这些粗分类只由 `msg` 表达。框架级事件名由核心包维护，领域事件由接入方自建注册表。
 
 ---
 

@@ -190,13 +190,13 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 
 ## 6. 关键设计决策与不可违反边界
 
-1. **三段式事件名**：`领域.对象.事实`（如 `http.request.completed`），必须经 `Validate`；`msg` 已承载六类粗分类，因此首段不得使用 `access/business/error/security/audit/probe`。框架级事件登记在 `types.go`，领域事件由接入方自建注册表（见 `example/mall`），禁止在中间件/生产埋点里散落手写字符串。
+1. **事件名 Convention**：`event.name MUST use the form <domain>.<subject>.<event>`；`<event>` MUST 是注册的 Event Type（唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；正则 `EventNamePattern` 校验；`msg` 已承载六类粗分类，因此首段不得使用 `access/business/error/security/audit/probe`。框架级事件登记在 `types.go`，领域事件由接入方自建注册表（见 `example/mall`），禁止在中间件/生产埋点里散落手写字符串。
 2. **semconv 1.41.0 键名**：路径用 `url.path`（不是 `http.request.path`）；代码位置用 `code.function.name` / `code.file.path` / `code.line.number`。
 3. **顶层映射集中**：新增保留键必须同时更新 `attrkv.recordAttrKeys` 与 `normalize.reservedKeys`，保证 OTLP 剥离与 file 保留一致。
 4. **公共字段登记**：核心公共字段必须在 `keys.go` 登记；vendor 一律 `app.*`；领域专属键（`order_id` 等）由接入方自建，不进核心 `keys.go`。
 5. **零值省略**：字符串/数值零值省略；布尔不省略（`false` 对 `retryable` / `result` 语义明确）。
 6. **samber 边界**：samber 生态只允许出现在 `example/` 与 `docs/samber-comparison.md`，核心包保持零外部依赖。
-7. **采样边界**：默认 `TraceSampleRatio=0.1` 是 SDK 头部采样——未选中的 trace 不会被导出，Collector 看不到，也无法通过 `tail_sampling` 恢复。需要 Collector 按错误/延迟决定保留时，SDK 应导出完整 trace（通常 `1.0`），再在 Collector 执行尾部采样，并评估吞吐、费用与敏感数据风险。
+7. **采样边界**：默认 `TraceSampleRatio=0.1` 是 SDK 头部采样——未选中的 trace 不会被导出，Collector 看不到，也无法通过 `tail_sampling` 恢复。需要 Collector 按错误/延迟决定保留时，SDK 应导出完整 trace（通常 `1.0`），再在 Collector 执行尾部采样，并评估吞吐、费用与敏感数据风险。 采样保留属独立 Sampling/Retention Policy 层（高价值事件 SHOULD be retained，操作上需要时保证保留），不编码进事件/错误语义。
 
 ## 7. 三信号装配（`telemetry`）
 
@@ -224,7 +224,7 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 | 归一化/保留键 | `normalize.go reservedKeys` 与 `attrkv.recordAttrKeys` 一致性 | `go test ./... -run Record` |
 | 双投影形状 | `writer/otlp`、`writer/file`、`writer/stdout` 的输出测试 | `go test ./writer/...` |
 | 错误投影 | `error_project.go`：Kind 分派、`LevelOf`、`StackRule`、值/指针/`%w` 链/nil | `go test ./... -run Error` |
-| 采样/脱敏 | `sampler.go` 高价值保留/事件前缀全量、`masker.go` 递归脱敏与并发契约 | `go test ./... -run 'Sample|Mask'` |
+| 采样/脱敏 | `sampler.go` 高价值保留（SHOULD）/事件前缀全量、`masker.go` 递归脱敏与并发契约 | `go test ./... -run 'Sample|Mask'` |
 | 错误收口 | `httperr` 契约与 Gin/net/http adapter：Kind→状态码映射、system 响应不泄露、`Abort(nil)` 兜底、与 recover 不双写 | `go test ./middleware/httperr ./middleware/gin ./middleware/http` |
 | 并发安全 | Logger 构造后只读；Writer/ErrorHandler 多 goroutine 语义 | `go test -race ./...` |
 | 三信号装配 | `telemetry/*.go` Setup 失败回滚、Shutdown 顺序、出口选择固化 | `go test ./telemetry/...` |

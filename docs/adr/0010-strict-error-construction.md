@@ -12,6 +12,7 @@
 ## 决策（Decision）
 
 - ErrorCode 的规范文法为 `SCOPE.OPERATION.REASON`：恰好三段，每段只允许大写字母、数字和下划线。SCOPE 表示服务或业务模块，不称为 domain。
+- `errs.ErrorCodePattern` 是 SCOPE.OPERATION.REASON 的规范正则，`Validate` 使用正则校验（等价文法）。
 - ErrorType 的规范文法为 `domain.reason`：恰好两段，每段只允许小写字母、数字和下划线，并保持低基数。
 - `Validate` 校验已有值；`ParseErrorCode` / `ParseErrorType` 返回规范类型或错误，不做裁剪、大小写转换或自动修复。
 - `NewValidationError`、`NewBusinessError`、`NewSystemError` 使用各自配置结构并返回 `(错误值, error)`。严格构造器校验消息、命名空间和重试状态，并把 cause 写入 `Unwrap` 链。

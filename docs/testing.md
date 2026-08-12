@@ -34,6 +34,7 @@
 ## 当前核心验收
 
 - EventName 文法、ErrorType / ErrorCode 分工以 [ADR-0009](adr/0009-event-name-fact-and-error-code.md) 为准。
+- event.name 的 `<event>` 必须是注册 Event Type（Event Name Convention）以 [ADR-0018](adr/0018-event-name-convention.md) 为准。
 - ErrorCode / ErrorType 严格文法、构造失败和旧入口兼容以 [ADR-0010](adr/0010-strict-error-construction.md) 为准。
 - ErrorType 复用 OTel/gRPC 标准枚举（跨模块闭合枚举）以 [ADR-0016](adr/0016-errortype-otel-grpc-standard-enum.md) 为准。
 - ErrorCode → ErrorType 固定映射（Error Registry）以 [ADR-0015](adr/0015-error-registry.md) 为准，严格构造器对已注册码强制类型一致。
