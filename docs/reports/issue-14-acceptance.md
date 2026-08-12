@@ -2,7 +2,7 @@
 
 - 功能基线：`829e910`；Shutdown flush 黑盒与本报告位于同一证据提交
 - 日期：2026-08-11
-- Oracle：`docs/proposals/logging-system-optimization.md`、ADR-0012、ADR-0013
+- Oracle：`docs/history/pr-0016-logging-system-optimization.md`（历史实施规格）、ADR-0012、ADR-0013
 
 | Rule / Accept | Case / 公开观察点 | 结果 |
 | --- | --- | --- |

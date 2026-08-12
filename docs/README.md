@@ -8,7 +8,8 @@
 | [environment.md](environment.md) | 查询库实际读取的环境变量 |
 | [architecture.md](architecture.md) | 理解包边界和事件数据流 |
 | [adr/](adr/README.md) | 追溯关键架构决策（ADR）：错误模型等「为什么这么做」的记录 |
-| [proposals/logging-system-optimization.md](proposals/logging-system-optimization.md) | 审阅生产级日志优化提案、优先级、验收契约与待确认决策 |
+| [pr/](pr/README.md) | 查看进行中的复杂 PR 实施规格及其归档规则 |
+| [history/](history/README.md) | 追溯已完成、放弃或被取代的实施文档；不作为当前真源 |
 | [otel-logs-data-model.md](otel-logs-data-model.md) | OTel Logs LogRecord 各顶层字段与 go-observability 的映射 |
 | [testing.md](testing.md) | 需求、缺陷或公共行为变更时，如何用独立黑盒测试固化正式验收 |
 | [security.md](security.md) | 设计脱敏、采样和日志治理策略 |

@@ -130,7 +130,7 @@ logger := log.NewLogger(w,
 | --- | --- | --- |
 | Sampler | 全量日志事件 | 保持默认可保证每个 HTTP 语义事件都有对应 AccessEvent；仅在已有网关全量 access 或明确接受关联不完整时显式采样 |
 | MinLevel | 不过滤 | `WithMinLevel` 接受 DEBUG/INFO/WARN/ERROR；提高级别会同时丢弃低级别语义事件及其 AccessEvent，需明确接受关联不完整 |
-| TraceExtractor | 不补全链路 | 配 `WithTraceExtractor`（如 `middleware/trace.NewTraceExtractor`），事件未显式带 trace/span 时自动补全 |
+| TraceExtractor | 不补全链路 | 配 `WithTraceExtractor`（如 `middleware/otelutil.NewTraceExtractor`），事件未显式带 trace/span 时自动补全 |
 | Masker | 不脱敏 | 维护业务 PII 键清单并在写出前脱敏 |
 | IdentityExtractor | 不补全身份 | 在认证边界注入 `IdentityContext`；可信非空值覆盖事件伪造字段 |
 | BaseMetadata | 不补全 | 注入服务内稳定的公共元数据 |
