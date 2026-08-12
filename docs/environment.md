@@ -5,7 +5,7 @@
 | `OTEL_SDK_DISABLED` | 应用映射到 `Config.Enabled` | 未设置，即启用 | 值为 `true` 时返回不含 Provider 的 Runtime；兼容 `SetupFromEnvironment` 仍回退 JSONL |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | 应用映射到 `Config.Endpoint` | `127.0.0.1:4317` | `LogOutputOTLP` 使用该 OTLP gRPC 地址；出口由 `Config.LogOutput` 显式选择 |
 | `GO_OBSERVABILITY_REGION` | 主示例 | 空 | 示例写入 resource `region`；库不自动读取 |
-| `GO_OBSERVABILITY_INSTANCE` | 主示例 | 空 | 示例写入 resource `instance`；库不自动读取 |
+| `GO_OBSERVABILITY_INSTANCE` | 主示例 | 空 | 示例映射到 `Config.Instance`，写入 Resource `service.instance.id`；库不自动读取 |
 
 `OTEL_EXPORTER_OTLP_ENDPOINT` 接受 `host:port` 或完整 URL，内部会为无 scheme 的地址补 `http://`。TLS、证书、认证头等生产配置目前不由 `telemetry.Config` 暴露；需要这些能力时，应评估扩展 API 或在应用侧自建 Provider。
 

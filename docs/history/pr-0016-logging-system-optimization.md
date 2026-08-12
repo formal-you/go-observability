@@ -1,6 +1,12 @@
-# PR Proposal：Production Observability Event System
+# 历史 PR 提案：Production Observability Event System
 
-- 状态：Partially implemented；P0 基线、P1 身份/堆栈治理和 P2 证据已在本地分支实现，剩余部署侧与性能目标需独立 Issue
+> 本文是 Issue [#14](https://github.com/formal-you/go-observability/issues/14) 与已合并
+> PR [#16](https://github.com/formal-you/go-observability/pull/16) 的实施快照，不再定义当前行为。
+> 其中关于 `sample.json` 不是合法 JSON、能力仍在本地分支等描述已经过期；当前契约以
+> [正式测试契约](../testing.md)、[架构说明](../architecture.md) 和
+> [`example/blackbox`](../../example/blackbox/README.md) 为准。
+
+- 状态：Archived；PR #16 已于 2026-08-11 合并，未完成事项转为独立 Issue 管理
 - 日期：2026-08-11
 - 输入：`example/blackbox/sample.json`、当前代码、`CONTEXT.md`、既有 ADR
 - 范围：记录已落地能力、仍需独立 Issue 的后续工作与验收证据

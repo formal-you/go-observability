@@ -157,7 +157,7 @@ go-observability/
   -> 进入 4.1 同一条 Emit 管线写出
 ```
 
-错误事件名必须由调用方从 `types.go` 常量注册表传入，`EventFromError` 不自动派生；Trace/Span 由调用方从 span context 提取后填入 `md`。Gin 接入时，显式业务/系统错误由 `middleware/errresp` 在链尾统一收口（`c.Errors` + `Abort`），panic 仍由 `middleware/recover` 处理，二者组合时一个请求的错误事件唯一；经 InputGuard 注入的安全/审计事件可与错误事件并存（见 4.3）。
+错误事件名必须由调用方从 `types.go` 常量注册表传入，`EventFromError` 不自动派生；Trace/Span 由调用方从 span context 提取后填入 `md`。Gin 接入时，显式业务/系统错误由 `middleware/gin.ErrorResponse` 在链尾统一收口（`c.Errors` + `Abort`），panic 由同包 `Recover` 处理，二者组合时一个请求的错误事件唯一；经 InputGuard 注入的安全/审计事件可与错误事件并存（见 4.3）。
 
 ### 4.3 非法输入的安全/审计事件（方案 D，ADR-0007）
 
@@ -225,7 +225,7 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 | 双投影形状 | `writer/otlp`、`writer/file`、`writer/stdout` 的输出测试 | `go test ./writer/...` |
 | 错误投影 | `error_project.go`：Kind 分派、`LevelOf`、`StackRule`、值/指针/`%w` 链/nil | `go test ./... -run Error` |
 | 采样/脱敏 | `sampler.go` 高价值保留/事件前缀全量、`masker.go` 递归脱敏与并发契约 | `go test ./... -run 'Sample|Mask'` |
-| 错误收口 | `errresp.go`：Kind→状态码映射、system 响应不泄露、`Abort(nil)` 兜底、与 recover 不双写 | `go test ./middleware/errresp/...` |
+| 错误收口 | `httperr` 契约与 Gin/net/http adapter：Kind→状态码映射、system 响应不泄露、`Abort(nil)` 兜底、与 recover 不双写 | `go test ./middleware/httperr ./middleware/gin ./middleware/http` |
 | 并发安全 | Logger 构造后只读；Writer/ErrorHandler 多 goroutine 语义 | `go test -race ./...` |
 | 三信号装配 | `telemetry/*.go` Setup 失败回滚、Shutdown 顺序、出口选择固化 | `go test ./telemetry/...` |
 

@@ -5,3 +5,4 @@
 - [Issue #14 验收报告](issue-14-acceptance.md)
 - [性能基线](performance-baseline.md)
 - [首轮 mutation baseline](mutation-baseline.md)
+- [Kubernetes 运维、排障与管理工具调研](kubernetes-operations-and-tooling-research.md)

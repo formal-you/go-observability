@@ -9,7 +9,7 @@
 | [`blackbox`](blackbox/) | `go run ./example/blackbox` | 真实 OTel span + Gin 请求的 JSONL/OTLP 语义黑盒测试 |
 | [`main.go`](main.go) | `go run ./example` | Gin 全链路中间件（trace/access/recover/metrics/errresp） |
 | [`nethttp`](nethttp/) | `go run ./example/nethttp` | 标准库 HTTP 全链路（trace/metrics/nethttp 收口 + access 模板） |
-| [`metrics`](metrics/) | `go run ./example/metrics` | 使用方自定义业务指标（服务端 RED 见 middleware/metrics） |
+| [`metrics`](metrics/) | `go run ./example/metrics` | 使用方自定义业务指标（服务端 RED 见 `middleware/gin`、`middleware/http`、`middleware/grpc`） |
 | [`mall`](mall/) | `go test ./example/mall` | 领域事件名和扩展字段注册表 |
 | [`samber`](samber/) | `go run ./example/samber` | 与 samber slog handler 互操作 |
 | [`config`](config/) | 无 | 应用、环境变量和 Collector 配置模板 |
