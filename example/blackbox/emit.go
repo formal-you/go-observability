@@ -205,7 +205,7 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	logger.Emit(mqCtx, log.EventFromError(
 		log.NewEventName("messaging", "publish", "failed"),
 		mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeUnavailable, Message: "publish order.created: deadline exceeded",
+			Type: errs.TypeDeadlineExceeded, Message: "publish order.created: deadline exceeded",
 			Upstream: "kafka", Retryable: true, Retries: 3, RetriesExhausted: true,
 		}),
 		log.EventMetadata{},

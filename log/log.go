@@ -311,18 +311,24 @@ func ensureTimestamp(attrs []slog.Attr) []slog.Attr {
 }
 
 // fillTraceContext 仅补全缺失的 trace_id/span_id，不覆盖事件已设置的值。
+// 缺失时前置插入，保证 file/stdout 扁平投影里 trace/span 出现在 event.name 之前，
+// 符合固定字段顺序（timestamp → level → type → trace/span/request/latency → event.name）。
 func fillTraceContext(attrs []slog.Attr, tc TraceContext) []slog.Attr {
 	have := make(map[string]bool, len(attrs))
 	for _, a := range attrs {
 		have[a.Key] = true
 	}
+	missing := make([]slog.Attr, 0, 2)
 	if tc.TraceID != "" && !have[string(KeyTraceID)] {
-		attrs = append(attrs, slog.String(string(KeyTraceID), tc.TraceID))
+		missing = append(missing, slog.String(string(KeyTraceID), tc.TraceID))
 	}
 	if tc.SpanID != "" && !have[string(KeySpanID)] {
-		attrs = append(attrs, slog.String(string(KeySpanID), tc.SpanID))
+		missing = append(missing, slog.String(string(KeySpanID), tc.SpanID))
 	}
-	return attrs
+	if len(missing) == 0 {
+		return attrs
+	}
+	return append(missing, attrs...)
 }
 
 // mergeBaseMetadata 仅补全 attrs 中缺失的公共字段，不覆盖事件已设置的值。
