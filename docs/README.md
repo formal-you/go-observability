@@ -14,6 +14,7 @@
 | [testing.md](testing.md) | 需求、缺陷或公共行为变更时，如何用独立黑盒测试固化正式验收 |
 | [security.md](security.md) | 设计脱敏、采样和日志治理策略 |
 | [workflow.md](workflow.md) | 提交代码、测试与维护兼容性 |
+| [github-remote-workflow.md](github-remote-workflow.md) | Codex 创建 Issue/PR、处理 CI、squash merge 与同步主分支时选择性阅读 |
 | [samber-comparison.md](samber-comparison.md) | 评估与 samber slog 生态的取舍 |
 | [release-checklist.md](release-checklist.md) | 首次公开发布和后续发版 |
 | [todo.md](todo.md) | 非代码待办与飞书项目管理迁移准备 |

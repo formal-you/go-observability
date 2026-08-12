@@ -22,7 +22,7 @@ git diff --check
 
 ## Issue / PR 开放流程
 
-本节是 Codex 处理 GitHub 任务的执行真源。技术需求与进度使用 GitHub Issue；跨工具流程待办才写入 [`todo.md`](todo.md)。复杂实施规格可暂存于 [`pr/`](pr/README.md)。
+本节是 Codex 处理 GitHub 任务的执行真源。技术需求与进度使用 GitHub Issue；跨工具流程待办才写入 [`todo.md`](todo.md)。复杂实施规格可暂存于 [`pr/`](pr/README.md)。执行远程 Issue/PR、CI、squash merge、已合并分支重放或主分支同步时，读取 [GitHub 远程协作实操](github-remote-workflow.md)。
 
 ### 1. 建立 Issue
 
