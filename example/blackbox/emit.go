@@ -27,11 +27,14 @@ const (
 )
 
 // init 注册黑盒用到的 error.code → error.type 映射（Error Registry，启动期一次性写入）。
+// INFRA 是统一基础设施 SCOPE：第二段（OPERATION）承担组件名（REDIS/MYSQL/MONGODB/KAFKA…），
+// 第三段（REASON）承担具体故障，文法与业务码一致（ADR-0019）。
 func init() {
 	mustRegisterErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT", errs.TypeFailedPrecondition)
 	mustRegisterErrorCode("USER.ROLE_UPDATE.DB_TIMEOUT", errs.TypeDeadlineExceeded)
 	mustRegisterErrorCode("MESSAGING.PUBLISH.DEADLINE_EXCEEDED", errs.TypeDeadlineExceeded)
 	mustRegisterErrorCode("LOCK.ACQUIRE.CONFLICT", errs.TypeAborted)
+	mustRegisterErrorCode("INFRA.REDIS.UNAVAILABLE", errs.TypeUnavailable)
 }
 
 func mustRegisterErrorCode(code errs.ErrorCode, typ errs.ErrorType) {
@@ -237,6 +240,18 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 		log.EventMetadata{},
 	))
 	mqSpan.End()
+
+	cacheCtx, cacheSpan := tracer.Start(ctx, "background cache unavailable")
+	report.record("background-cache", cacheSpan.SpanContext())
+	logger.Emit(cacheCtx, log.EventFromError(
+		log.NewEventName("cache", "read", "unavailable"),
+		mustSystemError(errs.SystemErrorConfig{
+			Type: errs.TypeUnavailable, Code: "INFRA.REDIS.UNAVAILABLE", Message: "read cache order:pay:42: redis unavailable",
+			Upstream: "redis", Retryable: true, Retries: 2,
+		}),
+		log.EventMetadata{},
+	))
+	cacheSpan.End()
 
 	lockCtx, lockSpan := tracer.Start(ctx, "background lock conflict")
 	report.record("background-lock", lockSpan.SpanContext())

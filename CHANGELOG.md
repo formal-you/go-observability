@@ -10,6 +10,7 @@
 - ErrorType 由 `domain.reason` 自定义词表迁移为 OTel/gRPC 标准枚举（gRPC canonical code，跨模块闭合枚举）：旧常量移除，映射如 `db.query_timeout → DEADLINE_EXCEEDED`、`db.connection_error → UNAVAILABLE`、`runtime.panic → INTERNAL`、`business.* → FAILED_PRECONDITION`；`SetStackPolicy` 改为按精确 code 覆盖。
 - 框架不再提供泛化错误事件名（ADR-0018 / 方案 C）：移除 `http.request.failed` / `http.request.rejected` / `rpc.request.failed` / `database.query.timed_out` 常量；HTTP/Gin/Kratos 错误出口必须由接入方经 `EventName` / `EventNameResolver` 提供具体事实名，`EventFromError` 对事件名做 `EventNamePattern` 正则校验（非法 panic）。
 - `error.code` 与 `event.name` 增加正则约束：`errs.ErrorCodePattern`（SCOPE.OPERATION.REASON）与 `log.EventNamePattern`（<domain>.<subject>.<event>），`Validate` 使用正则校验；EventName 注释明确 `<event>` 必须是注册的 Event Type、非自由文本、非生命周期 Stage。
+- `error.code` 明确单一文法 `SCOPE.OPERATION.REASON`（ADR-0019）：第三段统一 REASON、不分裂 cause/reason；SCOPE 命名空间新增统一基础设施 `INFRA`（OPERATION 承担组件名，如 `INFRA.REDIS.UNAVAILABLE`），业务/系统区分由 error.type 承担，依赖名继续由 `app.upstream_service` 承载；黑盒新增 INFRA 系统错误示例。
 - 保留 `Result` / `app.result`
 - Writer 首个参数由 `msg` 改名为 `eventType`；file/stdout JSONL 输出键 `msg` 改为 `type`（粗分类列），`type` 加入保留键防 payload 覆盖；OTLP 仍映射 LogRecord.Body。
 （不做 event.outcome 改名/移除）；采样保留措辞改为 SHOULD：高价值失败/异常事件由 Sampling/Retention Policy 高优先级保留（SHOULD be retained，操作上需要时保证保留），不编码进 event.name / error.type 语义。

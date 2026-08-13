@@ -131,19 +131,25 @@ func isBusinessErrorType(t ErrorType) bool {
 
 // ErrorCode（err.code）是可选、稳定、具体的应用错误码，规范文法为
 // err.code = SCOPE.OPERATION.REASON = （服务/模块）.（场景/操作）.（结果/具体错误），
-// 例如 ORDER.CREATE.STOCK_INSUFFICIENT。日志统一投影到 error.code，不用于推导
-// ErrorType 或 EventName。它不是 <domain>.<subject>.<reason>：<domain> 是旧 ErrorType
-// 自定义词表的术语，ErrorCode 第一段是服务/模块（SCOPE）。
+// 例如 ORDER.CREATE.STOCK_INSUFFICIENT、INFRA.REDIS.UNAVAILABLE。日志统一投影到
+// error.code，不用于推导 ErrorType 或 EventName。它不是 <domain>.<subject>.<reason>：
+// <domain> 是旧 ErrorType 自定义词表的术语，ErrorCode 第一段是 SCOPE。
+// SCOPE 命名空间分两类：业务模块（ORDER/PAYMENT/USER…）与统一基础设施命名空间 INFRA；
+// INFRA 下第二段（OPERATION）承担组件名（REDIS/MYSQL/MONGODB/KAFKA…），第三段仍为
+// REASON（具体故障），例如 INFRA.REDIS.UNAVAILABLE。第三段统一为 REASON，不因业务/系统
+// 分裂成 cause/reason 两套命名；业务/系统（预期拒绝 vs 非预期故障）的区分由 error.type
+// 承担，不是 error.code 段名的职责。
 // 已注册的 ErrorCode 恰好映射一个 ErrorType（多对一，见 RegisterErrorCode）；未注册码不强制映射。
 // 仅 BizError 必须承载；SystemError 可通过 Code 关联可选业务码。
 type ErrorCode string
 
 // ErrorCodePattern 是 ErrorCode 的规范正则：SCOPE.OPERATION.REASON = （服务/模块）.
-// （场景/操作）.（结果/具体错误），每段仅大写字母、数字或下划线。
+// （场景/操作）.（结果/具体错误），每段仅大写字母、数字或下划线。第三段一律 REASON，
+// 单一文法；段名语义（SCOPE=业务模块或 INFRA、INFRA 下 OPERATION=组件）由 ADR-0019 约定。
 var ErrorCodePattern = regexp.MustCompile(`^[A-Z0-9_]+\.[A-Z0-9_]+\.[A-Z0-9_]+$`)
 
 // Validate 验证 ErrorCode 是否严格符合 SCOPE.OPERATION.REASON 正则：恰好三段，每段
-// 仅包含大写字母、数字或下划线。
+// 仅包含大写字母、数字或下划线；只校验形状，不做段名注册强制。
 func (c ErrorCode) Validate() error {
 	if !ErrorCodePattern.MatchString(string(c)) {
 		return fmt.Errorf("error code %q must match SCOPE.OPERATION.REASON", string(c))
@@ -151,7 +157,6 @@ func (c ErrorCode) Validate() error {
 	return nil
 }
 
-// ParseErrorCode 解析并验证严格的 SCOPE.OPERATION.REASON ErrorCode。
 // ParseErrorCode 解析并验证严格的 SCOPE.OPERATION.REASON ErrorCode。
 func ParseErrorCode(value string) (ErrorCode, error) {
 	c := ErrorCode(value)

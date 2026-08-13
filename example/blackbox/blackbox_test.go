@@ -22,7 +22,7 @@ import (
 	otlpwriter "github.com/formal-you/go-observability/writer/otlp"
 )
 
-const blackboxEventCount = 12
+const blackboxEventCount = 13
 
 // TestBlackboxJSONL 验证真实 HTTP/后台场景的扁平运营投影与跨事件关联。
 func TestBlackboxJSONL(t *testing.T) {
@@ -150,6 +150,7 @@ func assertBackgroundScenarios(t *testing.T, events []map[string]any, report *sc
 		wantStack bool
 	}{
 		{"background-mq", "messaging.publish.deadline_exceeded", true},
+		{"background-cache", "cache.read.unavailable", true},
 		{"background-lock", "lock.acquire.conflict", false},
 	} {
 		var found map[string]any
