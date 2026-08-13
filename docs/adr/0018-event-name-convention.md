@@ -30,3 +30,9 @@ Event Type 退化成 Operation Lifecycle Stage（INITIATED/COMPLETED/CANCELLED�
 - event.name 可枚举、可校验、唯一标识 Event Structure；查询/告警不会因自由词歧义漂移。
 - 生命周期阶段不再污染 event.name 语义；需要阶段时走 Span 或显式 event.stage。
 - 与 Error Semantics 分层：失败/异常事件的 error.type（ADR-0016）+ error.code（SCOPE.OPERATION.REASON）独立表达。
+
+## 补充（2026-08-13）
+
+- 系统/基础设施错误事件名可与 error.code 同注册于 errs Error Registry
+  （`RegisterErrorContract`，不透明字符串，文法由接入方校验，见 ADR-0015 补充）；
+  业务领域事件名仍由接入方自建注册表（如 example/mall / mall internal/app/<domain>/event）。

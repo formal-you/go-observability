@@ -30,17 +30,21 @@ const (
 // SCOPE 归属由失败面决定（ADR-0019）：业务拒绝用业务模块（ORDER）；系统/基础设施故障用
 // INFRA（OPERATION=组件：MYSQL/REDIS/MQ）；非基础设施系统类（如并发冲突 LOCK）保留领域 SCOPE。
 func init() {
-	mustRegisterErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT", errs.TypeFailedPrecondition)
-	mustRegisterErrorCode("INFRA.MYSQL.QUERY_TIMEOUT", errs.TypeDeadlineExceeded)
-	mustRegisterErrorCode("INFRA.MQ.PUBLISH_TIMEOUT", errs.TypeDeadlineExceeded)
-	mustRegisterErrorCode("LOCK.ACQUIRE.CONFLICT", errs.TypeAborted)
-	mustRegisterErrorCode("INFRA.REDIS.UNAVAILABLE", errs.TypeUnavailable)
+	errs.MustRegisterErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT", errs.TypeFailedPrecondition)
+	mustRegisterErrorContract("INFRA.MYSQL.QUERY_TIMEOUT", errs.TypeDeadlineExceeded, "user.role_update.database_timeout")
+	errs.MustRegisterErrorCode("INFRA.MQ.PUBLISH_TIMEOUT", errs.TypeDeadlineExceeded)
+	errs.MustRegisterErrorCode("LOCK.ACQUIRE.CONFLICT", errs.TypeAborted)
+	errs.MustRegisterErrorCode("INFRA.REDIS.UNAVAILABLE", errs.TypeUnavailable)
 }
 
-func mustRegisterErrorCode(code errs.ErrorCode, typ errs.ErrorType) {
-	if err := errs.RegisterErrorCode(code, typ); err != nil {
-		panic("blackbox: register error code: " + err.Error())
+// mustRegisterErrorContract 一次性注册 code → type + 错误事件名（ADR-0015 补充）：
+// 事件名文法由接入方按 log.EventNamePattern 校验后传给 errs（errs 不 import log）；
+// 注册失败（非法/冲突）由 Must 变体直接 panic。
+func mustRegisterErrorContract(code errs.ErrorCode, typ errs.ErrorType, eventName string) {
+	if err := log.EventName(eventName).Validate(); err != nil {
+		panic("blackbox: invalid error event name: " + err.Error())
 	}
+	errs.MustRegisterErrorContract(code, typ, eventName)
 }
 
 // scenarioTrace 保存一次黑盒场景的真实 OTel span 标识，供人工联调和测试关联日志。
@@ -125,6 +129,11 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 			EventNameResolver: func(err error) log.EventName {
 				var appErr errs.AppError
 				if errors.As(err, &appErr) {
+					// ADR-0015 补充：系统/基础设施错误码可注册 code → type + 事件名，
+					// 反查优先于按 Kind 的兜底映射。
+					if name, ok := appErr.ErrCode().RegisteredEventName(); ok {
+						return log.EventName(name)
+					}
 					switch appErr.Kind() {
 					case errs.KindValidation, errs.KindBusiness:
 						return log.NewEventName("order", "create", "stock_insufficient")
