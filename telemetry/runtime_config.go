@@ -36,6 +36,22 @@ func normalizeAndValidateConfig(cfg *Config) error {
 	default:
 		return fmt.Errorf("telemetry: invalid log output %q", cfg.LogOutput)
 	}
+	switch outputOf(cfg.TraceOutput) {
+	case LogOutputOTLP, LogOutputFile, LogOutputStdout, LogOutputNone:
+	default:
+		return fmt.Errorf("telemetry: invalid trace output %q", cfg.TraceOutput)
+	}
+	switch outputOf(cfg.MetricOutput) {
+	case LogOutputOTLP, LogOutputFile, LogOutputStdout, LogOutputNone:
+	default:
+		return fmt.Errorf("telemetry: invalid metric output %q", cfg.MetricOutput)
+	}
+	if outputOf(cfg.TraceOutput) == LogOutputFile && strings.TrimSpace(cfg.TraceFile) == "" {
+		return errors.New("telemetry: trace file output requires trace_file path")
+	}
+	if outputOf(cfg.MetricOutput) == LogOutputFile && strings.TrimSpace(cfg.MetricFile) == "" {
+		return errors.New("telemetry: metric file output requires metric_file path")
+	}
 	if cfg.TraceSampleRatio == 0 {
 		cfg.TraceSampleRatio = defaultTraceSampleRatio
 	}
@@ -143,4 +159,12 @@ func defaultIfEmpty(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+// outputOf 归一化信号输出目标：空值按 OTLP 处理（与历史行为一致，保持向后兼容）。
+func outputOf(o LogOutput) LogOutput {
+	if o == "" {
+		return LogOutputOTLP
+	}
+	return o
 }

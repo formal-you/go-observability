@@ -97,6 +97,13 @@ func (r *Runtime) Shutdown(ctx context.Context) error {
 		if r.tracerProvider != nil {
 			errs = appendError(errs, r.tracerProvider.Shutdown(ctx))
 		}
+		// file 输出句柄由 Runtime 持有：Provider 已 flush 后关闭。
+		if r.traceFile != nil {
+			_ = r.traceFile.Close()
+		}
+		if r.metricFile != nil {
+			_ = r.metricFile.Close()
+		}
 		r.shutdownErr = errors.Join(errs...)
 	})
 	return r.shutdownErr

@@ -10,6 +10,7 @@
 package telemetry
 
 import (
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -75,6 +76,16 @@ type Config struct {
 	// LogQueueSize 是 OTLP Log BatchProcessor 的有界队列容量；零值使用 2048。
 	// 队列满时的丢弃由 OTel SDK 诊断机制报告，不由 Logger.Emit 返回给调用方。
 	LogQueueSize int
+	// TraceOutput 选择 Trace 导出目标：otlp（默认）/ file / stdout / none。
+	// none 时不装配 TracerProvider（Tracer 回退进程级 no-op）；file 时须配 TraceFile。
+	TraceOutput LogOutput
+	// MetricOutput 选择 Metric 导出目标：otlp（默认）/ file / stdout / none。
+	// none 时不装配 MeterProvider；file 时须配 MetricFile。
+	MetricOutput LogOutput
+	// TraceFile 是 TraceOutput=file 时的写入路径（OTLP JSON 追加，文件句柄由 Runtime 持有并关闭）。
+	TraceFile string
+	// MetricFile 是 MetricOutput=file 时的写入路径（OTLP JSON 追加，文件句柄由 Runtime 持有并关闭）。
+	MetricFile string
 	// TraceExporter 允许测试或自定义部署注入公开 OTel SpanExporter。
 	// 为空时按 Endpoint 创建 OTLP gRPC Exporter。成功装配后，它由 TracerProvider
 	// 持有并随 Runtime.Shutdown 关闭；构造失败时，注入对象不由本函数回滚关闭。
@@ -112,6 +123,8 @@ type Runtime struct {
 	logOutput      LogOutput
 	fileMetadata   file.ResourceMetadata
 	counters       *runtimeCounters
+	traceFile      *os.File // TraceOutput=file 时持有，Shutdown 关闭
+	metricFile     *os.File // MetricOutput=file 时持有，Shutdown 关闭
 
 	restoreMu sync.Mutex // 保护 restores，协调 InstallGlobal 与 Shutdown。
 	restores  []func()   // 按安装顺序登记，Shutdown 时按 LIFO 恢复 global state。
