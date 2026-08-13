@@ -35,11 +35,11 @@
 | --- | --- | --- |
 | A. msg 承载细名 event.name | Body = EventName，消除粗/细冗余 | 未采纳：与 OTel EventName 字段重复，Body 基数上升 |
 | B. msg 承载可读消息（BusinessMessage 等） | Body = 自由文本 | 未采纳：高基数，违背「事件进属性」，与 attrs 消息字段重复 |
-| C. 现状 + 参数改名 msg → eventType | 消除 slog 语义误导 | 可演进项：Writer 为库自定义接口，改名只破坏库内调用点（一次性） |
+| C. 参数改名 msg → eventType（已采纳） | 消除 slog 语义误导 | 已实施：Writer 首个参数为 eventType，file/stdout 输出键为 type（见 CHANGELOG） |
 
 ## 结果（Consequences）
 
 - 正面：Body 低基数可聚合；细名走 OTel 原生字段；file/stdout 有稳定的粗分类列。
 - 已知张力（已解决）：`eventType` 命名与 slog「消息」语义不一致，本次已把 Writer 首个参数由 `msg` 改名为 `eventType`（见 CHANGELOG）；event_type 是 event.name 的第一段，
-  存在可推导冗余（见备选方案 C，可演进）。
+  存在可推导冗余（已按备选方案 C 改名 eventType，见 CHANGELOG）。
 - 现状：决策已固化于 CONTEXT.md（Body 定义）与 docs/architecture.md（type 即 event_type）。

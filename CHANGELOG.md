@@ -13,6 +13,7 @@
 - 保留 `Result` / `app.result`
 - Writer 首个参数由 `msg` 改名为 `eventType`；file/stdout JSONL 输出键 `msg` 改为 `type`（粗分类列），`type` 加入保留键防 payload 覆盖；OTLP 仍映射 LogRecord.Body。
 （不做 event.outcome 改名/移除）；采样保留措辞改为 SHOULD：高价值失败/异常事件由 Sampling/Retention Policy 高优先级保留（SHOULD be retained，操作上需要时保证保留），不编码进 event.name / error.type 语义。
+- 修正 ADR 与当前设计的一致性：0001 关联/事件名术语、0004 备选方案 C 标记已采纳、0009 的 msg→type、0010 的 ErrorType 文法改为标准枚举（ADR-0016）、0013 堆栈覆盖改精确 code 与 INTERNAL 保持 must、0018 的 type 术语、README 索引。
 - 新增 ADR-0018（Event Name Convention）与 ADR-0017（保留 app.result / Sampling/Retention 独立层），并把三层事件模型（Event/Error/Sampling）同步到 README、architecture、otel-logs 等文档。
 
 ### Added

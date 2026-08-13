@@ -15,7 +15,7 @@ Event Type 退化成 Operation Lifecycle Stage（INITIATED/COMPLETED/CANCELLED�
 ## 决策（Decision）
 
 - event.name MUST use the form `<domain>.<subject>.<event>`；正则 `log.EventNamePattern`
-  校验（每段小写字母/数字/下划线），首段禁止六类 EventType 前缀（粗分类由 msg 承载）。
+  校验（每段小写字母/数字/下划线），首段禁止六类 EventType 前缀（粗分类由 type 承载）。
 - `<event>` MUST 是注册的 Event Type：稳定语义发生、唯一标识一个 Event Structure，
   不是自由文本；MUST NOT 编码动态值、错误分类或 Operation Lifecycle State，除非该
   生命周期转换本身就是要记录的语义事件（如 http.request.completed）。
