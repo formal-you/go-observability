@@ -21,6 +21,8 @@
 ### Added
 
 - 新增 Error Registry：`errs.RegisterErrorCode` 注册 ErrorCode→ErrorType 固定映射（多对一），`ErrorCode.RegisteredErrorType` 反查；严格构造器对已注册码强制类型一致，未注册码保持既有行为。
+- Error Registry 扩展为 ErrorCode → {ErrorType, EventName?}：新增 rrs.RegisterErrorContract(code, typ, eventName) 一次性注册错误码 + type + 错误事件名（系统/基础设施码路径）与 ErrorCode.RegisteredEventName() 反查；事件名以不透明字符串存储，文法由接入方校验（errs 不 import log，避免循环依赖）。
+- 新增 `errs.MustRegisterErrorCode` / `errs.MustRegisterErrorContract`：注册失败（非法文法/重复冲突）直接 panic，供启动期以常量/全局预定义注册使用；error 变体保留给需要处理失败的调用方。
 - 新增 `log.ManagedWriter`、`log.ManageWriter` 与托管 `MultiWriter`；`telemetry.Runtime.NewWriter` 现在返回具备幂等关闭能力的 Writer，保留仅实现 `Write` 的旧 Adapter 兼容性。
 - 新增严格错误值验证与配置式构造器：ErrorCode 使用 `SCOPE.OPERATION.REASON`，ErrorType 复用 OTel/gRPC 标准枚举（gRPC canonical code），并支持保留 cause 链。
 - 六类类型化事件、`Logger` / `Writer` 接口，以及 JSONL、stdout、OTLP Writer。
