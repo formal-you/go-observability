@@ -20,7 +20,7 @@ type RecoverConfig struct {
 	// EventName 错误事实名；空值默认 log.EventNameRuntimePanicOccurred。
 	EventName log.EventName
 
-	// ErrorType 低基数失败类别；空值默认 errs.TypeRuntimePanic。
+	// ErrorType 低基数失败类别；空值默认 errs.TypeInternal。
 	ErrorType errs.ErrorType
 
 	// GetRequestID 从请求提取 request_id 写入响应体；可选，未提供则不输出该字段。
@@ -50,7 +50,7 @@ func Recover(cfg RecoverConfig) gin.HandlerFunc {
 	}
 	errorType := cfg.ErrorType
 	if errorType == "" {
-		errorType = errs.TypeRuntimePanic
+		errorType = errs.TypeInternal
 	}
 	projector := cfg.ResponseProjector
 	if projector == nil {

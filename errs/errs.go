@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -33,22 +34,25 @@ const (
 	KindSystem ErrorKind = "system"
 )
 
-// ErrorType 映射 OTel error.type：保持低基数，采用 domain.reason 格式
-// （第一段为资源域 db/redis/mq/http/lock/idempotency/stock/data/runtime/validation/
-// business 等，后接具体失败原因，如 db.connection_error / business.stock_insufficient）。
-// 它是比 ErrorCode 更高层的全局分类：不针对某个具体业务码细化，而是把多个
-// ErrorCode 按失效模式归为同一大类（多对一），用于聚合、告警路由与堆栈策略。
-// 系统侧为固定枚举（本文件下方常量），business.* 为开放命名空间，本包不穷举，
-// 调用方可用 ErrorType("business.stock_insufficient") 或自定义常量。
+// ErrorType 映射 OTel error.type，复用 OTel/gRPC 标准枚举（gRPC canonical code）：
+// 跨模块、低基数、闭合枚举，单段 UPPER_SNAKE（如 NOT_FOUND / UNAVAILABLE /
+// DEADLINE_EXCEEDED / INTERNAL）。它是比 ErrorCode 更高层的全局分类：不针对某个
+// 具体业务码细化，而是把多个 ErrorCode 按标准失效模式归为同一大类（多对一），
+// 用于聚合、告警路由与堆栈策略。以通用性换取工具链兼容（Grafana / OTel / gRPC
+// 生态原生识别）与低维护成本（无需维护自定义 domain.reason 词表）。
+// 已注册的 ErrorCode 经 Error Registry 反查归属的 ErrorType（多对一，见 RegisterErrorCode）。
 type ErrorType string
 
-// Validate 验证 ErrorType 是否严格符合 domain.reason：恰好两段，且每段仅包含
-// 小写字母、数字或下划线。
+// Validate 验证 ErrorType 是否属于 OTel/gRPC 标准枚举（gRPC canonical code，
+// 单段 UPPER_SNAKE，如 NOT_FOUND / UNAVAILABLE）。
 func (t ErrorType) Validate() error {
-	return validateDottedIdentifier(string(t), 2, isLowerIdentifierByte, "error type")
+	if _, ok := errorTypeSet[t]; !ok {
+		return fmt.Errorf("error type %q must be an OTel/gRPC canonical code", string(t))
+	}
+	return nil
 }
 
-// ParseErrorType 解析并验证严格的 domain.reason ErrorType。
+// ParseErrorType 解析并验证 OTel/gRPC 标准枚举 ErrorType。
 func ParseErrorType(value string) (ErrorType, error) {
 	t := ErrorType(value)
 	if err := t.Validate(); err != nil {
@@ -58,61 +62,106 @@ func ParseErrorType(value string) (ErrorType, error) {
 }
 
 const (
-	// TypeUnknown 普通 error 无法归类时的稳定兜底类型。
-	TypeUnknown ErrorType = "error.unknown"
-	// TypeValidationFailed 参数/入参校验失败。
-	TypeValidationFailed ErrorType = "validation.failed"
-	// TypeDBConnectionError 数据库连接失败。
-	TypeDBConnectionError ErrorType = "db.connection_error"
-	// TypeDBQueryTimeout 数据库查询超时。
-	TypeDBQueryTimeout ErrorType = "db.query_timeout"
-	// TypeDBDeadlock 数据库死锁。
-	TypeDBDeadlock ErrorType = "db.deadlock"
-	// TypeRedisConnectionError Redis 连接失败。
-	TypeRedisConnectionError ErrorType = "redis.connection_error"
-	// TypeRedisTimeout Redis 操作超时。
-	TypeRedisTimeout ErrorType = "redis.timeout"
-	// TypeMQPublishFailed 消息发布失败。
-	TypeMQPublishFailed ErrorType = "mq.publish_failed"
-	// TypeMQConsumeFailed 消息消费失败。
-	TypeMQConsumeFailed ErrorType = "mq.consume_failed"
-	// TypeMQRetryExhausted 消息重试耗尽。
-	TypeMQRetryExhausted ErrorType = "mq.retry_exhausted"
-	// TypeHTTPUpstream5xx 上游 HTTP 服务返回 5xx。
-	TypeHTTPUpstream5xx ErrorType = "http.upstream_5xx"
-	// TypeHTTPUpstreamTimeout 上游 HTTP 服务调用超时。
-	TypeHTTPUpstreamTimeout ErrorType = "http.upstream_timeout"
-	// TypeLockConflict 分布式锁冲突。
-	TypeLockConflict ErrorType = "lock.conflict"
-	// TypeIdempotencyConflict 幂等冲突（重复请求被拒绝）。
-	TypeIdempotencyConflict ErrorType = "idempotency.conflict"
-	// TypeStockRace 库存并发竞争。
-	TypeStockRace ErrorType = "stock.race"
-	// TypeDataJSONUnmarshal JSON 反序列化失败。
-	TypeDataJSONUnmarshal ErrorType = "data.json_unmarshal"
-	// TypeDataDuplicateKey 数据唯一键冲突。
-	TypeDataDuplicateKey ErrorType = "data.duplicate_key"
-	// TypeDataNotFound 数据不存在。
-	TypeDataNotFound ErrorType = "data.not_found"
-	// TypeRuntimePanic 运行时 panic。
-	TypeRuntimePanic ErrorType = "runtime.panic"
-	// TypeRuntimeContextCanceled 上下文被取消。
-	TypeRuntimeContextCanceled ErrorType = "runtime.context_cancelled"
-	// TypeRuntimeDeadlineExceeded 操作超过截止时间。
-	TypeRuntimeDeadlineExceeded ErrorType = "runtime.deadline_exceeded"
+	// TypeUnknown 普通 error 无法归类时的稳定兜底类型（gRPC UNKNOWN）。
+	TypeUnknown ErrorType = "UNKNOWN"
+	// TypeCancelled 操作被客户端取消（gRPC CANCELLED）。
+	TypeCancelled ErrorType = "CANCELLED"
+	// TypeInvalidArgument 参数/入参校验失败（gRPC INVALID_ARGUMENT）。
+	TypeInvalidArgument ErrorType = "INVALID_ARGUMENT"
+	// TypeDeadlineExceeded 操作超过截止时间/超时（gRPC DEADLINE_EXCEEDED）。
+	TypeDeadlineExceeded ErrorType = "DEADLINE_EXCEEDED"
+	// TypeNotFound 数据或目标不存在（gRPC NOT_FOUND）。
+	TypeNotFound ErrorType = "NOT_FOUND"
+	// TypeAlreadyExists 数据/幂等键已存在（gRPC ALREADY_EXISTS）。
+	TypeAlreadyExists ErrorType = "ALREADY_EXISTS"
+	// TypePermissionDenied 权限不足（gRPC PERMISSION_DENIED）。
+	TypePermissionDenied ErrorType = "PERMISSION_DENIED"
+	// TypeResourceExhausted 配额/资源耗尽（gRPC RESOURCE_EXHAUSTED）。
+	TypeResourceExhausted ErrorType = "RESOURCE_EXHAUSTED"
+	// TypeFailedPrecondition 业务前置条件不满足（gRPC FAILED_PRECONDITION）。
+	TypeFailedPrecondition ErrorType = "FAILED_PRECONDITION"
+	// TypeAborted 并发冲突/锁竞争（gRPC ABORTED）。
+	TypeAborted ErrorType = "ABORTED"
+	// TypeOutOfRange 取值越界（gRPC OUT_OF_RANGE）。
+	TypeOutOfRange ErrorType = "OUT_OF_RANGE"
+	// TypeUnimplemented 操作未实现/未启用（gRPC UNIMPLEMENTED）。
+	TypeUnimplemented ErrorType = "UNIMPLEMENTED"
+	// TypeInternal 内部错误（含 panic、反序列化失败等，gRPC INTERNAL）。
+	TypeInternal ErrorType = "INTERNAL"
+	// TypeUnavailable 上游/依赖不可用（DB/Redis/MQ/HTTP 上游，gRPC UNAVAILABLE）。
+	TypeUnavailable ErrorType = "UNAVAILABLE"
+	// TypeDataLoss 数据丢失/损坏（gRPC DATA_LOSS）。
+	TypeDataLoss ErrorType = "DATA_LOSS"
+	// TypeUnauthenticated 未认证（gRPC UNAUTHENTICATED）。
+	TypeUnauthenticated ErrorType = "UNAUTHENTICATED"
 )
 
-// ErrorCode 是可选、稳定、具体的应用错误码，严格采用
-// （服务/模块）.（场景/操作）.（结果/具体错误）三段式，例如
-// ORDER.CREATE.STOCK_INSUFFICIENT。日志统一投影到 app.error_code，不用于推导
-// ErrorType 或 EventName。
+// errorTypeSet 是 ErrorType 可用的 OTel/gRPC 标准枚举（gRPC canonical codes）集合。
+// Validate 要求 ErrorType 必须属于该闭合集合：跨模块复用标准枚举，禁止自定义词表。
+var errorTypeSet = map[ErrorType]struct{}{
+	TypeUnknown:            {},
+	TypeCancelled:          {},
+	TypeInvalidArgument:    {},
+	TypeDeadlineExceeded:   {},
+	TypeNotFound:           {},
+	TypeAlreadyExists:      {},
+	TypePermissionDenied:   {},
+	TypeResourceExhausted:  {},
+	TypeFailedPrecondition: {},
+	TypeAborted:            {},
+	TypeOutOfRange:         {},
+	TypeUnimplemented:      {},
+	TypeInternal:           {},
+	TypeUnavailable:        {},
+	TypeDataLoss:           {},
+	TypeUnauthenticated:    {},
+}
+
+// isBusinessErrorType 报告 ErrorType 是否属于业务/校验预期拒绝集合
+// （gRPC 4xx 类客户端错误码）：用于严格构造器的命名空间约束。
+func isBusinessErrorType(t ErrorType) bool {
+	switch t {
+	case TypeInvalidArgument, TypeFailedPrecondition, TypeAlreadyExists, TypeNotFound,
+		TypePermissionDenied, TypeUnauthenticated, TypeOutOfRange, TypeResourceExhausted:
+		return true
+	default:
+		return false
+	}
+}
+
+// ErrorCode（err.code）是可选、稳定、具体的应用错误码，规范文法为
+// err.code = SCOPE.OPERATION.REASON = （服务/模块）.（场景/操作）.（结果/具体错误），
+// 例如 ORDER.CREATE.STOCK_INSUFFICIENT、INFRA.REDIS.UNAVAILABLE。日志统一投影到
+// error.code，不用于推导 ErrorType 或 EventName。它不是 <domain>.<subject>.<reason>：
+// <domain> 是旧 ErrorType 自定义词表的术语，ErrorCode 第一段是 SCOPE。
+// SCOPE 命名空间分两类：业务模块（ORDER/PAYMENT/USER…）与统一基础设施命名空间 INFRA；
+// INFRA 下第二段（OPERATION）承担组件名（REDIS/MYSQL/MONGODB/KAFKA…），第三段仍为
+// REASON（具体故障），例如 INFRA.REDIS.UNAVAILABLE。第三段统一为 REASON，不因业务/系统
+// 分裂成 cause/reason 两套命名；业务/系统（预期拒绝 vs 非预期故障）的区分由 error.type
+// 承担，不是 error.code 段名的职责。
+// SCOPE 归属由失败面（failure surface）决定，不由包装它的业务模块决定：业务/校验拒绝
+// （KindBusiness/KindValidation）用业务模块 SCOPE；基础设施故障（KindSystem，失败面为
+// DB/缓存/MQ/网络等依赖组件）用 INFRA.*；其余系统类（如并发冲突 ABORTED）可保留领域
+// SCOPE 或保持无码。INTERNAL/panic 类不承载 error.code：识别靠 error.type + event.name
+// + stacktrace，不设具体码。
+// event.name 与 error.code 前两段只做软对齐（SHOULD）：业务码尽量与 event.name 的
+// domain.subject 同源；INFRA.* 与业务事件名天然不同源（失败面 vs 业务事实），不做匹配。
+// 已注册的 ErrorCode 恰好映射一个 ErrorType（多对一，见 RegisterErrorCode）；未注册码不强制映射。
 // 仅 BizError 必须承载；SystemError 可通过 Code 关联可选业务码。
 type ErrorCode string
 
-// Validate 验证 ErrorCode 是否严格符合 SCOPE.OPERATION.REASON：恰好三段，且每段
-// 仅包含大写字母、数字或下划线。
+// ErrorCodePattern 是 ErrorCode 的规范正则：SCOPE.OPERATION.REASON = （服务/模块）.
+// （场景/操作）.（结果/具体错误），每段仅大写字母、数字或下划线。第三段一律 REASON，
+// 单一文法；段名语义（SCOPE=业务模块或 INFRA、INFRA 下 OPERATION=组件）由 ADR-0019 约定。
+var ErrorCodePattern = regexp.MustCompile(`^[A-Z0-9_]+\.[A-Z0-9_]+\.[A-Z0-9_]+$`)
+
+// Validate 验证 ErrorCode 是否严格符合 SCOPE.OPERATION.REASON 正则：恰好三段，每段
+// 仅包含大写字母、数字或下划线；只校验形状，不做段名注册强制。
 func (c ErrorCode) Validate() error {
-	return validateDottedIdentifier(string(c), 3, isUpperIdentifierByte, "error code")
+	if !ErrorCodePattern.MatchString(string(c)) {
+		return fmt.Errorf("error code %q must match SCOPE.OPERATION.REASON", string(c))
+	}
+	return nil
 }
 
 // ParseErrorCode 解析并验证严格的 SCOPE.OPERATION.REASON ErrorCode。
@@ -124,30 +173,56 @@ func ParseErrorCode(value string) (ErrorCode, error) {
 	return c, nil
 }
 
-func validateDottedIdentifier(value string, segments int, validByte func(byte) bool, name string) error {
-	parts := strings.Split(value, ".")
-	if len(parts) != segments {
-		return fmt.Errorf("%s must contain exactly %d segments", name, segments)
+// Error Registry：ErrorCode → ErrorType 的固定映射注册表。
+// 每个注册的 ErrorCode 恰好映射一个 ErrorType（多对一：多个 code 可共用一个 type），
+// 用于反查、告警路由与构造期一致性校验；未注册的 code 不强制映射（保持既有行为）。
+var (
+	errorCodeRegistryMu sync.RWMutex
+	errorCodeRegistry   = map[ErrorCode]ErrorType{}
+)
+
+// RegisterErrorCode 把 ErrorCode 注册到恰好一个 ErrorType，返回错误而非 panic。
+// 同一 code 重复注册时 type 必须一致（幂等成功），不一致返回错误——error.code → exactly
+// one error.type 是查询/告警依据，漂移应尽早暴露。code 或 type 不合文法时返回错误。
+// 应在进程启动期、构造错误前完成注册（与 SetStackPolicy 同类）；Registry 并发安全。
+func RegisterErrorCode(code ErrorCode, typ ErrorType) error {
+	if err := code.Validate(); err != nil {
+		return err
 	}
-	for _, part := range parts {
-		if part == "" {
-			return fmt.Errorf("%s segments must not be empty", name)
-		}
-		for i := 0; i < len(part); i++ {
-			if !validByte(part[i]) {
-				return fmt.Errorf("%s contains invalid character %q", name, part[i])
-			}
-		}
+	if err := typ.Validate(); err != nil {
+		return err
 	}
+	errorCodeRegistryMu.Lock()
+	defer errorCodeRegistryMu.Unlock()
+	if existing, ok := errorCodeRegistry[code]; ok {
+		if existing != typ {
+			return fmt.Errorf("error code %q already registered with error type %q", code, existing)
+		}
+		return nil
+	}
+	errorCodeRegistry[code] = typ
 	return nil
 }
 
-func isUpperIdentifierByte(b byte) bool {
-	return b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_'
+// RegisteredErrorType 返回该 ErrorCode 注册的 ErrorType；未注册返回 false。
+func (c ErrorCode) RegisteredErrorType() (ErrorType, bool) {
+	errorCodeRegistryMu.RLock()
+	defer errorCodeRegistryMu.RUnlock()
+	typ, ok := errorCodeRegistry[c]
+	return typ, ok
 }
 
-func isLowerIdentifierByte(b byte) bool {
-	return b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || b == '_'
+// checkRegisteredCodeType 校验已注册 code 的类型映射；未注册的 code 直接通过。
+// 供严格构造器（NewBusinessError / NewSystemError）在文法校验后调用。
+func checkRegisteredCodeType(code ErrorCode, typ ErrorType) error {
+	if code == "" {
+		return nil
+	}
+	registered, ok := code.RegisteredErrorType()
+	if ok && registered != typ {
+		return fmt.Errorf("error code %q maps to error type %q, got %q", code, registered, typ)
+	}
+	return nil
 }
 
 // Source 代码位置（OTel code.* 语义），用于定位错误产生点。
@@ -162,11 +237,11 @@ type Source struct {
 type StackPolicy string
 
 const (
-	// StackMust 必记创建点堆栈：跨进程/易失性失败（runtime/db/redis/mq/http），
-	// 由 NewSystem 构造时自动采集。
+	// StackMust 必记创建点堆栈：非预期系统故障（UNKNOWN/INTERNAL/UNAVAILABLE/
+	// DEADLINE_EXCEEDED/DATA_LOSS），由 NewSystem 构造时自动采集。
 	StackMust StackPolicy = "must"
-	// StackOptional 按需记录堆栈：低基数但可复现的失败（lock/idempotency/stock/data）
-	// 与高频的 runtime.context_cancelled；不自动采集，需要时由调用方 WithStack。
+	// StackOptional 按需记录堆栈：高频/瞬态（CANCELLED/ABORTED），不自动采集，
+	// 需要时由调用方 WithStack。
 	StackOptional StackPolicy = "optional"
 	// StackNone 不记录堆栈：预期内的业务/校验拒绝，堆栈无诊断价值。
 	StackNone StackPolicy = "none"
@@ -188,7 +263,7 @@ const (
 	StackTruncationMarker = "\n... [stacktrace truncated]\n"
 )
 
-// StackConfig 配置堆栈大小、路径处理与按 ErrorType 前缀覆盖的记录策略。
+// StackConfig 配置堆栈大小、路径处理与按 ErrorType 精确 code 覆盖的记录策略。
 // 应在进程启动阶段设置，之后保持只读。
 type StackConfig struct {
 	MaxBytes   int
@@ -202,21 +277,20 @@ func DevelopmentStackConfig() StackConfig {
 }
 
 // ProductionStackConfig 返回生产环境建议配置：16 KiB，仅保留文件名，并关闭
-// 高频、可预期失败的自动堆栈。runtime.panic 始终保持 must。
+// 高频、可预期失败的自动堆栈（CANCELLED/ABORTED）。INTERNAL（panic）始终保持 must。
 func ProductionStackConfig() StackConfig {
 	return StackConfig{
 		MaxBytes:   productionStackMaxBytes,
 		PathPolicy: StackPathBase,
 		Overrides: map[string]StackPolicy{
-			"runtime.context_cancelled": StackNone,
-			"lock.":                     StackNone,
-			"idempotency.":              StackNone,
-			"stock.":                    StackNone,
-			"data.":                     StackNone,
+			string(TypeCancelled): StackNone,
+			string(TypeAborted):   StackNone,
 		},
 	}
 }
 
+// stackOverrides 保存使用方注入的「error.type → 堆栈策略」精确覆盖表；命中时优先于
+// 内置默认策略。由 SetStackPolicy 在进程启动期一次性写入，之后只读。
 // stackOverrides 保存使用方注入的「error.type 前缀 → 堆栈策略」覆盖表；命中时优先于
 // 内置默认策略。由 SetStackPolicy 在进程启动期一次性写入，之后只读。
 var (
@@ -255,8 +329,8 @@ func SetStackConfig(config StackConfig) error {
 			return fmt.Errorf("invalid stack policy %q", policy)
 		}
 	}
-	if stackRuleWithOverrides(TypeRuntimePanic, config.Overrides) != StackMust {
-		return errors.New("runtime.panic stack policy must remain must")
+	if stackRuleWithOverrides(TypeInternal, config.Overrides) != StackMust {
+		return errors.New("INTERNAL stack policy must remain must (panic protection)")
 	}
 	stackOverridesMu.Lock()
 	stackMaxBytes = config.MaxBytes
@@ -278,10 +352,10 @@ func cloneStackOverrides(source map[string]StackPolicy) map[string]StackPolicy {
 	return cloned
 }
 
-// SetStackPolicy 设置前缀→策略覆盖表（如 "db." -> StackNone、精确类型
-// "runtime.context_cancelled" -> StackMust）；空 map / nil 恢复为仅使用内置默认策略。
+// SetStackPolicy 设置 error.type → 策略覆盖表（精确 code，如 string(errs.TypeCancelled)
+// -> StackNone）；空 map / nil 恢复为仅使用内置默认策略。
 // 必须在进程启动阶段、任何错误构造/事件写出前调用（与 log.SetFlags 同类）；
-// StackRule 对命中覆盖前缀的类型优先返回覆盖策略（最长前缀优先），未命中回落到内置默认。
+// StackRule 对命中覆盖 code 的类型优先返回覆盖策略，未命中回落到内置默认。
 func SetStackPolicy(overrides map[string]StackPolicy) {
 	copied := cloneStackOverrides(overrides)
 	delete(copied, "")
@@ -290,26 +364,29 @@ func SetStackPolicy(overrides map[string]StackPolicy) {
 	stackOverridesMu.Unlock()
 }
 
-// StackRule 按 error.type 返回堆栈策略（NewSystem 构造时据此决定是否自动补记创建点堆栈）：
-// 先查 SetStackPolicy 注入的覆盖表（最长前缀优先），未命中回落到内置默认——
-// db./redis./mq./http./runtime.（除 context_cancelled）-> must；
-// lock./idempotency./stock.race/data. 及 runtime.context_cancelled -> optional；
-// business.*/validation.* 及未知/空类型（默认兜底）-> none。
+// StackRule 按 error.type（OTel/gRPC 标准枚举）返回堆栈策略
+// （NewSystem 构造时据此决定是否自动补记创建点堆栈）：
+// 先查 SetStackPolicy 注入的精确覆盖表，未命中回落到内置默认——
+// UNKNOWN/INTERNAL/UNAVAILABLE/DEADLINE_EXCEEDED/DATA_LOSS -> must（非预期系统故障）；
+// CANCELLED/ABORTED -> optional（高频/瞬态）；
+// 业务预期拒绝（INVALID_ARGUMENT/FAILED_PRECONDITION/ALREADY_EXISTS/NOT_FOUND/
+// PERMISSION_DENIED/UNAUTHENTICATED/OUT_OF_RANGE/RESOURCE_EXHAUSTED）、UNIMPLEMENTED
+// 及未知/空类型（默认兜底）-> none。
 func StackRule(t ErrorType) StackPolicy {
-	p := string(t)
 	stackOverridesMu.RLock()
-	policy, ok := stackPolicyForLocked(p)
+	policy, ok := stackOverrides[string(t)]
 	stackOverridesMu.RUnlock()
 	if ok {
 		return policy
 	}
-	switch {
-	case p == "runtime.context_cancelled":
-		// 高频且多为客户端主动取消，逐次采集堆栈成本高、诊断价值低；需要时由调用方 WithStack。
-		return StackOptional
-	case hasAnyPrefix(p, "runtime.", "db.", "redis.", "mq.", "http."):
+	return defaultStackRule(t)
+}
+
+func defaultStackRule(t ErrorType) StackPolicy {
+	switch t {
+	case TypeUnknown, TypeInternal, TypeUnavailable, TypeDeadlineExceeded, TypeDataLoss:
 		return StackMust
-	case hasAnyPrefix(p, "lock.", "idempotency.", "stock.race", "data."):
+	case TypeCancelled, TypeAborted:
 		return StackOptional
 	default:
 		return StackNone
@@ -317,54 +394,10 @@ func StackRule(t ErrorType) StackPolicy {
 }
 
 func stackRuleWithOverrides(t ErrorType, overrides map[string]StackPolicy) StackPolicy {
-	p := string(t)
-	best := ""
-	var selected StackPolicy
-	for prefix, policy := range overrides {
-		if len(prefix) > len(best) && strings.HasPrefix(p, prefix) {
-			best = prefix
-			selected = policy
-		}
+	if policy, ok := overrides[string(t)]; ok {
+		return policy
 	}
-	if best != "" {
-		return selected
-	}
-	switch {
-	case p == "runtime.context_cancelled":
-		return StackOptional
-	case hasAnyPrefix(p, "runtime.", "db.", "redis.", "mq.", "http."):
-		return StackMust
-	case hasAnyPrefix(p, "lock.", "idempotency.", "stock.race", "data."):
-		return StackOptional
-	default:
-		return StackNone
-	}
-}
-
-// stackPolicyForLocked 在覆盖表中查找 p 的最长匹配前缀；调用方须持有 stackOverridesMu 读锁。
-func stackPolicyForLocked(p string) (StackPolicy, bool) {
-	best := ""
-	var bestPolicy StackPolicy
-	found := false
-	for prefix, policy := range stackOverrides {
-		if len(prefix) > len(best) && strings.HasPrefix(p, prefix) {
-			best = prefix
-			bestPolicy = policy
-			found = true
-		}
-	}
-	return bestPolicy, found
-}
-
-// hasAnyPrefix 报告 s 是否以 prefixes 中任一前缀开头。
-// StackRule 内部复用，避免在每个分支重复书写 HasPrefix 判断。
-func hasAnyPrefix(s string, prefixes ...string) bool {
-	for _, p := range prefixes {
-		if strings.HasPrefix(s, p) {
-			return true
-		}
-	}
-	return false
+	return defaultStackRule(t)
 }
 
 // AppError 错误体系接口：统一收口所需方法。
@@ -444,14 +477,14 @@ func (e BizError) Source() Source {
 	return e.source
 }
 
-// NewValidation 参数校验错误：typ=TypeValidationFailed，不记 ErrCode。
+// NewValidation 参数校验错误：typ=TypeInvalidArgument，不记 ErrCode。
 //
 // Deprecated: 使用 NewValidationError 获取严格校验与 cause/source 配置能力。
 func NewValidation(message string) BizError {
 	return BizError{
 		appError: appError{message: message},
 		code:     "",
-		typ:      TypeValidationFailed,
+		typ:      TypeInvalidArgument,
 		kind:     KindValidation,
 	}
 }
@@ -498,7 +531,7 @@ func NewValidationError(cfg ValidationErrorConfig) (BizError, error) {
 	}
 	return BizError{
 		appError: appError{message: message, cause: cfg.Cause},
-		typ:      TypeValidationFailed,
+		typ:      TypeInvalidArgument,
 		kind:     KindValidation,
 		source:   cfg.Source,
 	}, nil
@@ -516,8 +549,11 @@ func NewBusinessError(cfg BusinessErrorConfig) (BizError, error) {
 	if err := cfg.Type.Validate(); err != nil {
 		return BizError{}, err
 	}
-	if !strings.HasPrefix(string(cfg.Type), "business.") {
-		return BizError{}, errors.New("business error type must use the business.* namespace")
+	if !isBusinessErrorType(cfg.Type) {
+		return BizError{}, errors.New("business error type must be an expected client error (INVALID_ARGUMENT/FAILED_PRECONDITION/ALREADY_EXISTS/NOT_FOUND/PERMISSION_DENIED/UNAUTHENTICATED/OUT_OF_RANGE/RESOURCE_EXHAUSTED)")
+	}
+	if err := checkRegisteredCodeType(cfg.Code, cfg.Type); err != nil {
+		return BizError{}, err
 	}
 	return BizError{
 		appError: appError{message: message, cause: cfg.Cause},
@@ -682,11 +718,14 @@ func NewSystemError(cfg SystemErrorConfig) (SystemError, error) {
 	if err := cfg.Type.Validate(); err != nil {
 		return SystemError{}, err
 	}
-	if strings.HasPrefix(string(cfg.Type), "business.") || strings.HasPrefix(string(cfg.Type), "validation.") {
-		return SystemError{}, errors.New("system error type must not use business.* or validation.* namespaces")
+	if isBusinessErrorType(cfg.Type) {
+		return SystemError{}, errors.New("system error type must not use business/validation gRPC codes")
 	}
 	if cfg.Code != "" {
 		if err := cfg.Code.Validate(); err != nil {
+			return SystemError{}, err
+		}
+		if err := checkRegisteredCodeType(cfg.Code, cfg.Type); err != nil {
 			return SystemError{}, err
 		}
 	}

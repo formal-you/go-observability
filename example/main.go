@@ -46,7 +46,7 @@ func main() {
 	defer restore()
 	defer func() { _ = providers.Shutdown(ctx) }()
 
-	w, err := newLogWriter(ctx, providers)
+	w, err := newLogWriter(ctx, providers, output)
 	if err != nil {
 		slog.Error("init log writer", "err", err)
 		os.Exit(1)
@@ -64,7 +64,7 @@ func main() {
 		ginmw.AccessLog(ginmw.AccessConfig{Logger: logger}),
 		ginmw.Recover(ginmw.RecoverConfig{Logger: logger}),
 		ginmw.Metrics(ginmw.MetricsConfig{}),
-		ginmw.ErrorResponse(ginmw.ErrorConfig{Logger: logger}),
+		ginmw.ErrorResponse(ginmw.ErrorConfig{Logger: logger, EventName: log.NewEventName("order", "create", "stock_insufficient")}),
 	)
 	r.GET("/api/v1/products/:id", func(c *gin.Context) {
 		c.JSON(200, gin.H{"id": c.Param("id")})
@@ -72,7 +72,7 @@ func main() {
 	r.POST("/api/v1/orders", func(c *gin.Context) {
 		// 业务拒绝：errresp.Abort 挂载错误，收口中间件决定状态码/响应体并写错误事件。
 		ginmw.Abort(c, mustBusinessError(errs.BusinessErrorConfig{
-			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "business.stock_insufficient", Message: "库存不足",
+			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "FAILED_PRECONDITION", Message: "库存不足",
 		}))
 	})
 	if err := r.Run(":8080"); err != nil {
@@ -88,13 +88,12 @@ func mustBusinessError(cfg errs.BusinessErrorConfig) errs.BizError {
 	return err
 }
 
-// newLogWriter 优先 OTLP（OTEL_EXPORTER_OTLP_ENDPOINT），否则写入当前工作目录的 logs/events.jsonl。
-// OTLP 路径注入 telemetry 的 Resource 与 LoggerProvider，三信号共享同一份资源与装配。
-func newLogWriter(ctx context.Context, p *telemetry.Providers) (log.ManagedWriter, error) {
+// newLogWriter 根据应用已选定的出口组装 Writer；Runtime 隐藏 Provider 与 Resource 实现。
+func newLogWriter(ctx context.Context, p *telemetry.Providers, output telemetry.LogOutput) (log.ManagedWriter, error) {
 	if p == nil {
 		return nil, errors.New("nil telemetry runtime")
 	}
-	if p.LoggerProvider() != nil {
+	if output == telemetry.LogOutputOTLP {
 		return p.NewWriter(ctx, telemetry.WriterConfig{})
 	}
 	return p.NewWriter(ctx, telemetry.WriterConfig{FilePath: filepath.Join("logs", "events.jsonl")})

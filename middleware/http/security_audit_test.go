@@ -30,8 +30,8 @@ func TestSecurityLogEmitsSetSecurityEvent(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/login", nil))
 
-	if len(w.msgs) != 1 || w.msgs[0] != "security" {
-		t.Fatalf("msgs = %v, want [security]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "security" {
+		t.Fatalf("eventTypes = %v, want [security]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "input.threat.detected")
@@ -55,8 +55,8 @@ func TestSecurityLogNoPayloadNoEvent(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204", rec.Code)
 	}
-	if len(w.msgs) != 0 {
-		t.Errorf("未挂载安全载荷不应写事件，实际 %v", w.msgs)
+	if len(w.eventTypes) != 0 {
+		t.Errorf("未挂载安全载荷不应写事件，实际 %v", w.eventTypes)
 	}
 }
 
@@ -94,8 +94,8 @@ func TestAuditLogEmitsSetAuditEvent(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/users/u-2002/role", nil))
 
-	if len(w.msgs) != 1 || w.msgs[0] != "audit" {
-		t.Fatalf("msgs = %v, want [audit]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "audit" {
+		t.Fatalf("eventTypes = %v, want [audit]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "input.anomaly.recorded")
@@ -118,8 +118,8 @@ func TestAuditLogNoPayloadNoEvent(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204", rec.Code)
 	}
-	if len(w.msgs) != 0 {
-		t.Errorf("未挂载审计载荷不应写事件，实际 %v", w.msgs)
+	if len(w.eventTypes) != 0 {
+		t.Errorf("未挂载审计载荷不应写事件，实际 %v", w.eventTypes)
 	}
 }
 
@@ -152,8 +152,8 @@ func TestSecurityLogDecideEmits(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200（SecurityLog 只记录不拦截）", rec.Code)
 	}
-	if len(w.msgs) != 1 || w.msgs[0] != "security" {
-		t.Fatalf("msgs = %v, want [security]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "security" {
+		t.Fatalf("eventTypes = %v, want [security]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "input.threat.detected")
@@ -175,8 +175,8 @@ func TestSecurityLogDecideNilNoEvent(t *testing.T) {
 	}))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
-	if len(w.msgs) != 0 {
-		t.Errorf("Decide 返回 nil 不应写事件，实际 %v", w.msgs)
+	if len(w.eventTypes) != 0 {
+		t.Errorf("Decide 返回 nil 不应写事件，实际 %v", w.eventTypes)
 	}
 }
 
@@ -211,8 +211,8 @@ func TestAuditLogDescribeEmits(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	if len(w.msgs) != 1 || w.msgs[0] != "audit" {
-		t.Fatalf("msgs = %v, want [audit]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "audit" {
+		t.Fatalf("eventTypes = %v, want [audit]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "input.anomaly.recorded")

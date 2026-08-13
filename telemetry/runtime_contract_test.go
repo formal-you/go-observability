@@ -15,24 +15,6 @@ import (
 func TestNewRuntimeOutputContractBlackBox(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	for _, output := range []telemetry.LogOutput{
-		telemetry.LogOutputFile,
-		telemetry.LogOutputStdout,
-		telemetry.LogOutputNone,
-	} {
-		r, err := telemetry.NewRuntime(ctx, telemetry.Config{
-			Enabled: true, ServiceName: "runtime-contract", LogOutput: output,
-			TraceBatchTimeout: time.Hour, MetricExportInterval: time.Hour,
-		})
-		if err != nil {
-			t.Fatalf("NewRuntime(%q): %v", output, err)
-		}
-		if r.LoggerProvider() != nil {
-			t.Fatalf("output %q must not create an OTLP LoggerProvider", output)
-		}
-		_ = r.Shutdown(ctx)
-	}
-
 	r, err := telemetry.NewRuntime(ctx, telemetry.Config{
 		Enabled: true, ServiceName: "runtime-contract", LogOutput: telemetry.LogOutputOTLP,
 		TraceBatchTimeout: time.Hour, MetricExportInterval: time.Hour,
@@ -41,8 +23,12 @@ func TestNewRuntimeOutputContractBlackBox(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Shutdown(ctx)
-	if r.LoggerProvider() == nil {
-		t.Fatal("otlp output must create a LoggerProvider")
+	w, err := r.NewWriter(ctx, telemetry.WriterConfig{})
+	if err != nil {
+		t.Fatalf("OTLP runtime must create its configured Writer: %v", err)
+	}
+	if err := w.Close(ctx); err != nil {
+		t.Fatalf("close runtime-backed OTLP Writer: %v", err)
 	}
 }
 

@@ -48,7 +48,7 @@ observability:
       type: none
       # 高流量可选 event_keep：仅在已有网关全量 access 或接受关联不完整时启用
       # keep_prefixes: ["business.", "error.", "security.", "audit.", "probe."]
-      # fallback_ratio: 0.1  # access 失败恒保留，成功按比例保留
+      # fallback_ratio: 0.1  # access 失败高优先级保留，成功按比例保留
       # 备选 result_keep：只按 app.result 采样，不区分事件类型
       # type: result_keep
       # ratio: 1.0   # 非高价值保留概率；1=全量

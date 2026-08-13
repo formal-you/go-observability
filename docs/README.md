@@ -7,6 +7,7 @@
 | [configuration.md](configuration.md) | 配置 telemetry、Logger 和部署侧 Collector |
 | [environment.md](environment.md) | 查询库实际读取的环境变量 |
 | [architecture.md](architecture.md) | 理解包边界和事件数据流 |
+| [coding-standards.md](coding-standards.md) | 编写或 Review Go 实现、公共 API、并发代码和库级注释 |
 | [adr/](adr/README.md) | 追溯关键架构决策（ADR）：错误模型等「为什么这么做」的记录 |
 | [issues/](issues/README.md) | 阅读需要随代码版本管理的复杂需求与可观察验收；任务状态仍以 GitHub Issue 为准 |
 | [pr/](pr/README.md) | 查看进行中的复杂 PR 实施规格及其归档规则 |
@@ -21,6 +22,7 @@
 | [todo.md](todo.md) | 非代码待办与飞书项目管理迁移准备 |
 | [reports/](reports/README.md) | 查看 Issue 验收、性能和 mutation 基线证据 |
 | [go-observability-architecture.drawio](go-observability-architecture.drawio) | 可编辑架构图 |
+| [module-map.html](module-map.html) | 浏览器直接打开的 UML 模块地图 |
 
 可复制的部署配置位于 [`example/config`](../example/config/)；本地 LGTM 栈位于 [`observability`](../observability/)；分信号模板位于 [`observability/templates`](../observability/templates/)。
 

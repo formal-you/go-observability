@@ -25,7 +25,7 @@ func TestBoundedStackContractBlackBox(t *testing.T) {
 
 	stack := "goroutine 1 [running]:\nmain.run()\n\tC:/workspace/private/service/handler.go:42 +0x1\n" + strings.Repeat("界", 100)
 	errValue, err := errs.NewSystemError(errs.SystemErrorConfig{
-		Type:    errs.TypeRuntimePanic,
+		Type:    errs.TypeInternal,
 		Message: "panic",
 		Stack:   stack,
 	})
@@ -53,8 +53,8 @@ func TestProductionStackProfileKeepsPanicBlackBox(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = errs.SetStackConfig(errs.DevelopmentStackConfig()) })
 
-	config.Overrides["runtime."] = errs.StackNone
+	config.Overrides[string(errs.TypeInternal)] = errs.StackNone
 	if err := errs.SetStackConfig(config); err == nil {
-		t.Fatal("configuration that disables runtime.panic must be rejected")
+		t.Fatal("configuration that disables INTERNAL (panic) must be rejected")
 	}
 }

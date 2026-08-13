@@ -62,8 +62,8 @@ func (w *Writer) Close(ctx context.Context) error { return w.provider.Shutdown(c
 
 // Write 把事件写为一条 stdout LogRecord；与 otlp.Writer 共享同一组装逻辑：
 // timestamp/level 映射顶层字段，trace_id/span_id 由 ctx 关联，不写成属性。
-func (w *Writer) Write(ctx context.Context, msg string, attrs ...slog.Attr) error {
-	rec, rest := attrkv.Record(msg, attrs)
+func (w *Writer) Write(ctx context.Context, eventType string, attrs ...slog.Attr) error {
+	rec, rest := attrkv.Record(eventType, attrs)
 	rec.AddAttributes(attrkv.ToKeyValues(rest)...)
 	w.logger.Emit(ctx, rec)
 	return nil

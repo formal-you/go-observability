@@ -3,6 +3,7 @@ package ginmw
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -17,6 +18,8 @@ import (
 	"github.com/formal-you/go-observability/middleware/httperr"
 )
 
+var testErrEventName = log.NewEventName("order", "creation", "rejected")
+
 // TestErrorResponseBusinessErrorWritesEventAndResponse 验证业务拒绝（KindBusiness）：
 // 状态码 409、响应体透传业务码与消息、事件投影为 business 事件（WARN / failed）。
 func TestErrorResponseBusinessErrorWritesEventAndResponse(t *testing.T) {
@@ -26,12 +29,13 @@ func TestErrorResponseBusinessErrorWritesEventAndResponse(t *testing.T) {
 	r := gin.New()
 	r.Use(ErrorResponse(ErrorConfig{
 		Logger:       logger,
+		EventName:    testErrEventName,
 		GetRequestID: func(*gin.Context) string { return "req-biz-1" },
 	}))
 	r.GET("/orders/:id", func(c *gin.Context) {
 		Abort(c, errs.NewBusiness(
 			"ORDER.CREATE.STOCK_INSUFFICIENT",
-			"business.stock_insufficient",
+			"FAILED_PRECONDITION",
 			"stock insufficient",
 		))
 	})
@@ -55,13 +59,13 @@ func TestErrorResponseBusinessErrorWritesEventAndResponse(t *testing.T) {
 		t.Errorf("request_id = %v, want req-biz-1", resp["request_id"])
 	}
 
-	if len(w.msgs) != 1 || w.msgs[0] != "business" {
-		t.Fatalf("msgs = %v, want [business]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "business" {
+		t.Fatalf("eventTypes = %v, want [business]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "event.name", "http.request.rejected")
-	attrString(t, attrs, "error.type", "business.stock_insufficient")
-	attrString(t, attrs, "app.error_code", "ORDER.CREATE.STOCK_INSUFFICIENT")
+	attrString(t, attrs, "event.name", string(testErrEventName))
+	attrString(t, attrs, "error.type", "FAILED_PRECONDITION")
+	attrString(t, attrs, "error.code", "ORDER.CREATE.STOCK_INSUFFICIENT")
 	attrString(t, attrs, "app.business_message", "stock insufficient")
 	attrString(t, attrs, "app.result", "failed")
 	attrString(t, attrs, "level", "WARN")
@@ -75,7 +79,7 @@ func TestErrorResponseValidationErrorWritesEventAndResponse(t *testing.T) {
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger, EventName: testErrEventName}))
 	r.GET("/orders", func(c *gin.Context) {
 		Abort(c, errs.NewValidation("order id is required"))
 	})
@@ -97,7 +101,7 @@ func TestErrorResponseValidationErrorWritesEventAndResponse(t *testing.T) {
 	}
 
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "error.type", "validation.failed")
+	attrString(t, attrs, "error.type", "INVALID_ARGUMENT")
 	attrString(t, attrs, "app.result", "failed")
 	attrString(t, attrs, "level", "WARN")
 }
@@ -109,9 +113,9 @@ func TestErrorResponseSystemErrorHidesMessage(t *testing.T) {
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger, EventName: testErrEventName}))
 	r.GET("/orders/:id", func(c *gin.Context) {
-		Abort(c, errs.NewSystem(errs.TypeDBQueryTimeout, "dial tcp 10.0.0.1:3306: timeout"))
+		Abort(c, errs.NewSystem(errs.TypeDeadlineExceeded, "dial tcp 10.0.0.1:3306: timeout"))
 	})
 
 	rec := doRequest(r, "/orders/1")
@@ -133,12 +137,12 @@ func TestErrorResponseSystemErrorHidesMessage(t *testing.T) {
 		t.Errorf("响应体不应泄露内部细节: %s", got)
 	}
 
-	if len(w.msgs) != 1 || w.msgs[0] != "error" {
-		t.Fatalf("msgs = %v, want [error]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "error" {
+		t.Fatalf("eventTypes = %v, want [error]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "event.name", "http.request.failed")
-	attrString(t, attrs, "error.type", "db.query_timeout")
+	attrString(t, attrs, "event.name", string(testErrEventName))
+	attrString(t, attrs, "error.type", "DEADLINE_EXCEEDED")
 	attrString(t, attrs, "exception.message", "dial tcp 10.0.0.1:3306: timeout")
 	attrString(t, attrs, "app.result", "error")
 	attrString(t, attrs, "level", "ERROR")
@@ -151,7 +155,7 @@ func TestAbortNilFallback(t *testing.T) {
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger, EventName: testErrEventName}))
 	r.GET("/orders/:id", func(c *gin.Context) {
 		Abort(c, nil)
 	})
@@ -170,9 +174,22 @@ func TestAbortNilFallback(t *testing.T) {
 	}
 
 	attrs := attrMap(w.attrsList[0])
-	attrString(t, attrs, "error.type", "error.unknown")
+	attrString(t, attrs, "error.type", "UNKNOWN")
 	attrString(t, attrs, "exception.message", "internal error")
 	attrString(t, attrs, "level", "ERROR")
+}
+
+func TestFallbackInternalErrorIsInitialized(t *testing.T) {
+	if fallbackInternalError == nil {
+		t.Fatal("fallbackInternalError = nil")
+	}
+	var appErr errs.AppError
+	if !errors.As(fallbackInternalError, &appErr) {
+		t.Fatalf("fallbackInternalError type = %T, want errs.AppError", fallbackInternalError)
+	}
+	if appErr.Kind() != errs.KindSystem || appErr.ErrorType() != errs.TypeUnknown {
+		t.Fatalf("fallbackInternalError = kind %q type %q, want system/error.unknown", appErr.Kind(), appErr.ErrorType())
+	}
 }
 
 // TestErrorResponseNoErrorPassthrough 验证无错误时中间件直接放行：不改响应、不写事件。
@@ -181,7 +198,7 @@ func TestErrorResponseNoErrorPassthrough(t *testing.T) {
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger, EventName: testErrEventName}))
 	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 
 	rec := doRequest(r, "/ok")
@@ -192,8 +209,8 @@ func TestErrorResponseNoErrorPassthrough(t *testing.T) {
 	if rec.Body.String() != "ok" {
 		t.Errorf("body = %q, want ok", rec.Body.String())
 	}
-	if len(w.msgs) != 0 {
-		t.Errorf("无错误不应写事件，实际 %v", w.msgs)
+	if len(w.eventTypes) != 0 {
+		t.Errorf("无错误不应写事件，实际 %v", w.eventTypes)
 	}
 }
 
@@ -204,7 +221,7 @@ func TestErrorResponseFillsTraceAndSpanFromContext(t *testing.T) {
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
-	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger, EventName: testErrEventName}))
 	r.GET("/orders/:id", func(c *gin.Context) {
 		Abort(c, errs.NewBusiness("ORDER.NOT_FOUND", "business.not_found", "order not found"))
 	})
@@ -239,7 +256,7 @@ func TestErrorResponseWithRecoverNoDoubleWrite(t *testing.T) {
 	logger := log.NewLogger(w)
 	r := gin.New()
 	r.Use(Recover(RecoverConfig{Logger: logger}))
-	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger, EventName: testErrEventName}))
 	r.GET("/boom", func(c *gin.Context) { panic("boom") })
 
 	rec := doRequest(r, "/boom")
@@ -247,8 +264,8 @@ func TestErrorResponseWithRecoverNoDoubleWrite(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
 	}
-	if len(w.msgs) != 1 || w.msgs[0] != "error" {
-		t.Fatalf("msgs = %v, want 仅 recover 写 1 条 [error]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "error" {
+		t.Fatalf("eventTypes = %v, want 仅 recover 写 1 条 [error]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "runtime.panic.occurred")
@@ -262,10 +279,11 @@ func TestErrorResponseCustomStatusForError(t *testing.T) {
 	r := gin.New()
 	r.Use(ErrorResponse(ErrorConfig{
 		Logger:         logger,
+		EventName:      testErrEventName,
 		StatusForError: func(error) int { return http.StatusTeapot },
 	}))
 	r.GET("/orders/:id", func(c *gin.Context) {
-		Abort(c, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "business.stock_insufficient", "stock insufficient"))
+		Abort(c, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "FAILED_PRECONDITION", "stock insufficient"))
 	})
 
 	rec := doRequest(r, "/orders/1")
@@ -329,7 +347,8 @@ func TestErrorResponseProjectorOverride(t *testing.T) {
 	logger := log.NewLogger(w)
 	engine := gin.New()
 	engine.Use(ErrorResponse(ErrorConfig{
-		Logger: logger,
+		Logger:    logger,
+		EventName: testErrEventName,
 		ResponseProjector: func(err error, _ string) (int, any) {
 			return http.StatusUnauthorized, gin.H{"error": gin.H{"code": "invalid_credentials", "message": err.Error()}}
 		},
@@ -348,8 +367,8 @@ func TestErrorResponseProjectorOverride(t *testing.T) {
 	if body["error"]["code"] != "invalid_credentials" || body["error"]["message"] == "" {
 		t.Fatalf("body = %#v, want nested invalid_credentials", body)
 	}
-	if len(w.msgs) != 1 || w.msgs[0] != "business" {
-		t.Fatalf("events = %v, want one business event", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "business" {
+		t.Fatalf("events = %v, want one business event", w.eventTypes)
 	}
 }
 
@@ -363,7 +382,8 @@ func TestErrorResponseInputGuardEmitsSecurityAuditEvents(t *testing.T) {
 	var gotSummary httperr.InputSummary
 	engine := gin.New()
 	engine.Use(ErrorResponse(ErrorConfig{
-		Logger: logger,
+		Logger:    logger,
+		EventName: testErrEventName,
 		InputGuard: func(ctx context.Context, _ *http.Request, _ error, s httperr.InputSummary) []log.EventPayload {
 			gotSummary = s
 			md := httperr.EventMetadataFromContext(ctx)
@@ -381,7 +401,7 @@ func TestErrorResponseInputGuardEmitsSecurityAuditEvents(t *testing.T) {
 	}))
 	engine.GET("/x", func(c *gin.Context) {
 		c.Request = c.Request.WithContext(httperr.WithInputSummary(c.Request.Context(), httperr.InputSummary{Fields: []string{"order_id"}, Hash: "sha256:abc"}))
-		Abort(c, errs.NewSystem(errs.TypeDBQueryTimeout, "dial tcp: timeout"))
+		Abort(c, errs.NewSystem(errs.TypeDeadlineExceeded, "dial tcp: timeout"))
 	})
 
 	tid, err := trace.TraceIDFromHex("0123456789abcdef0123456789abcdef")
@@ -403,10 +423,10 @@ func TestErrorResponseInputGuardEmitsSecurityAuditEvents(t *testing.T) {
 	if !reflect.DeepEqual(gotSummary.Fields, []string{"order_id"}) || gotSummary.Hash != "sha256:abc" {
 		t.Errorf("guard 摘要 = %+v, want order_id/sha256:abc", gotSummary)
 	}
-	if len(w.msgs) != 3 || !reflect.DeepEqual(w.msgs, []string{"error", "security", "audit"}) {
-		t.Fatalf("msgs = %v, want [error security audit]", w.msgs)
+	if len(w.eventTypes) != 3 || !reflect.DeepEqual(w.eventTypes, []string{"error", "security", "audit"}) {
+		t.Fatalf("eventTypes = %v, want [error security audit]", w.eventTypes)
 	}
-	for i, want := range []string{"http.request.failed", "input.threat.detected", "input.anomaly.recorded"} {
+	for i, want := range []string{string(testErrEventName), "input.threat.detected", "input.anomaly.recorded"} {
 		attrs := attrMap(w.attrsList[i])
 		attrString(t, attrs, "event.name", want)
 		attrString(t, attrs, "trace_id", "0123456789abcdef0123456789abcdef")
@@ -438,8 +458,8 @@ func TestRecoverInputGuardEmitsSecurityEvent(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
 	}
-	if len(w.msgs) != 2 || !reflect.DeepEqual(w.msgs, []string{"error", "security"}) {
-		t.Fatalf("msgs = %v, want [error security]", w.msgs)
+	if len(w.eventTypes) != 2 || !reflect.DeepEqual(w.eventTypes, []string{"error", "security"}) {
+		t.Fatalf("eventTypes = %v, want [error security]", w.eventTypes)
 	}
 	attrString(t, attrMap(w.attrsList[1]), "event.name", "input.threat.detected")
 }

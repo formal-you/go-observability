@@ -34,7 +34,10 @@
 ## 当前核心验收
 
 - EventName 文法、ErrorType / ErrorCode 分工以 [ADR-0009](adr/0009-event-name-fact-and-error-code.md) 为准。
+- event.name 的 `<event>` 必须是注册 Event Type（Event Name Convention）以 [ADR-0018](adr/0018-event-name-convention.md) 为准。
 - ErrorCode / ErrorType 严格文法、构造失败和旧入口兼容以 [ADR-0010](adr/0010-strict-error-construction.md) 为准。
+- ErrorType 复用 OTel/gRPC 标准枚举（跨模块闭合枚举）以 [ADR-0016](adr/0016-errortype-otel-grpc-standard-enum.md) 为准。
+- ErrorCode → ErrorType 固定映射（Error Registry）以 [ADR-0015](adr/0015-error-registry.md) 为准，严格构造器对已注册码强制类型一致。
 - file/stdout 与 OTLP 双投影以 [OTel Logs 映射](otel-logs-data-model.md) 为准。
 - HTTP AccessEvent 完整性、跨事件关联和后台事件边界以 [`example/blackbox`](../example/blackbox/README.md) 的公开场景与黑盒断言为准；最初的实施计划已归档为 [PR #16 历史提案](history/pr-0016-logging-system-optimization.md)。
 - 采样只在使用方显式配置后改变保留行为；默认行为必须由黑盒覆盖。

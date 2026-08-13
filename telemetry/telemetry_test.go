@@ -54,7 +54,7 @@ func TestNewRuntimeValidation(t *testing.T) {
 		}
 	}
 	r, err := NewRuntime(context.Background(), Config{})
-	if err != nil || r == nil || r.Resource() != nil {
+	if err != nil || r == nil || r.resource != nil {
 		t.Fatalf("disabled runtime = %#v, %v", r, err)
 	}
 }
@@ -191,7 +191,7 @@ func TestSetupDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("disabled setup 不应报错: %v", err)
 	}
-	if p == nil || p.Resource() != nil || p.LoggerProvider() != nil {
+	if p == nil || p.resource != nil || p.loggerProvider != nil {
 		t.Fatalf("disabled setup 应返回空 Providers，got %+v", p)
 	}
 	if p.Tracer("x") == nil {
@@ -253,7 +253,7 @@ func TestSetupResourceAttributes(t *testing.T) {
 		t.Fatalf("setup 失败: %v", err)
 	}
 	defer func() { _ = p.Shutdown(ctx) }()
-	if p.Resource() == nil || p.LoggerProvider() == nil {
+	if p.resource == nil || p.loggerProvider == nil {
 		t.Fatal("enabled setup 应返回非 nil 的 Resource 与 LoggerProvider")
 	}
 
@@ -265,7 +265,7 @@ func TestSetupResourceAttributes(t *testing.T) {
 		"service.instance.id":         "i-1",
 	}
 	got := map[string]string{}
-	for _, kv := range p.Resource().Attributes() {
+	for _, kv := range p.resource.Attributes() {
 		got[string(kv.Key)] = kv.Value.Emit()
 	}
 	for k, v := range want {
@@ -282,11 +282,11 @@ func TestSetupFileCreatesLocalTracesAndMetadata(t *testing.T) {
 		t.Fatalf("SetupFile 失败: %v", err)
 	}
 	defer func() { _ = p.Shutdown(ctx) }()
-	if p.LoggerProvider() != nil {
+	if p.loggerProvider != nil {
 		t.Fatal("SetupFile 不应创建 OTLP LoggerProvider")
 	}
 	attrs := map[string]string{}
-	for _, kv := range p.Resource().Attributes() {
+	for _, kv := range p.resource.Attributes() {
 		attrs[string(kv.Key)] = kv.Value.AsString()
 	}
 	if attrs["service.name"] != "mall-monolith" || attrs["service.version"] != "1.0.0" || attrs["service.instance.id"] != "shop-01" || attrs["deployment.environment.name"] != "development" {

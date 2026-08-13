@@ -65,7 +65,7 @@ go run ./example/minimal
 得到一条可直接检索的 JSONL 事件：
 
 ```json
-{"timestamp":"2026-08-11T15:00:00Z","level":"INFO","msg":"business","service.name":"mall-monolith","deployment.environment.name":"development","trace_id":"...","span_id":"...","event.name":"order.payment.succeeded","app.result":"success"}
+{"timestamp":"2026-08-11T15:00:00Z","level":"INFO","type":"business","service.name":"mall-monolith","deployment.environment.name":"development","trace_id":"...","span_id":"...","event.name":"order.payment.succeeded","app.result":"success"}
 ```
 
 切换到 OTLP Writer 后，`severity`、`EventName`、`timestamp` 和 span context 会进入 OTel LogRecord 顶层；业务属性继续保持结构化，不会退化成拼接字符串。
@@ -156,15 +156,15 @@ if err := w.Close(ctx); err != nil {
 | 🩺 | `ProbeEvent` | 健康检查与运行状态 | readiness、liveness、依赖探测 |
 
 ```text
-事件名三段式结构（`msg` 已承载粗分类）
+事件名结构：event.name MUST use the form <domain>.<subject>.<event>（`type` 已承载粗分类）
 
 http.request.completed
-   │      │      └── 动作 action
-   │      └───────── 对象 object
-   └──────────────── 领域 domain
+   │      │      └── <event> 注册的 Event Type
+   │      └───────── <subject> 对象
+   └──────────────── <domain> 领域
 ```
 
-`event.name` 使用「领域.对象.事实」三段式，首段不得是 `access` / `business` / `error` / `security` / `audit` / `probe`；这些粗分类只由 `msg` 表达。框架级事件名由核心包维护，领域事件由接入方自建注册表。
+`event.name` MUST use the form `<domain>.<subject>.<event>`（正则 `EventNamePattern` 校验）；`<event>` MUST 是注册的 Event Type（稳定语义发生，唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；首段不得是 `access` / `business` / `error` / `security` / `audit` / `probe`，这些粗分类只由 `type` 表达。框架级事件名由核心包维护，领域事件由接入方自建注册表。
 
 ---
 
@@ -239,7 +239,7 @@ log 包以标准库 `log/slog` 为属性载体。OTel 依赖集中在转换、Wr
 
 AccessEvent 记录 method、path、status、latency 等请求事实，BusinessEvent 记录领域动作与结果，两者不是重复日志。即使业务结果为 success，运营仍需要 AccessEvent 计算请求量、成功率、延迟和容量，并在 trace 被采样时保留可检索的请求全貌。
 
-高流量服务只有在已有网关全量 access，或明确接受成功请求的事件关联不完整时，才应显式启用 access 采样；一旦启用，就不再保证每个 HTTP 语义事件都有 AccessEvent。失败结果仍由 `ResultKeepSampler` 强制保留：
+高流量服务只有在已有网关全量 access，或明确接受成功请求的事件关联不完整时，才应显式启用 access 采样；一旦启用，就不再保证每个 HTTP 语义事件都有 AccessEvent。失败结果仍由 `ResultKeepSampler` 高优先级保留（Sampling/Retention Policy 层 SHOULD）：
 
 ```go
 log.WithSampler(log.NewEventTypeKeepSampler(
@@ -248,7 +248,7 @@ log.WithSampler(log.NewEventTypeKeepSampler(
 ))
 ```
 
-`EventKeepSampler` 仍保留用于按领域前缀采样；旧的类别前缀配置会按 `msg` 兼容识别。启用任意 AccessEvent 采样策略后，不再保证每个 HTTP 语义事件都有 AccessEvent。
+`EventKeepSampler` 仍保留用于按领域前缀采样；旧的类别前缀配置会按 `type` 兼容识别。启用任意 AccessEvent 采样策略后，不再保证每个 HTTP 语义事件都有 AccessEvent。
 
 ---
 

@@ -43,12 +43,12 @@ func TestRecoverCatchesPanicAndEmitsErrorEvent(t *testing.T) {
 		t.Errorf("request_id = %v, want req-panic-1", resp["request_id"])
 	}
 
-	if len(w.msgs) != 1 || w.msgs[0] != "error" {
-		t.Fatalf("msgs = %v, want [error]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "error" {
+		t.Fatalf("eventTypes = %v, want [error]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", "runtime.panic.occurred")
-	attrString(t, attrs, "error.type", "runtime.panic")
+	attrString(t, attrs, "error.type", "INTERNAL")
 	attrString(t, attrs, "level", "ERROR")
 	attrString(t, attrs, "exception.message", "boom")
 	if stack, ok := attrs["exception.stacktrace"].(slog.Value); !ok || stack.String() == "" {
@@ -76,8 +76,8 @@ func TestRecoverNilPassthrough(t *testing.T) {
 	if rec.Body.String() != "ok" {
 		t.Errorf("body = %q, want ok", rec.Body.String())
 	}
-	if len(w.msgs) != 0 {
-		t.Errorf("无 panic 不应写错误事件，实际 %v", w.msgs)
+	if len(w.eventTypes) != 0 {
+		t.Errorf("无 panic 不应写错误事件，实际 %v", w.eventTypes)
 	}
 }
 
@@ -138,7 +138,7 @@ func TestRecoverProjectorOverride(t *testing.T) {
 	if body["error"]["code"] != "internal_error" || body["error"]["message"] == "" {
 		t.Fatalf("body = %#v, want nested internal_error", body)
 	}
-	if len(w.msgs) != 1 || w.msgs[0] != "error" {
-		t.Fatalf("events = %v, want one error event", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "error" {
+		t.Fatalf("events = %v, want one error event", w.eventTypes)
 	}
 }

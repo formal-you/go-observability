@@ -28,8 +28,8 @@ func TestAccessLogWritesAccessEvent(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if len(w.msgs) != 1 || w.msgs[0] != "access" {
-		t.Fatalf("msgs = %v, want [access]", w.msgs)
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "access" {
+		t.Fatalf("eventTypes = %v, want [access]", w.eventTypes)
 	}
 	attrs := attrMap(w.attrsList[0])
 	want := []string{
@@ -58,8 +58,8 @@ func TestAccessLogSkipPaths(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if len(w.msgs) != 0 {
-		t.Errorf("跳过路径不应写日志，实际 %v", w.msgs)
+	if len(w.eventTypes) != 0 {
+		t.Errorf("跳过路径不应写日志，实际 %v", w.eventTypes)
 	}
 }
 
@@ -93,7 +93,7 @@ func TestAccessLogOutsideRecoverRecordsPanicResponse(t *testing.T) {
 	r := gin.New()
 	r.Use(AccessLog(AccessConfig{Logger: logger}))
 	r.Use(Recover(RecoverConfig{Logger: logger}))
-	r.Use(ErrorResponse(ErrorConfig{Logger: logger}))
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger, EventName: testErrEventName}))
 	r.GET("/panic", func(*gin.Context) { panic("boom") })
 
 	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
@@ -103,8 +103,8 @@ func TestAccessLogOutsideRecoverRecordsPanicResponse(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
 	}
-	if len(w.msgs) != 2 || w.msgs[0] != "error" || w.msgs[1] != "access" {
-		t.Fatalf("msgs = %v, want [error access]", w.msgs)
+	if len(w.eventTypes) != 2 || w.eventTypes[0] != "error" || w.eventTypes[1] != "access" {
+		t.Fatalf("eventTypes = %v, want [error access]", w.eventTypes)
 	}
 	accessAttrs := attrMap(w.attrsList[1])
 	if got, ok := accessAttrs["http.response.status_code"].(slog.Value); !ok || got.Int64() != http.StatusInternalServerError {

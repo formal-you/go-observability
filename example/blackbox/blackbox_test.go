@@ -22,7 +22,7 @@ import (
 	otlpwriter "github.com/formal-you/go-observability/writer/otlp"
 )
 
-const blackboxEventCount = 12
+const blackboxEventCount = 13
 
 // TestBlackboxJSONL 验证真实 HTTP/后台场景的扁平运营投影与跨事件关联。
 func TestBlackboxJSONL(t *testing.T) {
@@ -62,13 +62,15 @@ func TestBlackboxJSONL(t *testing.T) {
 	assertRequestScenario(t, events, report, requestBusinessSuccess,
 		[]string{"business", "access"}, []string{"order.payment.succeeded", "http.request.completed"})
 	assertRequestScenario(t, events, report, requestBusinessFailed,
-		[]string{"business", "access"}, []string{"http.request.rejected", "http.request.completed"})
+		[]string{"business", "access"}, []string{"order.create.stock_insufficient", "http.request.completed"})
 	assertBusinessRejectionCode(t, events)
 	assertRequestScenario(t, events, report, requestSystemError,
 		[]string{"error", "security", "audit", "access"},
-		[]string{"http.request.failed", "input.threat.detected", "input.anomaly.recorded", "http.request.completed"})
+		[]string{"user.role_update.database_timeout", "input.threat.detected", "input.anomaly.recorded", "http.request.completed"})
+	assertSystemErrorCode(t, events)
 	assertRequestScenario(t, events, report, requestPanic,
 		[]string{"error", "access"}, []string{"runtime.panic.occurred", "http.request.completed"})
+	assertPanicNoErrorCode(t, events)
 	assertBackgroundScenarios(t, events, report)
 	assertDistinctRequestTraces(t, report)
 	assertCanonicalOrder(t, lines)
@@ -77,8 +79,8 @@ func TestBlackboxJSONL(t *testing.T) {
 func assertBusinessRejectionCode(t *testing.T, events []map[string]any) {
 	t.Helper()
 	for _, event := range eventsForRequest(events, requestBusinessFailed) {
-		if event["msg"] == "business" {
-			assertString(t, event, "app.error_code", "ORDER.CREATE.STOCK_INSUFFICIENT")
+		if event["type"] == "business" {
+			assertString(t, event, "error.code", "ORDER.CREATE.STOCK_INSUFFICIENT")
 			return
 		}
 	}
@@ -107,12 +109,12 @@ func assertRequestScenario(
 		if _, exists := event["parent_span_id"]; exists {
 			t.Errorf("日志不应重复写入 parent_span_id: %v", event)
 		}
-		assertString(t, event, "msg", wantTypes[i])
+		assertString(t, event, "type", wantTypes[i])
 		assertString(t, event, "event.name", wantNames[i])
 		assertString(t, event, "trace_id", traceInfo.TraceID)
 		assertString(t, event, "span_id", traceInfo.SpanID)
 		assertString(t, event, "request_id", requestID)
-		if event["msg"] == "access" {
+		if event["type"] == "access" {
 			assertAccessShape(t, event)
 		} else {
 			assertNoHTTPFields(t, event)
@@ -136,7 +138,7 @@ func assertNoHTTPFields(t *testing.T, event map[string]any) {
 	t.Helper()
 	for _, key := range []string{"http.request.method", "url.path", "http.route", "http.response.status_code", "latency_ms"} {
 		if _, ok := event[key]; ok {
-			t.Errorf("%s 事件不应重复 access 字段 %s", event["msg"], key)
+			t.Errorf("%s 事件不应重复 access 字段 %s", event["type"], key)
 		}
 	}
 }
@@ -148,9 +150,11 @@ func assertBackgroundScenarios(t *testing.T, events []map[string]any, report *sc
 		scenario  string
 		eventName string
 		wantStack bool
+		wantCode  string
 	}{
-		{"background-mq", "messaging.publish.failed", true},
-		{"background-lock", "lock.acquire.failed", false},
+		{"background-mq", "messaging.publish.deadline_exceeded", true, "INFRA.MQ.PUBLISH_TIMEOUT"},
+		{"background-cache", "cache.read.unavailable", true, "INFRA.REDIS.UNAVAILABLE"},
+		{"background-lock", "lock.acquire.conflict", false, "LOCK.ACQUIRE.CONFLICT"},
 	} {
 		var found map[string]any
 		for _, event := range events {
@@ -180,7 +184,38 @@ func assertBackgroundScenarios(t *testing.T, events []map[string]any, report *sc
 		if !item.wantStack && hasStack && stack != "" {
 			t.Errorf("%s 不应包含 stacktrace", item.eventName)
 		}
+		if item.wantCode != "" {
+			assertString(t, found, "error.code", item.wantCode)
+		}
 	}
+}
+
+// assertSystemErrorCode 锁定基础设施故障的 SCOPE 归属：失败面是数据库时 error.code 必须
+// 落在 INFRA.*（ADR-0019），而不是包装它的业务模块 USER。
+func assertSystemErrorCode(t *testing.T, events []map[string]any) {
+	t.Helper()
+	for _, event := range eventsForRequest(events, requestSystemError) {
+		if event["type"] == "error" {
+			assertString(t, event, "error.code", "INFRA.MYSQL.QUERY_TIMEOUT")
+			return
+		}
+	}
+	t.Fatal("system error 缺少 ErrorEvent")
+}
+
+// assertPanicNoErrorCode 锁定 panic/INTERNAL 类不承载 error.code（ADR-0019）：
+// 定位靠 error.type=INTERNAL + event.name + stacktrace，不设具体错误码。
+func assertPanicNoErrorCode(t *testing.T, events []map[string]any) {
+	t.Helper()
+	for _, event := range eventsForRequest(events, requestPanic) {
+		if event["type"] == "error" {
+			if _, ok := event["error.code"]; ok {
+				t.Errorf("panic 事件不应承载 error.code: %v", event)
+			}
+			return
+		}
+	}
+	t.Fatal("panic 缺少 ErrorEvent")
 }
 
 func assertDistinctRequestTraces(t *testing.T, report *scenarioReport) {
@@ -277,7 +312,7 @@ func assertCanonicalOrder(t *testing.T, lines []string) {
 			continue
 		}
 		levelIndex := slices.Index(keys, "level")
-		msgIndex := slices.Index(keys, "msg")
+		msgIndex := slices.Index(keys, "type")
 		if levelIndex < 0 || msgIndex != levelIndex+1 {
 			t.Errorf("line %d keys=%v, want level 紧邻 msg", i+1, keys)
 		}

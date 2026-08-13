@@ -73,7 +73,7 @@ func TestErrorEncoder(t *testing.T) {
 		}
 	})
 	t.Run("system AppError hides detail", func(t *testing.T) {
-		err := errs.NewSystem(errs.TypeDBQueryTimeout, "find user: context deadline exceeded")
+		err := errs.NewSystem(errs.TypeDeadlineExceeded, "find user: context deadline exceeded")
 		status, body := encode(t, ErrorEncoder(), err)
 		if status != http.StatusInternalServerError {
 			t.Fatalf("status = %d, want 500", status)
@@ -82,7 +82,7 @@ func TestErrorEncoder(t *testing.T) {
 			t.Fatalf("message = %v, want fixed（不透传内部细节）", body["message"])
 		}
 		md, _ := body["metadata"].(map[string]any)
-		if md["error.type"] != "db.query_timeout" {
+		if md["error.type"] != "DEADLINE_EXCEEDED" {
 			t.Fatalf("metadata = %v", body["metadata"])
 		}
 	})
@@ -95,7 +95,7 @@ func TestErrorEncoder(t *testing.T) {
 			t.Fatalf("message = %v, want fixed", body["message"])
 		}
 		md, _ := body["metadata"].(map[string]any)
-		if md["error.type"] != "error.unknown" {
+		if md["error.type"] != "UNKNOWN" {
 			t.Fatalf("metadata = %v", body["metadata"])
 		}
 	})
@@ -129,7 +129,7 @@ func TestErrorLog(t *testing.T) {
 	t.Run("emits event and propagates error", func(t *testing.T) {
 		w := &captureWriter{}
 		logger := log.NewLogger(w)
-		mw := ErrorLog(logger)
+		mw := ErrorLog(logger, WithEventName(log.NewEventName("todo", "lookup", "rejected")))
 
 		wantErr := errs.NewBusiness("todo_not_found", errs.ErrorType("business.todo.not_found"), "todo not found")
 		next := func(context.Context, any) (any, error) { return nil, wantErr }
@@ -145,7 +145,7 @@ func TestErrorLog(t *testing.T) {
 			t.Fatalf("events = %d, want 1", len(w.attrsList))
 		}
 		attrs := attrMapOf(w.attrsList[0])
-		if attrs["event.name"] != "http.request.rejected" {
+		if attrs["event.name"] != "todo.lookup.rejected" {
 			t.Fatalf("event.name = %v", attrs["event.name"])
 		}
 		if attrs["error.type"] != "business.todo.not_found" {
@@ -182,7 +182,7 @@ func TestErrorLog(t *testing.T) {
 	t.Run("success emits nothing", func(t *testing.T) {
 		w := &captureWriter{}
 		logger := log.NewLogger(w)
-		mw := ErrorLog(logger)
+		mw := ErrorLog(logger, WithEventName(log.NewEventName("todo", "lookup", "rejected")))
 		_, err := mw(func(context.Context, any) (any, error) { return "ok", nil })(context.Background(), nil)
 		if err != nil {
 			t.Fatalf("err = %v, want nil", err)
@@ -228,7 +228,7 @@ func TestGRPCErrorMapper(t *testing.T) {
 		}
 	})
 	t.Run("system AppError hides detail", func(t *testing.T) {
-		err := errs.NewSystem(errs.TypeDBQueryTimeout, "find user: context deadline exceeded")
+		err := errs.NewSystem(errs.TypeDeadlineExceeded, "find user: context deadline exceeded")
 		mw := GRPCErrorMapper()
 		_, got := mw(func(context.Context, any) (any, error) { return nil, err })(context.Background(), nil)
 		st, _ := status.FromError(got)

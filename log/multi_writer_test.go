@@ -28,11 +28,11 @@ func TestMultiWriterWritesToAll(t *testing.T) {
 	if err := w.Write(context.Background(), "business", slog.String("app.result", "success")); err != nil {
 		t.Fatalf("Write err = %v", err)
 	}
-	if len(a.msgs) != 1 || a.msgs[0] != "business" {
-		t.Errorf("writer a msgs = %v, want [business]", a.msgs)
+	if len(a.eventTypes) != 1 || a.eventTypes[0] != "business" {
+		t.Errorf("writer a eventTypes = %v, want [business]", a.eventTypes)
 	}
-	if len(b.msgs) != 1 || b.msgs[0] != "business" {
-		t.Errorf("writer b msgs = %v, want [business]", b.msgs)
+	if len(b.eventTypes) != 1 || b.eventTypes[0] != "business" {
+		t.Errorf("writer b eventTypes = %v, want [business]", b.eventTypes)
 	}
 }
 
@@ -48,8 +48,8 @@ func TestMultiWriterAggregatesErrors(t *testing.T) {
 	if !errors.Is(err, errMultiB) || !errors.Is(err, errMultiC) {
 		t.Fatalf("聚合错误应包含 b/c，实际: %v", err)
 	}
-	if len(a.msgs) != 1 {
-		t.Errorf("失败 writer 不应阻断其余 writer，a.msgs = %v", a.msgs)
+	if len(a.eventTypes) != 1 {
+		t.Errorf("失败 writer 不应阻断其余 writer，a.eventTypes = %v", a.eventTypes)
 	}
 }
 
@@ -59,7 +59,7 @@ func TestMultiWriterSkipsNil(t *testing.T) {
 	if err := w.Write(context.Background(), "business"); err != nil {
 		t.Fatalf("Write err = %v", err)
 	}
-	if len(a.msgs) != 1 {
-		t.Errorf("nil writer 应被跳过，a.msgs = %v", a.msgs)
+	if len(a.eventTypes) != 1 {
+		t.Errorf("nil writer 应被跳过，a.eventTypes = %v", a.eventTypes)
 	}
 }

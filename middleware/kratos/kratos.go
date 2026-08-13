@@ -40,7 +40,8 @@ type options struct {
 }
 
 func defaultOptions() options {
-	return options{eventNameResolver: httperr.DefaultEventNameResolver, statusForErr: httperr.StatusForError}
+	// 框架不提供泛化错误事件名（ADR-0018）：默认无 resolver，ErrorLog 需经 WithEventName / WithEventNameResolver 配置，否则不写错误事件。
+	return options{statusForErr: httperr.StatusForError}
 }
 
 // WithEventName 设置固定错误事实名并覆盖默认 resolver。
@@ -120,6 +121,9 @@ func ErrorLog(logger *log.Logger, opts ...Option) middleware.Middleware {
 			eventName := o.eventName
 			if o.eventNameResolver != nil {
 				eventName = o.eventNameResolver(err)
+			}
+			if eventName == "" {
+				return reply, err
 			}
 			logger.Emit(ctx, log.EventFromError(eventName, err, md))
 			return reply, err

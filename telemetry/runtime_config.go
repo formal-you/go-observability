@@ -14,6 +14,7 @@ import (
 	"github.com/formal-you/go-observability/writer/file"
 )
 
+// 默认值属于 SDK 装配策略，不等同于 Collector 的 batch 或日志事件 sampling。
 const defaultEndpoint = "127.0.0.1:4317"
 
 const (
@@ -26,6 +27,7 @@ const (
 )
 
 func normalizeAndValidateConfig(cfg *Config) error {
+	// 先验证身份与出口，再补齐默认值，确保配置错误在创建任何 Exporter 前返回。
 	if strings.TrimSpace(cfg.ServiceName) == "" {
 		return errors.New("telemetry: service name is required")
 	}
@@ -71,6 +73,7 @@ func normalizeAndValidateConfig(cfg *Config) error {
 }
 
 func resourceForConfig(cfg Config) *resource.Resource {
+	// 显式 Resource 是高级注入点：一旦提供，就由调用方承担其属性完整性。
 	if cfg.Resource != nil {
 		return cfg.Resource
 	}
@@ -94,6 +97,8 @@ func resourceForConfig(cfg Config) *resource.Resource {
 }
 
 func resourceMetadata(res *resource.Resource) file.ResourceMetadata {
+	// file Writer 没有 OTel Resource 层，因此只投影稳定的进程级服务身份键。
+	// 其他 Resource Attributes 不复制到每条 JSONL，避免扩大文件日志字段面。
 	var metadata file.ResourceMetadata
 	if res == nil {
 		return metadata
@@ -113,17 +118,19 @@ func resourceMetadata(res *resource.Resource) file.ResourceMetadata {
 	return metadata
 }
 
-// EnabledFromEnvironment reads the legacy SDK disabled switch.
+// EnabledFromEnvironment 读取兼容入口使用的 OTEL_SDK_DISABLED 开关。
+// 环境变量值忽略首尾空白和大小写；只有 true 表示禁用。
 func EnabledFromEnvironment() bool {
 	return !strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_SDK_DISABLED")), "true")
 }
 
-// EndpointFromEnvironment reads the legacy OTLP endpoint or returns the local default.
+// EndpointFromEnvironment 读取兼容入口使用的 OTLP endpoint；未设置时返回本地默认地址。
 func EndpointFromEnvironment() string {
 	return defaultIfEmpty(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")), defaultEndpoint)
 }
 
 func endpointURL(endpoint string) (string, error) {
+	// 所有三种 OTLP signal 共用统一解析规则，避免不同 Exporter 对非法地址各自回退。
 	normalized, err := otlpendpoint.Parse(endpoint)
 	if err != nil {
 		return "", fmt.Errorf("telemetry: %w", err)

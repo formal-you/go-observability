@@ -22,6 +22,6 @@ curl -X POST http://127.0.0.1:8081/api/v1/orders -d '{}'
 tail -n 1 ./logs/nethttp-events.jsonl
 ```
 
-成功路径写 `http.request.completed`；错误路径额外写 `http.request.rejected`（业务拒绝 → WARN），
+成功路径写 `http.request.completed`；错误路径额外写 `order.create.stock_insufficient`（业务拒绝 → WARN），
 span/metrics 经全局 provider 输出（未配置 Collector 时 noop）。示例直接写 JSONL，不需要 Collector。
 生产封装还应处理代理 IP 信任边界、请求 ID 传播和 Writer 错误监控。

@@ -43,8 +43,18 @@ func TestSetupDisabledBlackBox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("disabled setup 不应报错: %v", err)
 	}
-	if p == nil || p.Resource() != nil || p.LoggerProvider() != nil {
+	if p == nil {
 		t.Fatalf("disabled 应返回空 Providers（Oracle: ACCEPT-B9-03）")
+	}
+	w, err := p.NewLogWriter(context.Background(), filepath.Join(t.TempDir(), "disabled.jsonl"))
+	if err != nil {
+		t.Fatalf("disabled 兼容 Runtime 应保留 file Writer: %v", err)
+	}
+	if _, ok := w.(*file.Writer); !ok {
+		t.Fatalf("disabled Writer = %T, want *file.Writer", w)
+	}
+	if closer, ok := w.(interface{ Close(context.Context) error }); ok {
+		_ = closer.Close(context.Background())
 	}
 }
 

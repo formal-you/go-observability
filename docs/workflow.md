@@ -31,6 +31,7 @@ git diff --check
 3. Issue 至少写明问题、范围与非范围、可观察验收条件、兼容性/安全影响和验证方式。不能用预设实现细节替代用户问题。
 4. 只有全部验收已实现并有证据时才关闭 Issue。多个 PR 共同完成一个 Issue 时，中间 PR 使用 `Refs #N`，最终 PR 才使用 `Closes #N`。
 5. 复杂需求在 `docs/issues/` 保存详细契约并回链远程 Issue；简单任务只建远程 Issue，避免为每个任务复制一份本地文档。
+6. 创建或更新 Issue 时设置一个 `type:*` 分类标签；本个人账号仓库用 Labels 模拟 Organization Issue Types，具体分类表和回退步骤见 [GitHub 远程协作实操](github-remote-workflow.md#issue-分类)。
 
 ### 2. 实施与创建 PR
 

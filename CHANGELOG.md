@@ -4,12 +4,27 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Gin `Abort(nil)` 的固定系统错误改为包初始化时构造并验证，请求路径只复用已验证错误，避免在请求处理中触发库内固定契约构造失败。
+- ErrorType 由 `domain.reason` 自定义词表迁移为 OTel/gRPC 标准枚举（gRPC canonical code，跨模块闭合枚举）：旧常量移除，映射如 `db.query_timeout → DEADLINE_EXCEEDED`、`db.connection_error → UNAVAILABLE`、`runtime.panic → INTERNAL`、`business.* → FAILED_PRECONDITION`；`SetStackPolicy` 改为按精确 code 覆盖。
+- 框架不再提供泛化错误事件名（ADR-0018 / 方案 C）：移除 `http.request.failed` / `http.request.rejected` / `rpc.request.failed` / `database.query.timed_out` 常量；HTTP/Gin/Kratos 错误出口必须由接入方经 `EventName` / `EventNameResolver` 提供具体事实名，`EventFromError` 对事件名做 `EventNamePattern` 正则校验（非法 panic）。
+- `error.code` 与 `event.name` 增加正则约束：`errs.ErrorCodePattern`（SCOPE.OPERATION.REASON）与 `log.EventNamePattern`（<domain>.<subject>.<event>），`Validate` 使用正则校验；EventName 注释明确 `<event>` 必须是注册的 Event Type、非自由文本、非生命周期 Stage。
+- `error.code` 明确单一文法 `SCOPE.OPERATION.REASON`（ADR-0019）：第三段统一 REASON、不分裂 cause/reason；SCOPE 命名空间新增统一基础设施 `INFRA`（OPERATION 承担组件名，如 `INFRA.REDIS.UNAVAILABLE`），业务/系统区分由 error.type 承担，依赖名继续由 `app.upstream_service` 承载；黑盒新增 INFRA 系统错误示例。
+- `error.code` SCOPE 归属由失败面决定（ADR-0019 补充）：业务/校验拒绝用业务模块，基础设施故障（DB/缓存/MQ/网络）用 `INFRA.*`（OPERATION=组件）；INTERNAL/panic 不承载 error.code；event.name 与 error.code 前两段软对齐（SHOULD，INFRA 与业务事件名不同源）。黑盒系统错误码迁移：`USER.ROLE_UPDATE.DB_TIMEOUT`→`INFRA.MYSQL.QUERY_TIMEOUT`、`MESSAGING.PUBLISH.DEADLINE_EXCEEDED`→`INFRA.MQ.PUBLISH_TIMEOUT`，`LOCK.ACQUIRE.CONFLICT`（并发冲突，非基础设施）保留领域 SCOPE。
+- 保留 `Result` / `app.result`
+- Writer 首个参数由 `msg` 改名为 `eventType`；file/stdout JSONL 输出键 `msg` 改为 `type`（粗分类列），`type` 加入保留键防 payload 覆盖；OTLP 仍映射 LogRecord.Body。
+（不做 event.outcome 改名/移除）；采样保留措辞改为 SHOULD：高价值失败/异常事件由 Sampling/Retention Policy 高优先级保留（SHOULD be retained，操作上需要时保证保留），不编码进 event.name / error.type 语义。
+- 修正 ADR 与当前设计的一致性：0001 关联/事件名术语、0004 备选方案 C 标记已采纳、0009 的 msg→type、0010 的 ErrorType 文法改为标准枚举（ADR-0016）、0013 堆栈覆盖改精确 code 与 INTERNAL 保持 must、0018 的 type 术语、README 索引。
+- 新增 ADR-0018（Event Name Convention）与 ADR-0017（保留 app.result / Sampling/Retention 独立层），并把三层事件模型（Event/Error/Sampling）同步到 README、architecture、otel-logs 等文档。
+
 ### Added
 
+- 新增 Error Registry：`errs.RegisterErrorCode` 注册 ErrorCode→ErrorType 固定映射（多对一），`ErrorCode.RegisteredErrorType` 反查；严格构造器对已注册码强制类型一致，未注册码保持既有行为。
 - 新增 `log.ManagedWriter`、`log.ManageWriter` 与托管 `MultiWriter`；`telemetry.Runtime.NewWriter` 现在返回具备幂等关闭能力的 Writer，保留仅实现 `Write` 的旧 Adapter 兼容性。
-- 新增严格错误值验证与配置式构造器：ErrorCode 使用 `SCOPE.OPERATION.REASON`，ErrorType 使用低基数 `domain.reason`，并支持保留 cause 链。
+- 新增严格错误值验证与配置式构造器：ErrorCode 使用 `SCOPE.OPERATION.REASON`，ErrorType 复用 OTel/gRPC 标准枚举（gRPC canonical code），并支持保留 cause 链。
 - 六类类型化事件、`Logger` / `Writer` 接口，以及 JSONL、stdout、OTLP Writer。
-- `AccessPayload` 新增 `RPCInfo`（semconv `rpc.*`）与框架级事件名 `rpc.request.completed` / `rpc.request.failed`，支持 gRPC 传输层访问/错误事件。
+- `AccessPayload` 新增 `RPCInfo`（semconv `rpc.*`）与框架级事件名 `rpc.request.completed`，支持 gRPC 传输层访问事件。
 - `errresp` 与 `recover` 中间件新增 `ResponseProjector` 配置：响应体与状态码可注入（默认保持扁平 `{code,message,request_id?}`），接入方可按自身 HTTP 契约投影。
 - 新增 `middleware/nethttp`：net/http 版统一错误收口（`ErrorResponse`/`Recover`/`SetError`，支持 `ResponseProjector`；Logger 为 nil 时只渲染不写事件）。
 - 新增 `middleware/metrics`：HTTP（net/http/Gin）与 gRPC 服务器指标中间件（`http.server.request.duration` / `rpc.server.duration`，semconv 1.41.0，默认全局 Meter，可注入）。
@@ -42,16 +57,17 @@
 - Error / Security / Audit payload 新增 `ExtraAttrs`（canonical 键守卫 + 保留键过滤）；新增框架级事实名 `input.threat.detected` / `input.anomaly.recorded` 与键 `app.input_field` / `app.input_hash` / `app.input_truncated`。
 
 ### Changed
+- 收紧 `telemetry.Runtime` 的推荐公共表面：`Resource()` / `LoggerProvider()` 标记 Deprecated 并移入兼容层；仓库内部与正式黑盒改用 `Tracer`、`Meter`、`NewWriter`、`Stats` 和生命周期方法，不再探测或持有 Runtime 内部 Provider。
 - `telemetry` 新增独立 `Runtime`、显式 `LogOutput` 与 `WriterConfig`；构造不再修改 OTel 全局状态，需显式 `InstallGlobal`，旧 `Setup*` 入口标记 Deprecated。
 - 仓库生产示例和正式黑盒迁移到严格错误构造器；旧错误构造器与 SystemOption 保留为 Deprecated 兼容入口。
 - `event.name` 从重复 `msg` 的「类别.模块.操作」调整为「领域.对象.事实」，并禁止六类 EventType 作为首段；HTTP 错误出口按错误 Kind 默认选择 `http.request.rejected` / `http.request.failed`。
-- BizError 与 SystemError 的稳定具体错误码统一投影到 `app.error_code`；旧 `app.business_code` / `app.operation` 不再输出，旧 Go 字段仅保留源码兼容输入。
+- BizError 与 SystemError 的稳定具体错误码统一投影到 `error.code`；旧 `app.business_code` / `app.operation` 不再输出，旧 Go 字段仅保留源码兼容输入。
 - 默认运维建议改为 HTTP AccessEvent 全量保留（健康检查用 `SkipPaths` 排除）；成功 access 概率采样保留为使用方显式选择，并明确会放弃完整的跨事件 access 关联。
 - Resource 输出键修正为 `service.instance.id` / `deployment.environment.name`；`Environment` 默认值统一为 `development`。
 - `Subject.UserID` 的新事件输出从 `app.user_id` 迁移到 semconv `user.id`；旧常量保留为 Deprecated 兼容输入。
 - 升级 OpenTelemetry 依赖至 otel v1.45.0 / log v0.21.0（破坏性 API：log 包移除 `Value`/`KeyValue`，`attrkv` 迁移到 `attribute` 包）；Go 要求升至 1.26。
 
-- `errs` 堆栈策略可配置：新增 `errs.SetStackPolicy`，使用方可按 `error.type` 前缀覆盖默认策略（最长前缀优先，空 map = 库内置默认）；`NewSystem` 构造采集与 `error_project` 事件渲染均跟随同一策略。
+- `errs` 堆栈策略可配置：新增 `errs.SetStackPolicy`，使用方可按 `error.type` 精确 code 覆盖默认策略（空 map = 库内置默认）；`NewSystem` 构造采集与 `error_project` 事件渲染均跟随同一策略。
 - 项目字段前缀统一为 `app.*`；电商等领域事件从核心包移至使用方示例。
 - OpenTelemetry 属性键对齐 Semantic Conventions 1.41.0。
 - file/stdout 与 OTLP 使用各自适合的字段投影，OTLP 顶层承载时间、严重级别、EventName 和 span context。

@@ -29,7 +29,7 @@ type ErrorConfig struct {
 	EventName log.EventName
 
 	// EventNameResolver 按错误选择事实名，仅供 ErrorResponse 使用；优先于 EventName。
-	// nil 且 EventName 为空时按错误 Kind 使用 http.request.rejected / http.request.failed。
+	// nil 且 EventName 为空、Logger 非空时 panic：框架不提供泛化错误事件名（ADR-0018）。
 	EventNameResolver httperr.EventNameResolver
 
 	// GetRequestID 从请求提取 request_id：写入响应体并补充到事件 metadata；可选。
@@ -75,9 +75,13 @@ func ErrorResponse(cfg ErrorConfig) func(http.Handler) http.Handler {
 	eventNameResolver := cfg.EventNameResolver
 	if eventNameResolver == nil {
 		if cfg.EventName != "" {
+			if err := cfg.EventName.Validate(); err != nil {
+				panic("httperr: invalid EventName: " + err.Error())
+			}
 			eventNameResolver = func(error) log.EventName { return cfg.EventName }
-		} else {
-			eventNameResolver = httperr.DefaultEventNameResolver
+		} else if cfg.Logger != nil {
+			// ADR-0018：框架不提供泛化错误事件名，错误事件名由接入方定义并经正则校验。
+			panic("httperr: ErrorConfig 必须提供 EventName 或 EventNameResolver（Logger 非空时）")
 		}
 	}
 	projector := cfg.ResponseProjector
@@ -125,7 +129,7 @@ func Recover(cfg ErrorConfig) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if recovered := recover(); recovered != nil {
-					err := httperr.SystemErrorFromPanic(errs.TypeRuntimePanic, recovered)
+					err := httperr.SystemErrorFromPanic(errs.TypeInternal, recovered)
 					requestID := ""
 					if cfg.GetRequestID != nil {
 						requestID = cfg.GetRequestID(r)

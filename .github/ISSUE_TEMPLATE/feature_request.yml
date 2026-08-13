@@ -1,7 +1,7 @@
 name: 功能建议
 description: 提议新的公共能力或兼容性改进
 title: "[Feature] "
-labels: [enhancement]
+labels: [enhancement, "type:feature"]
 body:
   - type: textarea
     id: problem

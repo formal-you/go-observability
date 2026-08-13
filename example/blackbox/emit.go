@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -24,6 +25,23 @@ const (
 	requestSystemError     = "req-system-error"
 	requestPanic           = "req-panic"
 )
+
+// init 注册黑盒用到的 error.code → error.type 映射（Error Registry，启动期一次性写入）。
+// SCOPE 归属由失败面决定（ADR-0019）：业务拒绝用业务模块（ORDER）；系统/基础设施故障用
+// INFRA（OPERATION=组件：MYSQL/REDIS/MQ）；非基础设施系统类（如并发冲突 LOCK）保留领域 SCOPE。
+func init() {
+	mustRegisterErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT", errs.TypeFailedPrecondition)
+	mustRegisterErrorCode("INFRA.MYSQL.QUERY_TIMEOUT", errs.TypeDeadlineExceeded)
+	mustRegisterErrorCode("INFRA.MQ.PUBLISH_TIMEOUT", errs.TypeDeadlineExceeded)
+	mustRegisterErrorCode("LOCK.ACQUIRE.CONFLICT", errs.TypeAborted)
+	mustRegisterErrorCode("INFRA.REDIS.UNAVAILABLE", errs.TypeUnavailable)
+}
+
+func mustRegisterErrorCode(code errs.ErrorCode, typ errs.ErrorType) {
+	if err := errs.RegisterErrorCode(code, typ); err != nil {
+		panic("blackbox: register error code: " + err.Error())
+	}
+}
 
 // scenarioTrace 保存一次黑盒场景的真实 OTel span 标识，供人工联调和测试关联日志。
 type scenarioTrace struct {
@@ -103,6 +121,17 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 			Logger:       logger,
 			GetRequestID: requestID,
 			InputGuard:   blackboxInputGuard,
+			// ADR-0018：框架不提供泛化错误事件名，接入方经 resolver 提供具体事实名。
+			EventNameResolver: func(err error) log.EventName {
+				var appErr errs.AppError
+				if errors.As(err, &appErr) {
+					switch appErr.Kind() {
+					case errs.KindValidation, errs.KindBusiness:
+						return log.NewEventName("order", "create", "stock_insufficient")
+					}
+				}
+				return log.NewEventName("user", "role_update", "database_timeout")
+			},
 		}),
 	)
 
@@ -129,7 +158,7 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 	engine.POST("/api/v1/orders", func(c *gin.Context) {
 		pauseForLatency()
 		ginmw.Abort(c, mustBusinessError(errs.BusinessErrorConfig{
-			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "business.stock_insufficient", Message: "商品库存不足",
+			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "FAILED_PRECONDITION", Message: "商品库存不足",
 		}))
 	})
 
@@ -142,7 +171,8 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 		})
 		c.Request = c.Request.WithContext(ctx)
 		ginmw.Abort(c, mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeDBQueryTimeout, Message: "update user role: database timeout",
+			Type: errs.TypeDeadlineExceeded, Code: "INFRA.MYSQL.QUERY_TIMEOUT", Message: "update user role: database timeout",
+			Upstream: "mysql",
 		}))
 	})
 
@@ -203,21 +233,33 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	mqCtx, mqSpan := tracer.Start(ctx, "background mq publish")
 	report.record("background-mq", mqSpan.SpanContext())
 	logger.Emit(mqCtx, log.EventFromError(
-		log.NewEventName("messaging", "publish", "failed"),
+		log.NewEventName("messaging", "publish", "deadline_exceeded"),
 		mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeMQPublishFailed, Message: "publish order.created: deadline exceeded",
+			Type: errs.TypeDeadlineExceeded, Code: "INFRA.MQ.PUBLISH_TIMEOUT", Message: "publish order.created: deadline exceeded",
 			Upstream: "kafka", Retryable: true, Retries: 3, RetriesExhausted: true,
 		}),
 		log.EventMetadata{},
 	))
 	mqSpan.End()
 
+	cacheCtx, cacheSpan := tracer.Start(ctx, "background cache unavailable")
+	report.record("background-cache", cacheSpan.SpanContext())
+	logger.Emit(cacheCtx, log.EventFromError(
+		log.NewEventName("cache", "read", "unavailable"),
+		mustSystemError(errs.SystemErrorConfig{
+			Type: errs.TypeUnavailable, Code: "INFRA.REDIS.UNAVAILABLE", Message: "read cache order:pay:42: redis unavailable",
+			Upstream: "redis", Retryable: true, Retries: 2,
+		}),
+		log.EventMetadata{},
+	))
+	cacheSpan.End()
+
 	lockCtx, lockSpan := tracer.Start(ctx, "background lock conflict")
 	report.record("background-lock", lockSpan.SpanContext())
 	logger.Emit(lockCtx, log.EventFromError(
-		log.NewEventName("lock", "acquire", "failed"),
+		log.NewEventName("lock", "acquire", "conflict"),
 		mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeLockConflict, Message: "acquire lock order:pay:42 conflict",
+			Type: errs.TypeAborted, Code: "LOCK.ACQUIRE.CONFLICT", Message: "acquire lock order:pay:42 conflict",
 		}),
 		log.EventMetadata{},
 	))

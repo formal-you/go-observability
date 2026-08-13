@@ -49,7 +49,7 @@ type BusinessPayload struct {
 	ErrorType string // error.type：business.* / validation.failed（低基数失败类别）
 	Subject   Subject
 	Resource  Resource
-	ErrorCode string // app.error_code：稳定具体错误码。
+	ErrorCode string // error.code：稳定具体错误码。
 	// BusinessCode 已弃用：请使用 ErrorCode；仅作为源码兼容输入，不再输出 app.business_code。
 	BusinessCode    string
 	BusinessMessage string
@@ -75,7 +75,7 @@ func (e BusinessPayload) Attrs() []slog.Attr {
 	if errorCode == "" {
 		errorCode = e.BusinessCode
 	}
-	attrs = appendString(attrs, KeyAppErrorCode, errorCode)
+	attrs = appendString(attrs, KeyErrorCode, errorCode)
 	attrs = appendString(attrs, KeyAppBusinessMessage, e.BusinessMessage)
 	attrs = appendString(attrs, KeyCodeFunctionName, e.Source.Function)
 	attrs = appendString(attrs, KeyCodeFilePath, e.Source.Filepath)
@@ -96,7 +96,7 @@ var businessPayloadCanonicalKeys = map[string]struct{}{
 	string(KeyAppTenantID):        {},
 	string(KeyAppResourceType):    {},
 	string(KeyAppResourceID):      {},
-	string(KeyAppErrorCode):       {},
+	string(KeyErrorCode):          {},
 	string(KeyAppBusinessCode):    {},
 	string(KeyAppBusinessMessage): {},
 	string(KeyCodeFunctionName):   {},
@@ -124,7 +124,7 @@ type ErrorPayload struct {
 	ErrorMessage        string // exception.message
 	StackTrace          string // exception.stacktrace
 	StackTraceTruncated bool   // app.stacktrace_truncated，仅在 StackTrace 非空时输出
-	ErrorCode           string // app.error_code：可选业务关联码。
+	ErrorCode           string // error.code：可选业务关联码。
 	// Operation 已弃用：请使用 ErrorCode；仅作为源码兼容输入，不再输出 app.operation。
 	Operation        string
 	FailureOperation string
@@ -155,7 +155,7 @@ func (e ErrorPayload) Attrs() []slog.Attr {
 	if errorCode == "" {
 		errorCode = e.Operation
 	}
-	attrs = appendString(attrs, KeyAppErrorCode, errorCode)
+	attrs = appendString(attrs, KeyErrorCode, errorCode)
 	attrs = appendString(attrs, KeyAppFailureOperation, e.FailureOperation)
 	attrs = appendString(attrs, KeyAppRootCauseType, e.RootCauseType)
 	attrs = appendBool(attrs, KeyAppRetryable, e.Retryable)
@@ -179,7 +179,7 @@ var errorPayloadCanonicalKeys = map[string]struct{}{
 	string(KeyExceptionMessage):       {},
 	string(KeyExceptionStacktrace):    {},
 	string(KeyAppStacktraceTruncated): {},
-	string(KeyAppErrorCode):           {},
+	string(KeyErrorCode):              {},
 	string(KeyAppOperation):           {},
 	string(KeyAppFailureOperation):    {},
 	string(KeyAppRootCauseType):       {},
@@ -359,7 +359,7 @@ func (e ProbePayload) Attrs() []slog.Attr {
 	attrs = appendString(attrs, KeyHTTPRequestMethod, e.HTTP.Method)
 	attrs = appendInt(attrs, KeyHTTPResponseStatusCode, e.HTTP.StatusCode)
 	attrs = appendString(attrs, KeyAppProbeType, e.ProbeType)
-	attrs = appendString(attrs, KeyAppErrorCode, e.ErrorCode)
+	attrs = appendString(attrs, KeyErrorCode, e.ErrorCode)
 	attrs = appendString(attrs, KeyAppSource, e.Source)
 	return appendString(attrs, KeyAppResult, string(e.Result))
 }

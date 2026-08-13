@@ -40,7 +40,7 @@ func TestBusinessEventFromValidationError(t *testing.T) {
 	if ev.Data.EventName != EventName("order.creation.rejected") {
 		t.Errorf("EventName = %q, want %q", ev.Data.EventName, EventName("order.creation.rejected"))
 	}
-	if ev.Data.ErrorType != "validation.failed" {
+	if ev.Data.ErrorType != "INVALID_ARGUMENT" {
 		t.Errorf("ErrorType = %q, want validation.failed", ev.Data.ErrorType)
 	}
 	if ev.Data.ErrorCode != "" {
@@ -60,11 +60,11 @@ func TestBusinessEventFromValidationError(t *testing.T) {
 	}
 
 	attrs := attrMap(ev.Attrs())
-	if got := attrValue(t, attrs, "error.type").String(); got != "validation.failed" {
+	if got := attrValue(t, attrs, "error.type").String(); got != "INVALID_ARGUMENT" {
 		t.Errorf("error.type = %q, want validation.failed", got)
 	}
-	if _, ok := attrs["app.error_code"]; ok {
-		t.Error("app.error_code 不应输出（validation 无 ErrCode）")
+	if _, ok := attrs["error.code"]; ok {
+		t.Error("error.code 不应输出（validation 无 ErrCode）")
 	}
 	if got := attrValue(t, attrs, "code.function.name").String(); got != "orderService.Create" {
 		t.Errorf("code.function.name = %q, want orderService.Create", got)
@@ -84,10 +84,10 @@ func TestBusinessEventFromValidationError(t *testing.T) {
 // ErrorCode 与 ErrorType（business.*）保留，调用方已设 Level 不被覆盖。
 func TestBusinessEventFromBusinessError(t *testing.T) {
 	const code errs.ErrorCode = "ORDER.CREATE.STOCK_INSUFFICIENT"
-	err := errs.NewBusiness(code, errs.ErrorType("business.stock_insufficient"), "库存不足，当前仅剩 2 件")
+	err := errs.NewBusiness(code, errs.ErrorType("FAILED_PRECONDITION"), "库存不足，当前仅剩 2 件")
 	ev := businessEventFromError(EventName("order.creation.rejected"), err, EventMetadata{Level: LevelInfo})
 
-	if ev.Data.ErrorType != "business.stock_insufficient" {
+	if ev.Data.ErrorType != "FAILED_PRECONDITION" {
 		t.Errorf("ErrorType = %q, want business.stock_insufficient", ev.Data.ErrorType)
 	}
 	if ev.Data.ErrorCode != string(code) {
@@ -101,10 +101,10 @@ func TestBusinessEventFromBusinessError(t *testing.T) {
 	}
 
 	attrs := attrMap(ev.Attrs())
-	if got := attrValue(t, attrs, "error.type").String(); got != "business.stock_insufficient" {
+	if got := attrValue(t, attrs, "error.type").String(); got != "FAILED_PRECONDITION" {
 		t.Errorf("error.type = %q, want business.stock_insufficient", got)
 	}
-	if got := attrValue(t, attrs, "app.error_code").String(); got != string(code) {
+	if got := attrValue(t, attrs, "error.code").String(); got != string(code) {
 		t.Errorf("app.error_code = %q, want %q", got, code)
 	}
 }
@@ -116,7 +116,7 @@ func TestErrorEventFromSystemError(t *testing.T) {
 	src := errs.Source{Function: "orderRepo.FindByID", Filepath: "internal/repo/order.go", Line: 17}
 	stack := "goroutine 1 [running]:\n...首层摘录"
 	err := errs.NewSystem(
-		errs.TypeDBQueryTimeout,
+		errs.TypeDeadlineExceeded,
 		"mysql: context deadline exceeded",
 		errs.WithRetry(2, false),
 		errs.WithUpstream("order-db"),
@@ -127,12 +127,12 @@ func TestErrorEventFromSystemError(t *testing.T) {
 		TraceID: "0123456789abcdef0123456789abcdef",
 		SpanID:  "0123456789abcdef",
 	}
-	ev := sysEventFromError(EventNameDatabaseQueryTimedOut, err, md)
+	ev := sysEventFromError(EventName("database.query.deadline_exceeded"), err, md)
 
-	if ev.Data.EventName != EventNameDatabaseQueryTimedOut {
-		t.Errorf("EventName = %q, want %q", ev.Data.EventName, EventNameDatabaseQueryTimedOut)
+	if ev.Data.EventName != EventName("database.query.deadline_exceeded") {
+		t.Errorf("EventName = %q, want %q", ev.Data.EventName, EventName("database.query.deadline_exceeded"))
 	}
-	if ev.Data.ErrorType != "db.query_timeout" {
+	if ev.Data.ErrorType != "DEADLINE_EXCEEDED" {
 		t.Errorf("ErrorType = %q, want db.query_timeout", ev.Data.ErrorType)
 	}
 	if ev.Data.ErrorMessage != "mysql: context deadline exceeded" {
@@ -167,7 +167,7 @@ func TestErrorEventFromSystemError(t *testing.T) {
 	}
 
 	attrs := attrMap(ev.Attrs())
-	if got := attrValue(t, attrs, "error.type").String(); got != "db.query_timeout" {
+	if got := attrValue(t, attrs, "error.type").String(); got != "DEADLINE_EXCEEDED" {
 		t.Errorf("error.type = %q, want db.query_timeout", got)
 	}
 	if got := attrValue(t, attrs, "app.retryable").Bool(); !got {
@@ -176,23 +176,23 @@ func TestErrorEventFromSystemError(t *testing.T) {
 	if got := attrValue(t, attrs, "app.retry_count").Int64(); got != 2 {
 		t.Errorf("app.retry_count = %d, want 2", got)
 	}
-	if _, ok := attrs["app.error_code"]; ok {
-		t.Error("app.error_code 不应输出（未设置 ErrCode）")
+	if _, ok := attrs["error.code"]; ok {
+		t.Error("error.code 不应输出（未设置 ErrCode）")
 	}
 	if got := attrValue(t, attrs, "app.result").String(); got != "error" {
 		t.Errorf("app.result = %q, want error", got)
 	}
 }
 
-// TestErrorEventCodeFromErrCode 验证 SystemError 可选 ErrCode 映射到 app.error_code。
+// TestErrorEventCodeFromErrCode 验证 SystemError 可选 ErrCode 映射到 error.code。
 func TestErrorEventCodeFromErrCode(t *testing.T) {
-	err := errs.NewSystem(errs.TypeHTTPUpstream5xx, "payment-gateway: 502", errs.WithCode("ORDER.PAY.UPSTREAM_5XX"))
+	err := errs.NewSystem(errs.TypeUnavailable, "payment-gateway: 502", errs.WithCode("ORDER.PAY.UPSTREAM_5XX"))
 	ev := sysEventFromError(EventName("payment.gateway.failed"), err, EventMetadata{})
 	if ev.Data.ErrorCode != "ORDER.PAY.UPSTREAM_5XX" {
 		t.Errorf("ErrorCode = %q, want ORDER.PAY.UPSTREAM_5XX", ev.Data.ErrorCode)
 	}
 	attrs := attrMap(ev.Attrs())
-	if got := attrValue(t, attrs, "app.error_code").String(); got != "ORDER.PAY.UPSTREAM_5XX" {
+	if got := attrValue(t, attrs, "error.code").String(); got != "ORDER.PAY.UPSTREAM_5XX" {
 		t.Errorf("app.error_code = %q, want ORDER.PAY.UPSTREAM_5XX", got)
 	}
 	for _, legacy := range []string{"app.operation", "app.business_code"} {
@@ -206,12 +206,12 @@ func TestErrorEventCodeFromErrCode(t *testing.T) {
 // stock.race 属 StackOptional，即使 err 已带堆栈也不投影。
 func TestErrorEventStackOnlyWhenMust(t *testing.T) {
 	err := errs.NewSystem(
-		errs.TypeStockRace,
+		errs.TypeAborted,
 		"库存扣减冲突",
 		errs.WithRetry(1, false),
 		errs.WithStack("不应投影的堆栈"),
 	)
-	ev := sysEventFromError(EventNameDatabaseQueryTimedOut, err, EventMetadata{})
+	ev := sysEventFromError(EventName("database.query.deadline_exceeded"), err, EventMetadata{})
 	if ev.Data.StackTrace != "" {
 		t.Errorf("StackTrace = %q, want empty（stock.race 非 StackMust）", ev.Data.StackTrace)
 	}
@@ -226,8 +226,8 @@ func TestEventFromErrorDispatchesByKind(t *testing.T) {
 		want EventType
 	}{
 		{"validation", errs.NewValidation("name is required"), EventBusiness},
-		{"business", errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", errs.ErrorType("business.stock_insufficient"), "库存不足"), EventBusiness},
-		{"system", errs.NewSystem(errs.TypeRedisTimeout, "redis timeout"), EventError},
+		{"business", errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", errs.ErrorType("FAILED_PRECONDITION"), "库存不足"), EventBusiness},
+		{"system", errs.NewSystem(errs.TypeDeadlineExceeded, "redis timeout"), EventError},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -259,9 +259,9 @@ func TestProjectedLevelDefaults(t *testing.T) {
 	}{
 		{"validation", errs.NewValidation("v"), LevelWarn},
 		{"business", errs.NewBusiness("C", errs.ErrorType("business.x"), "b"), LevelWarn},
-		{"system retrying", errs.NewSystem(errs.TypeDBQueryTimeout, "t", errs.WithRetry(1, false)), LevelWarn},
-		{"system exhausted", errs.NewSystem(errs.TypeMQRetryExhausted, "e", errs.WithRetry(5, true)), LevelError},
-		{"system not retryable", errs.NewSystem(errs.TypeRuntimePanic, "p"), LevelError},
+		{"system retrying", errs.NewSystem(errs.TypeDeadlineExceeded, "t", errs.WithRetry(1, false)), LevelWarn},
+		{"system exhausted", errs.NewSystem(errs.TypeResourceExhausted, "e", errs.WithRetry(5, true)), LevelError},
+		{"system not retryable", errs.NewSystem(errs.TypeInternal, "p"), LevelError},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -283,8 +283,8 @@ func TestCallerLevelNotOverridden(t *testing.T) {
 		t.Errorf("business Level = %q, want ERROR（调用方已设）", got)
 	}
 
-	sys := EventFromError(EventNameDatabaseQueryTimedOut,
-		errs.NewSystem(errs.TypeDBQueryTimeout, "t", errs.WithRetry(1, false)),
+	sys := EventFromError(EventName("database.query.deadline_exceeded"),
+		errs.NewSystem(errs.TypeDeadlineExceeded, "t", errs.WithRetry(1, false)),
 		EventMetadata{Level: LevelError})
 	if got := eventLevel(sys); got != LevelError {
 		t.Errorf("system Level = %q, want ERROR（调用方已设）", got)
@@ -310,7 +310,7 @@ func (e typedNilErrorWrapper) Unwrap() error { return e.cause }
 func TestErrorProjectionConcreteForms(t *testing.T) {
 	src := errs.Source{Function: "payment.Call", Filepath: "payment/client.go", Line: 19}
 	base := errs.NewSystem(
-		errs.TypeHTTPUpstreamTimeout,
+		errs.TypeDeadlineExceeded,
 		"timeout",
 		errs.WithRetry(3, true),
 		errs.WithUpstream("payment"),
@@ -328,7 +328,7 @@ func TestErrorProjectionConcreteForms(t *testing.T) {
 		{name: "wrapped pointer", err: wrapper},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ev := sysEventFromError(EventNameDatabaseQueryTimedOut, tc.err, EventMetadata{})
+			ev := sysEventFromError(EventName("database.query.deadline_exceeded"), tc.err, EventMetadata{})
 			if !ev.Data.Retryable || ev.Data.RetryCount != 3 {
 				t.Errorf("retry = %v/%d, want true/3", ev.Data.Retryable, ev.Data.RetryCount)
 			}
@@ -369,7 +369,7 @@ func TestBusinessProjectionConcreteForms(t *testing.T) {
 func TestEventFromWrappedErrors(t *testing.T) {
 	systemSource := errs.Source{Function: "payment.Call", Filepath: "payment/client.go", Line: 20}
 	system := errs.NewSystem(
-		errs.TypeHTTPUpstreamTimeout,
+		errs.TypeDeadlineExceeded,
 		"timeout",
 		errs.WithRetry(4, true),
 		errs.WithUpstream("payment"),
@@ -377,7 +377,7 @@ func TestEventFromWrappedErrors(t *testing.T) {
 		errs.WithSource(systemSource),
 	)
 	systemEvent, ok := EventFromError(
-		EventNameDatabaseQueryTimedOut,
+		EventName("database.query.deadline_exceeded"),
 		fmt.Errorf("checkout failed: %w", &system),
 		EventMetadata{},
 	).(ErrorEvent)
@@ -411,7 +411,7 @@ func TestEventFromWrappedErrors(t *testing.T) {
 
 // TestEventFromPlainError 验证非 AppError 仍按系统错误安全投影。
 func TestEventFromPlainError(t *testing.T) {
-	ev, ok := EventFromError(EventNameDatabaseQueryTimedOut, fmt.Errorf("plain"), EventMetadata{}).(ErrorEvent)
+	ev, ok := EventFromError(EventName("database.query.deadline_exceeded"), fmt.Errorf("plain"), EventMetadata{}).(ErrorEvent)
 	if !ok {
 		t.Fatal("plain error did not project to ErrorEvent")
 	}
@@ -431,7 +431,7 @@ func TestErrorProjectionTypedNilFallsBackSafely(t *testing.T) {
 		{name: "wrapped", err: typedNilErrorWrapper{cause: systemErr}, wantMessage: "wrapped typed-nil error"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ev, ok := EventFromError(EventNameDatabaseQueryTimedOut, tc.err, EventMetadata{}).(ErrorEvent)
+			ev, ok := EventFromError(EventName("database.query.deadline_exceeded"), tc.err, EventMetadata{}).(ErrorEvent)
 			if !ok {
 				t.Fatalf("typed-nil error projected as %T, want ErrorEvent", ev)
 			}
@@ -474,9 +474,9 @@ func TestLevelOfRuleTable(t *testing.T) {
 	}{
 		{"validation", errs.NewValidation("v"), LevelWarn},
 		{"business", errs.NewBusiness("C", errs.ErrorType("business.x"), "b"), LevelWarn},
-		{"system retrying", errs.NewSystem(errs.TypeDBQueryTimeout, "t", errs.WithRetry(1, false)), LevelWarn},
-		{"system exhausted", errs.NewSystem(errs.TypeMQRetryExhausted, "e", errs.WithRetry(5, true)), LevelError},
-		{"system not retryable", errs.NewSystem(errs.TypeRuntimePanic, "p"), LevelError},
+		{"system retrying", errs.NewSystem(errs.TypeDeadlineExceeded, "t", errs.WithRetry(1, false)), LevelWarn},
+		{"system exhausted", errs.NewSystem(errs.TypeResourceExhausted, "e", errs.WithRetry(5, true)), LevelError},
+		{"system not retryable", errs.NewSystem(errs.TypeInternal, "p"), LevelError},
 		{"unknown kind falls back to error", levelOfUnknownKind{}, LevelError},
 	}
 	for _, tc := range cases {
@@ -494,18 +494,18 @@ type levelOfUnknownKind struct{}
 
 func (levelOfUnknownKind) Kind() errs.ErrorKind      { return errs.ErrorKind("unknown") }
 func (levelOfUnknownKind) Error() string             { return "unknown kind" }
-func (levelOfUnknownKind) ErrorType() errs.ErrorType { return errs.TypeRuntimePanic }
+func (levelOfUnknownKind) ErrorType() errs.ErrorType { return errs.TypeInternal }
 func (levelOfUnknownKind) ErrCode() errs.ErrorCode   { return "" }
 func (levelOfUnknownKind) Unwrap() error             { return nil }
 
 func TestErrorEventStackRespectsStackPolicyOverride(t *testing.T) {
-	// 使用方把 db. 覆盖为 none：即使显式 WithStack，事件也不渲染 StackTrace。
-	errs.SetStackPolicy(map[string]errs.StackPolicy{"db.": errs.StackNone})
+	// 使用方把 DEADLINE_EXCEEDED 覆盖为 none：即使显式 WithStack，事件也不渲染 StackTrace。
+	errs.SetStackPolicy(map[string]errs.StackPolicy{string(errs.TypeDeadlineExceeded): errs.StackNone})
 	t.Cleanup(func() { errs.SetStackPolicy(nil) })
 
-	err := errs.NewSystem(errs.TypeDBQueryTimeout, "query timeout after 5s", errs.WithStack("不应投影的堆栈"))
-	ev := sysEventFromError(EventNameDatabaseQueryTimedOut, err, EventMetadata{})
+	err := errs.NewSystem(errs.TypeDeadlineExceeded, "query timeout after 5s", errs.WithStack("不应投影的堆栈"))
+	ev := sysEventFromError(EventName("database.query.deadline_exceeded"), err, EventMetadata{})
 	if ev.Data.StackTrace != "" {
-		t.Errorf("StackTrace = %q, want empty（db. 覆盖为 none）", ev.Data.StackTrace)
+		t.Errorf("StackTrace = %q, want empty（DEADLINE_EXCEEDED 覆盖为 none）", ev.Data.StackTrace)
 	}
 }

@@ -1,6 +1,6 @@
 # example/blackbox
 
-真实日志黑盒样例：file 模式由 `telemetry.NewFileRuntime` 在不连接 Collector 的情况下生成有效 span，通过 Gin 中间件执行四个 HTTP 请求，另生成两个后台错误场景。测试同时锁定带服务身份的 JSONL 运营投影与 OTLP LogRecord 语义。
+真实日志黑盒样例：file 模式由 `telemetry.NewFileRuntime` 在不连接 Collector 的情况下生成有效 span，通过 Gin 中间件执行四个 HTTP 请求，另生成三个后台错误场景。测试同时锁定带服务身份的 JSONL 运营投影与 OTLP LogRecord 语义。
 
 ## 本地 JSONL
 
@@ -30,11 +30,12 @@ go test ./example/blackbox -v
 | 场景 | 状态 | 必须记录的事件 |
 | --- | --- | --- |
 | 订单支付成功 | 200 | order.payment.succeeded + http.request.completed |
-| 库存不足 | 409 | BusinessEvent（http.request.rejected）+ http.request.completed |
+| 库存不足 | 409 | BusinessEvent（order.create.stock_insufficient）+ http.request.completed |
 | 高风险输入触发数据库故障 | 500 | ErrorEvent + SecurityEvent + AuditEvent + AccessEvent |
 | panic | 500 | runtime.panic.occurred + http.request.completed |
-| 后台 MQ 发布失败 | 无 HTTP | messaging.publish.failed，不伪造 AccessEvent/request_id |
-| 后台锁冲突 | 无 HTTP | lock.acquire.failed，不伪造 AccessEvent/request_id |
+| 后台 MQ 发布失败 | 无 HTTP | messaging.publish.deadline_exceeded，不伪造 AccessEvent/request_id |
+| 后台缓存不可用 | 无 HTTP | cache.read.unavailable，不伪造 AccessEvent/request_id |
+| 后台锁冲突 | 无 HTTP | lock.acquire.conflict，不伪造 AccessEvent/request_id |
 
 同一 HTTP 请求的事件共享 trace_id、span_id、request_id；HTTP method/path/status/latency 只在 AccessEvent 中出现。默认 Logger 不配置 Sampler，因此 business success 也始终有对应 AccessEvent。健康检查应使用 `AccessConfig.SkipPaths` 排除。
 
@@ -56,4 +57,4 @@ OTLP 模式固定 `TraceSampleRatio=1`、`service.name=go-observability-blackbox
 
 ## 字段顺序
 
-file/stdout 固定为 `timestamp -> level -> msg -> service metadata -> trace/span/request/latency -> event.name -> payload -> app.result`。黑盒测试会锁定 timestamp 首列及关键字段相对位置。
+file/stdout 固定为 `timestamp -> level -> type -> service metadata -> trace/span/request/latency -> event.name -> payload -> app.result`。黑盒测试会锁定 timestamp 首列及关键字段相对位置。

@@ -33,7 +33,7 @@ func TestWriterAppendsJSONLines(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("行数 = %d, want 2", len(lines))
 	}
-	if !strings.Contains(lines[0], `"http.request.method":"GET"`) || !strings.Contains(lines[0], `"msg":"access"`) {
+	if !strings.Contains(lines[0], `"http.request.method":"GET"`) || !strings.Contains(lines[0], `"type":"access"`) {
 		t.Errorf("line0 = %s", lines[0])
 	}
 	if !strings.Contains(lines[1], `"event.name":"order.payment.succeeded"`) {
@@ -42,7 +42,7 @@ func TestWriterAppendsJSONLines(t *testing.T) {
 }
 
 // TestWriteCanonicalOrder 验证 JSONL 行的固定字段顺序：
-// level → msg → 链路/延迟 → event.name → payload 字段 → app.result 收尾，
+// level → type → 链路/延迟 → event.name → payload 字段 → app.result 收尾，
 // 防止字段顺序退化成字典序或随构造顺序漂移。
 func TestWriteCanonicalOrder(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")

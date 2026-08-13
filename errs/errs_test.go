@@ -30,26 +30,22 @@ func TestErrorKindConstants(t *testing.T) {
 
 func TestErrorTypeConstants(t *testing.T) {
 	table := map[errs.ErrorType]string{
-		errs.TypeValidationFailed:        "validation.failed",
-		errs.TypeDBConnectionError:       "db.connection_error",
-		errs.TypeDBQueryTimeout:          "db.query_timeout",
-		errs.TypeDBDeadlock:              "db.deadlock",
-		errs.TypeRedisConnectionError:    "redis.connection_error",
-		errs.TypeRedisTimeout:            "redis.timeout",
-		errs.TypeMQPublishFailed:         "mq.publish_failed",
-		errs.TypeMQConsumeFailed:         "mq.consume_failed",
-		errs.TypeMQRetryExhausted:        "mq.retry_exhausted",
-		errs.TypeHTTPUpstream5xx:         "http.upstream_5xx",
-		errs.TypeHTTPUpstreamTimeout:     "http.upstream_timeout",
-		errs.TypeLockConflict:            "lock.conflict",
-		errs.TypeIdempotencyConflict:     "idempotency.conflict",
-		errs.TypeStockRace:               "stock.race",
-		errs.TypeDataJSONUnmarshal:       "data.json_unmarshal",
-		errs.TypeDataDuplicateKey:        "data.duplicate_key",
-		errs.TypeDataNotFound:            "data.not_found",
-		errs.TypeRuntimePanic:            "runtime.panic",
-		errs.TypeRuntimeContextCanceled:  "runtime.context_cancelled",
-		errs.TypeRuntimeDeadlineExceeded: "runtime.deadline_exceeded",
+		errs.TypeUnknown:            "UNKNOWN",
+		errs.TypeCancelled:          "CANCELLED",
+		errs.TypeInvalidArgument:    "INVALID_ARGUMENT",
+		errs.TypeDeadlineExceeded:   "DEADLINE_EXCEEDED",
+		errs.TypeNotFound:           "NOT_FOUND",
+		errs.TypeAlreadyExists:      "ALREADY_EXISTS",
+		errs.TypePermissionDenied:   "PERMISSION_DENIED",
+		errs.TypeResourceExhausted:  "RESOURCE_EXHAUSTED",
+		errs.TypeFailedPrecondition: "FAILED_PRECONDITION",
+		errs.TypeAborted:            "ABORTED",
+		errs.TypeOutOfRange:         "OUT_OF_RANGE",
+		errs.TypeUnimplemented:      "UNIMPLEMENTED",
+		errs.TypeInternal:           "INTERNAL",
+		errs.TypeUnavailable:        "UNAVAILABLE",
+		errs.TypeDataLoss:           "DATA_LOSS",
+		errs.TypeUnauthenticated:    "UNAUTHENTICATED",
 	}
 	for typ, want := range table {
 		if got := string(typ); got != want {
@@ -69,6 +65,9 @@ func TestErrorCodeValidateAndParse(t *testing.T) {
 			t.Errorf("ParseErrorCode(%q) = %q, %v", code, got, err)
 		}
 	}
+	if !errs.ErrorCodePattern.MatchString("ORDER.CREATE.STOCK_INSUFFICIENT") || errs.ErrorCodePattern.MatchString("order.create.failed") || errs.ErrorCodePattern.MatchString("ORDER.CREATE") {
+		t.Error("ErrorCodePattern 未正确约束 SCOPE.OPERATION.REASON")
+	}
 	invalid := []string{"", "ORDER.CREATE", "ORDER.CREATE.FAIL.EXTRA", ".CREATE.FAIL", "ORDER..FAIL", "order.CREATE.FAIL", "ORDER.CREATE.stock", "ORDER.CREATE.BAD-REASON", " ORDER.CREATE.FAIL "}
 	for _, value := range invalid {
 		if err := errs.ErrorCode(value).Validate(); err == nil {
@@ -81,7 +80,7 @@ func TestErrorCodeValidateAndParse(t *testing.T) {
 }
 
 func TestErrorTypeValidateAndParse(t *testing.T) {
-	valid := []errs.ErrorType{"db.connection_error", "business.stock_2"}
+	valid := []errs.ErrorType{"UNAVAILABLE", "FAILED_PRECONDITION"}
 	for _, typ := range valid {
 		if err := typ.Validate(); err != nil {
 			t.Errorf("Validate(%q) = %v, want nil", typ, err)
@@ -91,7 +90,7 @@ func TestErrorTypeValidateAndParse(t *testing.T) {
 			t.Errorf("ParseErrorType(%q) = %q, %v", typ, got, err)
 		}
 	}
-	invalid := []string{"", "db", "db.connection.error", ".failed", "db.", "DB.failed", "db.Connection", "db.bad-reason", " db.failed "}
+	invalid := []string{"", "db", "unavailable", "NOT_A_CODE", "db.connection_error", "NOT_FOUND.EXTRA", "NOT-FOUND", " not_found ", "DB.FAILED"}
 	for _, value := range invalid {
 		if err := errs.ErrorType(value).Validate(); err == nil {
 			t.Errorf("ErrorType(%q).Validate() = nil, want error", value)
@@ -120,30 +119,24 @@ func TestStackRule(t *testing.T) {
 		typ  errs.ErrorType
 		want errs.StackPolicy
 	}{
-		{errs.TypeRuntimePanic, errs.StackMust},
-		{errs.TypeRuntimeContextCanceled, errs.StackOptional},
-		{errs.TypeRuntimeDeadlineExceeded, errs.StackMust},
-		{errs.TypeDBConnectionError, errs.StackMust},
-		{errs.TypeDBQueryTimeout, errs.StackMust},
-		{errs.TypeDBDeadlock, errs.StackMust},
-		{errs.TypeRedisConnectionError, errs.StackMust},
-		{errs.TypeRedisTimeout, errs.StackMust},
-		{errs.TypeMQPublishFailed, errs.StackMust},
-		{errs.TypeMQConsumeFailed, errs.StackMust},
-		{errs.TypeMQRetryExhausted, errs.StackMust},
-		{errs.TypeHTTPUpstream5xx, errs.StackMust},
-		{errs.TypeHTTPUpstreamTimeout, errs.StackMust},
-		{errs.TypeLockConflict, errs.StackOptional},
-		{errs.TypeIdempotencyConflict, errs.StackOptional},
-		{errs.TypeStockRace, errs.StackOptional},
-		{errs.TypeDataJSONUnmarshal, errs.StackOptional},
-		{errs.TypeDataDuplicateKey, errs.StackOptional},
-		{errs.TypeDataNotFound, errs.StackOptional},
-		{errs.TypeValidationFailed, errs.StackNone},
-		{errs.ErrorType("business.stock_insufficient"), errs.StackNone},
-		{errs.ErrorType("validation.required"), errs.StackNone},
+		{errs.TypeUnknown, errs.StackMust},
+		{errs.TypeInternal, errs.StackMust},
+		{errs.TypeUnavailable, errs.StackMust},
+		{errs.TypeDeadlineExceeded, errs.StackMust},
+		{errs.TypeDataLoss, errs.StackMust},
+		{errs.TypeCancelled, errs.StackOptional},
+		{errs.TypeAborted, errs.StackOptional},
+		{errs.TypeInvalidArgument, errs.StackNone},
+		{errs.TypeFailedPrecondition, errs.StackNone},
+		{errs.TypeAlreadyExists, errs.StackNone},
+		{errs.TypeNotFound, errs.StackNone},
+		{errs.TypePermissionDenied, errs.StackNone},
+		{errs.TypeUnauthenticated, errs.StackNone},
+		{errs.TypeOutOfRange, errs.StackNone},
+		{errs.TypeResourceExhausted, errs.StackNone},
+		{errs.TypeUnimplemented, errs.StackNone},
 		{errs.ErrorType(""), errs.StackNone},
-		{errs.ErrorType("unknown.category"), errs.StackNone},
+		{errs.ErrorType("NOT_A_CODE"), errs.StackNone},
 	}
 	for _, tc := range table {
 		if got := errs.StackRule(tc.typ); got != tc.want {
@@ -157,8 +150,8 @@ func TestNewValidation(t *testing.T) {
 	if e.Kind() != errs.KindValidation {
 		t.Errorf("Kind() = %q, want %q", e.Kind(), errs.KindValidation)
 	}
-	if e.ErrorType() != errs.TypeValidationFailed {
-		t.Errorf("ErrorType() = %q, want %q", e.ErrorType(), errs.TypeValidationFailed)
+	if e.ErrorType() != errs.TypeInvalidArgument {
+		t.Errorf("ErrorType() = %q, want %q", e.ErrorType(), errs.TypeInvalidArgument)
 	}
 	if e.ErrCode() != "" {
 		t.Errorf("ErrCode() = %q, want empty", e.ErrCode())
@@ -177,7 +170,7 @@ func TestNewValidation(t *testing.T) {
 
 func TestNewBusiness(t *testing.T) {
 	const code errs.ErrorCode = "ORDER.CREATE.STOCK_INSUFFICIENT"
-	typ := errs.ErrorType("business.stock_insufficient")
+	typ := errs.ErrorType("FAILED_PRECONDITION")
 	e := errs.NewBusiness(code, typ, "库存不足")
 	if e.Kind() != errs.KindBusiness {
 		t.Errorf("Kind() = %q, want %q", e.Kind(), errs.KindBusiness)
@@ -213,7 +206,7 @@ func TestNewValidationError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Error() != "required: invalid input" || e.Kind() != errs.KindValidation || e.ErrorType() != errs.TypeValidationFailed || e.ErrCode() != "" {
+	if e.Error() != "required: invalid input" || e.Kind() != errs.KindValidation || e.ErrorType() != errs.TypeInvalidArgument || e.ErrCode() != "" {
 		t.Errorf("unexpected validation error: %#v, Error()=%q", e, e.Error())
 	}
 	if !errors.Is(e, cause) {
@@ -233,13 +226,13 @@ func TestNewBusinessError(t *testing.T) {
 	cause := errors.New("stock is zero")
 	source := errs.Source{Function: "reserve", Filepath: "stock.go", Line: 12}
 	e, err := errs.NewBusinessError(errs.BusinessErrorConfig{
-		Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "business.stock_insufficient",
+		Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "FAILED_PRECONDITION",
 		Message: "  insufficient stock ", Cause: cause, Source: source,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Error() != "insufficient stock: stock is zero" || e.Kind() != errs.KindBusiness || e.ErrCode() != "ORDER.CREATE.STOCK_INSUFFICIENT" || e.ErrorType() != "business.stock_insufficient" {
+	if e.Error() != "insufficient stock: stock is zero" || e.Kind() != errs.KindBusiness || e.ErrCode() != "ORDER.CREATE.STOCK_INSUFFICIENT" || e.ErrorType() != "FAILED_PRECONDITION" {
 		t.Errorf("unexpected business error: %#v, Error()=%q", e, e.Error())
 	}
 	if !errors.Is(e, cause) || e.Source() != source {
@@ -247,11 +240,11 @@ func TestNewBusinessError(t *testing.T) {
 	}
 
 	tests := []errs.BusinessErrorConfig{
-		{Code: "", Type: "business.failed", Message: "failed"},
-		{Code: "ORDER.BAD", Type: "business.failed", Message: "failed"},
+		{Code: "", Type: "FAILED_PRECONDITION", Message: "failed"},
+		{Code: "ORDER.BAD", Type: "FAILED_PRECONDITION", Message: "failed"},
 		{Code: "ORDER.CREATE.FAIL", Type: "", Message: "failed"},
 		{Code: "ORDER.CREATE.FAIL", Type: "db.failed", Message: "failed"},
-		{Code: "ORDER.CREATE.FAIL", Type: "business.failed", Message: " "},
+		{Code: "ORDER.CREATE.FAIL", Type: "FAILED_PRECONDITION", Message: " "},
 	}
 	for _, cfg := range tests {
 		if _, err := errs.NewBusinessError(cfg); err == nil {
@@ -261,12 +254,12 @@ func TestNewBusinessError(t *testing.T) {
 }
 
 func TestNewSystemDefaults(t *testing.T) {
-	e := errs.NewSystem(errs.TypeDBConnectionError, "connect failed")
+	e := errs.NewSystem(errs.TypeUnavailable, "connect failed")
 	if e.Kind() != errs.KindSystem {
 		t.Errorf("Kind() = %q, want %q", e.Kind(), errs.KindSystem)
 	}
-	if e.ErrorType() != errs.TypeDBConnectionError {
-		t.Errorf("ErrorType() = %q, want %q", e.ErrorType(), errs.TypeDBConnectionError)
+	if e.ErrorType() != errs.TypeUnavailable {
+		t.Errorf("ErrorType() = %q, want %q", e.ErrorType(), errs.TypeUnavailable)
 	}
 	if e.Error() != "connect failed" {
 		t.Errorf("Error() = %q, want %q", e.Error(), "connect failed")
@@ -298,7 +291,7 @@ func TestNewSystemOptions(t *testing.T) {
 	src := errs.Source{Function: "repo.Find", Filepath: "internal/repo/find.go", Line: 7}
 	stack := "goroutine 1 [running]:\ngithub.com/formal-you/go-observability/errs_test.TestNewSystemOptions"
 	e := errs.NewSystem(
-		errs.TypeDBQueryTimeout,
+		errs.TypeDeadlineExceeded,
 		"query timeout after 5s",
 		errs.WithRetry(3, true),
 		errs.WithUpstream("order-db"),
@@ -309,8 +302,8 @@ func TestNewSystemOptions(t *testing.T) {
 	if e.Kind() != errs.KindSystem {
 		t.Errorf("Kind() = %q, want %q", e.Kind(), errs.KindSystem)
 	}
-	if e.ErrorType() != errs.TypeDBQueryTimeout {
-		t.Errorf("ErrorType() = %q, want %q", e.ErrorType(), errs.TypeDBQueryTimeout)
+	if e.ErrorType() != errs.TypeDeadlineExceeded {
+		t.Errorf("ErrorType() = %q, want %q", e.ErrorType(), errs.TypeDeadlineExceeded)
 	}
 	if !e.Retryable() {
 		t.Error("Retryable() = false, want true")
@@ -346,35 +339,35 @@ func TestNewSystemError(t *testing.T) {
 	cause := errors.New("deadline")
 	source := errs.Source{Function: "query", Filepath: "repo.go", Line: 30}
 	e, err := errs.NewSystemError(errs.SystemErrorConfig{
-		Type: errs.TypeDBQueryTimeout, Code: "ORDER.QUERY.TIMEOUT", Message: "  query failed ", Cause: cause,
+		Type: errs.TypeDeadlineExceeded, Code: "ORDER.QUERY.TIMEOUT", Message: "  query failed ", Cause: cause,
 		Retryable: true, Retries: 3, RetriesExhausted: true, Upstream: "order-db", Stack: "custom", Source: source,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Error() != "query failed: deadline" || e.Kind() != errs.KindSystem || e.ErrorType() != errs.TypeDBQueryTimeout || e.ErrCode() != "ORDER.QUERY.TIMEOUT" {
+	if e.Error() != "query failed: deadline" || e.Kind() != errs.KindSystem || e.ErrorType() != errs.TypeDeadlineExceeded || e.ErrCode() != "ORDER.QUERY.TIMEOUT" {
 		t.Errorf("unexpected system error: %#v, Error()=%q", e, e.Error())
 	}
 	if !e.Retryable() || e.Retries() != 3 || !e.RetriesExhausted() || e.Upstream() != "order-db" || e.Stack() != "custom" || e.Source() != source || !errors.Is(e, cause) {
 		t.Error("system error config fields were not mapped")
 	}
 
-	auto, err := errs.NewSystemError(errs.SystemErrorConfig{Type: errs.TypeDBConnectionError, Message: "connect failed"})
+	auto, err := errs.NewSystemError(errs.SystemErrorConfig{Type: errs.TypeUnavailable, Message: "connect failed"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if auto.Stack() == "" {
 		t.Error("StackMust type did not auto-capture stack")
 	}
-	withoutCode, err := errs.NewSystemError(errs.SystemErrorConfig{Type: errs.TypeDataNotFound, Message: "not found"})
+	withoutCode, err := errs.NewSystemError(errs.SystemErrorConfig{Type: errs.TypeAborted, Message: "aborted"})
 	if err != nil || withoutCode.ErrCode() != "" || withoutCode.Stack() != "" {
 		t.Errorf("optional code/stack defaults = code %q stack %q err %v", withoutCode.ErrCode(), withoutCode.Stack(), err)
 	}
 
 	tests := []errs.SystemErrorConfig{
 		{Type: "", Message: "failed"},
-		{Type: "business.failed", Message: "failed"},
-		{Type: "validation.failed", Message: "failed"},
+		{Type: "FAILED_PRECONDITION", Message: "failed"},
+		{Type: "INVALID_ARGUMENT", Message: "failed"},
 		{Type: "DB.failed", Message: "failed"},
 		{Type: "db.failed", Code: "ORDER.BAD", Message: "failed"},
 		{Type: "db.failed", Message: " "},
@@ -402,7 +395,7 @@ func TestLegacyConstructorsRemainPermissive(t *testing.T) {
 }
 
 func TestSystemErrorWithRetryNotExhausted(t *testing.T) {
-	e := errs.NewSystem(errs.TypeRedisTimeout, "timeout", errs.WithRetry(1, false))
+	e := errs.NewSystem(errs.TypeDeadlineExceeded, "timeout", errs.WithRetry(1, false))
 	if !e.Retryable() {
 		t.Error("Retryable() = false, want true")
 	}
@@ -421,21 +414,21 @@ func TestUnwrap(t *testing.T) {
 	if got := errors.Unwrap(errs.NewBusiness("CODE", errs.ErrorType("business.x"), "b")); got != nil {
 		t.Errorf("Unwrap(NewBusiness) = %v, want nil", got)
 	}
-	if got := errors.Unwrap(errs.NewSystem(errs.TypeDBConnectionError, "s")); got != nil {
+	if got := errors.Unwrap(errs.NewSystem(errs.TypeUnavailable, "s")); got != nil {
 		t.Errorf("Unwrap(NewSystem) = %v, want nil", got)
 	}
 }
 
 func TestIsRetryExhausted(t *testing.T) {
-	exhausted := errs.NewSystem(errs.TypeMQRetryExhausted, "retry exhausted", errs.WithRetry(5, true))
+	exhausted := errs.NewSystem(errs.TypeResourceExhausted, "retry exhausted", errs.WithRetry(5, true))
 	if !errs.IsRetryExhausted(exhausted) {
 		t.Error("IsRetryExhausted(exhausted) = false, want true")
 	}
-	retrying := errs.NewSystem(errs.TypeDBQueryTimeout, "timeout", errs.WithRetry(1, false))
+	retrying := errs.NewSystem(errs.TypeDeadlineExceeded, "timeout", errs.WithRetry(1, false))
 	if errs.IsRetryExhausted(retrying) {
 		t.Error("IsRetryExhausted(retrying) = true, want false")
 	}
-	noRetry := errs.NewSystem(errs.TypeDBConnectionError, "connect failed")
+	noRetry := errs.NewSystem(errs.TypeUnavailable, "connect failed")
 	if errs.IsRetryExhausted(noRetry) {
 		t.Error("IsRetryExhausted(noRetry) = true, want false")
 	}
@@ -500,7 +493,7 @@ func TestCaptureStack(t *testing.T) {
 
 func TestNewSystemStackPolicy(t *testing.T) {
 	t.Run("must auto-captures at creation", func(t *testing.T) {
-		e := errs.NewSystem(errs.TypeDBQueryTimeout, "timeout")
+		e := errs.NewSystem(errs.TypeDeadlineExceeded, "timeout")
 		if e.Stack() == "" {
 			t.Fatal("Stack() empty, want StackMust 类别构造点自动采集")
 		}
@@ -509,19 +502,19 @@ func TestNewSystemStackPolicy(t *testing.T) {
 		}
 	})
 	t.Run("optional does not auto-capture", func(t *testing.T) {
-		e := errs.NewSystem(errs.TypeRuntimeContextCanceled, "canceled")
+		e := errs.NewSystem(errs.TypeCancelled, "canceled")
 		if e.Stack() != "" {
 			t.Errorf("Stack() = %q, want empty for StackOptional", e.Stack())
 		}
 	})
 	t.Run("none does not auto-capture", func(t *testing.T) {
-		e := errs.NewSystem(errs.ErrorType("business.auth.forbidden"), "denied")
+		e := errs.NewSystem(errs.TypeFailedPrecondition, "denied")
 		if e.Stack() != "" {
 			t.Errorf("Stack() = %q, want empty for StackNone", e.Stack())
 		}
 	})
 	t.Run("explicit WithStack wins over auto-capture", func(t *testing.T) {
-		e := errs.NewSystem(errs.TypeDBConnectionError, "conn", errs.WithStack("custom"))
+		e := errs.NewSystem(errs.TypeUnavailable, "conn", errs.WithStack("custom"))
 		if e.Stack() != "custom" {
 			t.Errorf("Stack() = %q, want explicit custom", e.Stack())
 		}
@@ -532,57 +525,54 @@ func TestSetStackPolicy(t *testing.T) {
 	t.Cleanup(func() { errs.SetStackPolicy(nil) })
 
 	t.Run("default without overrides", func(t *testing.T) {
-		if got := errs.StackRule(errs.TypeDBQueryTimeout); got != errs.StackMust {
-			t.Fatalf("StackRule(db.query_timeout) = %q, want must", got)
+		if got := errs.StackRule(errs.TypeDeadlineExceeded); got != errs.StackMust {
+			t.Fatalf("StackRule(DEADLINE_EXCEEDED) = %q, want must", got)
 		}
 	})
 
-	t.Run("override db. to none disables auto capture", func(t *testing.T) {
-		errs.SetStackPolicy(map[string]errs.StackPolicy{"db.": errs.StackNone})
-		if got := errs.StackRule(errs.TypeDBQueryTimeout); got != errs.StackNone {
-			t.Fatalf("StackRule(db.query_timeout) = %q, want none", got)
+	t.Run("exact override to none disables auto capture", func(t *testing.T) {
+		errs.SetStackPolicy(map[string]errs.StackPolicy{string(errs.TypeDeadlineExceeded): errs.StackNone})
+		if got := errs.StackRule(errs.TypeDeadlineExceeded); got != errs.StackNone {
+			t.Fatalf("StackRule(DEADLINE_EXCEEDED) = %q, want none", got)
 		}
-		if got := errs.StackRule(errs.TypeDBConnectionError); got != errs.StackNone {
-			t.Fatalf("StackRule(db.connection_error) = %q, want none", got)
+		if got := errs.StackRule(errs.TypeUnavailable); got != errs.StackMust {
+			t.Fatalf("StackRule(UNAVAILABLE) = %q, want must（未覆盖仍走内置默认）", got)
 		}
-		e := errs.NewSystem(errs.TypeDBQueryTimeout, "timeout")
+		e := errs.NewSystem(errs.TypeDeadlineExceeded, "timeout")
 		if e.Stack() != "" {
-			t.Fatalf("Stack() = %q, want empty（db. 覆盖为 none 不自动采集）", e.Stack())
-		}
-		if got := errs.StackRule(errs.TypeRedisTimeout); got != errs.StackMust {
-			t.Fatalf("StackRule(redis.timeout) = %q, want must（未覆盖仍走内置默认）", got)
+			t.Fatalf("Stack() = %q, want empty（DEADLINE_EXCEEDED 覆盖为 none 不自动采集）", e.Stack())
 		}
 	})
 
-	t.Run("override exact type to must enables auto capture", func(t *testing.T) {
-		errs.SetStackPolicy(map[string]errs.StackPolicy{"runtime.context_cancelled": errs.StackMust})
-		if got := errs.StackRule(errs.TypeRuntimeContextCanceled); got != errs.StackMust {
-			t.Fatalf("StackRule(runtime.context_cancelled) = %q, want must", got)
+	t.Run("override exact code to must enables auto capture", func(t *testing.T) {
+		errs.SetStackPolicy(map[string]errs.StackPolicy{string(errs.TypeCancelled): errs.StackMust})
+		if got := errs.StackRule(errs.TypeCancelled); got != errs.StackMust {
+			t.Fatalf("StackRule(CANCELLED) = %q, want must", got)
 		}
-		e := errs.NewSystem(errs.TypeRuntimeContextCanceled, "canceled")
+		e := errs.NewSystem(errs.TypeCancelled, "canceled")
 		if e.Stack() == "" {
 			t.Fatal("Stack() empty, want 自动采集（覆盖为 must）")
 		}
 	})
 
-	t.Run("longest prefix wins", func(t *testing.T) {
+	t.Run("exact match wins over default", func(t *testing.T) {
 		errs.SetStackPolicy(map[string]errs.StackPolicy{
-			"db.":              errs.StackNone,
-			"db.query_timeout": errs.StackMust,
+			string(errs.TypeDeadlineExceeded): errs.StackMust,
+			string(errs.TypeUnavailable):      errs.StackNone,
 		})
-		if got := errs.StackRule(errs.TypeDBQueryTimeout); got != errs.StackMust {
-			t.Fatalf("StackRule(db.query_timeout) = %q, want must（最长前缀优先）", got)
+		if got := errs.StackRule(errs.TypeDeadlineExceeded); got != errs.StackMust {
+			t.Fatalf("StackRule(DEADLINE_EXCEEDED) = %q, want must", got)
 		}
-		if got := errs.StackRule(errs.TypeDBConnectionError); got != errs.StackNone {
-			t.Fatalf("StackRule(db.connection_error) = %q, want none", got)
+		if got := errs.StackRule(errs.TypeUnavailable); got != errs.StackNone {
+			t.Fatalf("StackRule(UNAVAILABLE) = %q, want none", got)
 		}
 	})
 
 	t.Run("reset restores default", func(t *testing.T) {
-		errs.SetStackPolicy(map[string]errs.StackPolicy{"db.": errs.StackNone})
+		errs.SetStackPolicy(map[string]errs.StackPolicy{string(errs.TypeDeadlineExceeded): errs.StackNone})
 		errs.SetStackPolicy(nil)
-		if got := errs.StackRule(errs.TypeDBQueryTimeout); got != errs.StackMust {
-			t.Fatalf("StackRule(db.query_timeout) = %q, want must（重置后回默认）", got)
+		if got := errs.StackRule(errs.TypeDeadlineExceeded); got != errs.StackMust {
+			t.Fatalf("StackRule(DEADLINE_EXCEEDED) = %q, want must（重置后回默认）", got)
 		}
 	})
 }

@@ -120,8 +120,8 @@ logger := log.NewLogger(w,
 	log.WithIdentityExtractor(log.ContextIdentityExtractor{}),
 	log.WithMasker(log.FieldMasker{Keys: []string{"app.phone"}}),
 	log.WithBaseMetadata(log.EventMetadata{Level: log.LevelInfo}),
-	log.WithErrorHandler(func(ctx context.Context, msg string, attrs []slog.Attr, err error) {
-		slog.ErrorContext(ctx, "observability write failed", "event", msg, "err", err)
+	log.WithErrorHandler(func(ctx context.Context, eventType string, attrs []slog.Attr, err error) {
+		slog.ErrorContext(ctx, "observability write failed", "event", eventType, "err", err)
 	}),
 )
 ```
@@ -136,7 +136,7 @@ logger := log.NewLogger(w,
 | BaseMetadata | 不补全 | 注入服务内稳定的公共元数据 |
 | ErrorHandler | 写入错误不可见 | 接入独立、不会递归使用同一 Writer 的告警路径 |
 
-高流量场景可显式启用以下策略：business/error/security/audit/probe 全量，access 失败恒保留、成功按比例保留。启用后，成功 BusinessEvent 不再保证一定存在对应 AccessEvent。
+高流量场景可显式启用以下策略：business/error/security/audit/probe 全量，access 失败高优先级保留、成功按比例保留。启用后，成功 BusinessEvent 不再保证一定存在对应 AccessEvent。
 
 ```go
 log.WithSampler(log.NewEventTypeKeepSampler(
