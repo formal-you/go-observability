@@ -31,20 +31,15 @@ func normalizeAndValidateConfig(cfg *Config) error {
 	if strings.TrimSpace(cfg.ServiceName) == "" {
 		return errors.New("telemetry: service name is required")
 	}
-	switch cfg.LogOutput {
-	case LogOutputFile, LogOutputOTLP, LogOutputStdout, LogOutputNone:
-	default:
-		return fmt.Errorf("telemetry: invalid log output %q", cfg.LogOutput)
+	// LogOutput 必须显式选择；Trace/Metric 空值按 OTLP 处理（outputOf 归一化）。
+	if err := validateOutput(cfg.LogOutput, "log", false); err != nil {
+		return err
 	}
-	switch outputOf(cfg.TraceOutput) {
-	case LogOutputOTLP, LogOutputFile, LogOutputStdout, LogOutputNone:
-	default:
-		return fmt.Errorf("telemetry: invalid trace output %q", cfg.TraceOutput)
+	if err := validateOutput(cfg.TraceOutput, "trace", true); err != nil {
+		return err
 	}
-	switch outputOf(cfg.MetricOutput) {
-	case LogOutputOTLP, LogOutputFile, LogOutputStdout, LogOutputNone:
-	default:
-		return fmt.Errorf("telemetry: invalid metric output %q", cfg.MetricOutput)
+	if err := validateOutput(cfg.MetricOutput, "metric", true); err != nil {
+		return err
 	}
 	if outputOf(cfg.TraceOutput) == LogOutputFile && strings.TrimSpace(cfg.TraceFile) == "" {
 		return errors.New("telemetry: trace file output requires trace_file path")
@@ -58,32 +53,45 @@ func normalizeAndValidateConfig(cfg *Config) error {
 	if cfg.TraceSampleRatio < 0 || cfg.TraceSampleRatio > 1 {
 		return errors.New("telemetry: trace sample ratio must be in (0, 1]")
 	}
-	if cfg.TraceBatchTimeout == 0 {
-		cfg.TraceBatchTimeout = defaultTraceBatchTimeout
+	if err := normalizePositive(&cfg.TraceBatchTimeout, defaultTraceBatchTimeout, "trace batch timeout"); err != nil {
+		return err
 	}
-	if cfg.TraceBatchTimeout < 0 {
-		return errors.New("telemetry: trace batch timeout must be positive")
+	if err := normalizePositive(&cfg.MetricExportInterval, defaultMetricExportInterval, "metric export interval"); err != nil {
+		return err
 	}
-	if cfg.MetricExportInterval == 0 {
-		cfg.MetricExportInterval = defaultMetricExportInterval
+	if err := normalizePositive(&cfg.LogBatchTimeout, defaultLogBatchTimeout, "log batch timeout"); err != nil {
+		return err
 	}
-	if cfg.MetricExportInterval < 0 {
-		return errors.New("telemetry: metric export interval must be positive")
-	}
-	if cfg.LogBatchTimeout == 0 {
-		cfg.LogBatchTimeout = defaultLogBatchTimeout
-	}
-	if cfg.LogBatchTimeout < 0 {
-		return errors.New("telemetry: log batch timeout must be positive")
-	}
-	if cfg.LogQueueSize == 0 {
-		cfg.LogQueueSize = defaultLogQueueSize
-	}
-	if cfg.LogQueueSize < 0 {
-		return errors.New("telemetry: log queue size must be positive")
+	if err := normalizePositive(&cfg.LogQueueSize, defaultLogQueueSize, "log queue size"); err != nil {
+		return err
 	}
 	if cfg.Environment == "" {
 		cfg.Environment = "development"
+	}
+	return nil
+}
+
+// validateOutput 校验信号输出目标枚举；allowEmpty 为 true 时空值视为合法（由 outputOf
+// 归一化为 OTLP），false 时要求调用方显式选择。
+func validateOutput(output LogOutput, name string, allowEmpty bool) error {
+	if output == "" && allowEmpty {
+		return nil
+	}
+	switch output {
+	case LogOutputFile, LogOutputOTLP, LogOutputStdout, LogOutputNone:
+		return nil
+	default:
+		return fmt.Errorf("telemetry: invalid %s output %q", name, output)
+	}
+}
+
+// normalizePositive 为零值字段应用默认值并拒绝负数；duration 与整型队列容量共用。
+func normalizePositive[T int | time.Duration](value *T, def T, name string) error {
+	if *value == 0 {
+		*value = def
+	}
+	if *value < 0 {
+		return fmt.Errorf("telemetry: %s must be positive", name)
 	}
 	return nil
 }
