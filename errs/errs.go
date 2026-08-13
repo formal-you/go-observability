@@ -40,7 +40,7 @@ const (
 // 具体业务码细化，而是把多个 ErrorCode 按标准失效模式归为同一大类（多对一），
 // 用于聚合、告警路由与堆栈策略。以通用性换取工具链兼容（Grafana / OTel / gRPC
 // 生态原生识别）与低维护成本（无需维护自定义 domain.reason 词表）。
-// 已注册的 ErrorCode 经 Error Registry 反查归属的 ErrorType（多对一，见 RegisterErrorCode）。
+// 已注册的 ErrorCode 经 Error Registry 反查归属的 ErrorType（多对一，见 RegisterErrorCode / RegisterErrorContract）。
 type ErrorType string
 
 // Validate 验证 ErrorType 是否属于 OTel/gRPC 标准枚举（gRPC canonical code，
@@ -173,19 +173,39 @@ func ParseErrorCode(value string) (ErrorCode, error) {
 	return c, nil
 }
 
-// Error Registry：ErrorCode → ErrorType 的固定映射注册表。
+// Error Registry：ErrorCode → ErrorType 的固定映射注册表，注册项可选携带错误事件名
+// （EventName）。
+//
 // 每个注册的 ErrorCode 恰好映射一个 ErrorType（多对一：多个 code 可共用一个 type），
 // 用于反查、告警路由与构造期一致性校验；未注册的 code 不强制映射（保持既有行为）。
+// 事件名是可选附加槽位：业务/校验错误不注册事件名（其领域事件由 Application 发布），
+// 系统/基础设施错误码由失败面维护方经 RegisterErrorContract 一并注册 code → type +
+// 事件名。EventName 以不透明字符串存储：errs 只依赖标准库（不 import log，避免与
+// log 包循环依赖），文法（log.EventNamePattern）由接入方适配层校验后传入。
+type registeredError struct {
+	typ       ErrorType
+	eventName string
+}
+
 var (
 	errorCodeRegistryMu sync.RWMutex
-	errorCodeRegistry   = map[ErrorCode]ErrorType{}
+	errorCodeRegistry   = map[ErrorCode]registeredError{}
 )
 
-// RegisterErrorCode 把 ErrorCode 注册到恰好一个 ErrorType，返回错误而非 panic。
-// 同一 code 重复注册时 type 必须一致（幂等成功），不一致返回错误——error.code → exactly
-// one error.type 是查询/告警依据，漂移应尽早暴露。code 或 type 不合文法时返回错误。
-// 应在进程启动期、构造错误前完成注册（与 SetStackPolicy 同类）；Registry 并发安全。
+// RegisterErrorCode 把 ErrorCode 注册到恰好一个 ErrorType（事件名留空），返回错误而非
+// panic。同一 code 重复注册时 type 必须一致（幂等成功），不一致返回错误——error.code →
+// exactly one error.type 是查询/告警依据，漂移应尽早暴露。code 或 type 不合文法时返回
+// 错误。应在进程启动期、构造错误前完成注册（与 SetStackPolicy 同类）；Registry 并发安全。
 func RegisterErrorCode(code ErrorCode, typ ErrorType) error {
+	return RegisterErrorContract(code, typ, "")
+}
+
+// RegisterErrorContract 把 ErrorCode 注册到恰好一个 ErrorType 与一个可选的错误事件名
+// （系统/基础设施错误码路径，如 INFRA.MYSQL.QUERY_TIMEOUT → DEADLINE_EXCEEDED +
+// "db.query.deadline_exceeded"）。重复注册：type 必须一致；事件名已存在时必须一致，
+// 空事件名可被后续补齐（code-only 升级为完整契约）。eventName 是不透明字符串，文法由
+// 接入方按 log.EventNamePattern 校验（errs 不 import log，避免循环依赖）。
+func RegisterErrorContract(code ErrorCode, typ ErrorType, eventName string) error {
 	if err := code.Validate(); err != nil {
 		return err
 	}
@@ -195,12 +215,18 @@ func RegisterErrorCode(code ErrorCode, typ ErrorType) error {
 	errorCodeRegistryMu.Lock()
 	defer errorCodeRegistryMu.Unlock()
 	if existing, ok := errorCodeRegistry[code]; ok {
-		if existing != typ {
-			return fmt.Errorf("error code %q already registered with error type %q", code, existing)
+		if existing.typ != typ {
+			return fmt.Errorf("error code %q already registered with error type %q", code, existing.typ)
+		}
+		if existing.eventName != "" && eventName != "" && existing.eventName != eventName {
+			return fmt.Errorf("error code %q already registered with event name %q", code, existing.eventName)
+		}
+		if existing.eventName == "" && eventName != "" {
+			errorCodeRegistry[code] = registeredError{typ: typ, eventName: eventName}
 		}
 		return nil
 	}
-	errorCodeRegistry[code] = typ
+	errorCodeRegistry[code] = registeredError{typ: typ, eventName: eventName}
 	return nil
 }
 
@@ -208,8 +234,38 @@ func RegisterErrorCode(code ErrorCode, typ ErrorType) error {
 func (c ErrorCode) RegisteredErrorType() (ErrorType, bool) {
 	errorCodeRegistryMu.RLock()
 	defer errorCodeRegistryMu.RUnlock()
-	typ, ok := errorCodeRegistry[c]
-	return typ, ok
+	reg, ok := errorCodeRegistry[c]
+	return reg.typ, ok
+}
+
+// RegisteredEventName 返回该 ErrorCode 注册的错误事件名；未注册或未填事件名返回 false。
+// 业务/校验错误码不注册事件名（领域事件由 Application 发布）；系统/基础设施错误码由
+// 失败面维护方经 RegisterErrorContract 注册。
+func (c ErrorCode) RegisteredEventName() (string, bool) {
+	errorCodeRegistryMu.RLock()
+	defer errorCodeRegistryMu.RUnlock()
+	reg, ok := errorCodeRegistry[c]
+	if !ok || reg.eventName == "" {
+		return "", false
+	}
+	return reg.eventName, true
+}
+
+// MustRegisterErrorCode 是 RegisterErrorCode 的必须成功变体：注册失败（非法文法、
+// 与已注册 type 冲突）直接 panic。注册输入通常是常量/全局预定义，失败即编码错误，
+// 应在启动期尽早暴露（与 log.NewEventName 同类）。
+func MustRegisterErrorCode(code ErrorCode, typ ErrorType) {
+	if err := RegisterErrorCode(code, typ); err != nil {
+		panic("errs: register error code: " + err.Error())
+	}
+}
+
+// MustRegisterErrorContract 是 RegisterErrorContract 的必须成功变体：注册失败直接
+// panic。事件名文法仍由接入方按 log.EventNamePattern 校验后传入（errs 不 import log）。
+func MustRegisterErrorContract(code ErrorCode, typ ErrorType, eventName string) {
+	if err := RegisterErrorContract(code, typ, eventName); err != nil {
+		panic("errs: register error contract: " + err.Error())
+	}
 }
 
 // checkRegisteredCodeType 校验已注册 code 的类型映射；未注册的 code 直接通过。
