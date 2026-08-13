@@ -463,3 +463,51 @@ func TestRecoverInputGuardEmitsSecurityEvent(t *testing.T) {
 	}
 	attrString(t, attrMap(w.attrsList[1]), "event.name", "input.threat.detected")
 }
+
+// TestErrorResponseSkipEventSkipsEventWrite 验证 SkipEvent 命中时只渲染响应体、不写事件。
+func TestErrorResponseSkipEventSkipsEventWrite(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	r := gin.New()
+	r.Use(ErrorResponse(ErrorConfig{
+		Logger:    logger,
+		EventName: testErrEventName,
+		SkipEvent: func(error) bool { return true },
+	}))
+	r.GET("/orders/:id", func(c *gin.Context) {
+		Abort(c, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "FAILED_PRECONDITION", "stock insufficient"))
+	})
+
+	rec := doRequest(r, "/orders/1")
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", rec.Code)
+	}
+	if len(w.eventTypes) != 0 {
+		t.Fatalf("SkipEvent 命中不应写事件，实际 %v", w.eventTypes)
+	}
+}
+
+// TestErrorResponseSkipEventMissWritesEvent 验证 SkipEvent 未命中时照常写事件。
+func TestErrorResponseSkipEventMissWritesEvent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	r := gin.New()
+	r.Use(ErrorResponse(ErrorConfig{
+		Logger:    logger,
+		EventName: testErrEventName,
+		SkipEvent: func(error) bool { return false },
+	}))
+	r.GET("/orders/:id", func(c *gin.Context) {
+		Abort(c, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "FAILED_PRECONDITION", "stock insufficient"))
+	})
+
+	rec := doRequest(r, "/orders/1")
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", rec.Code)
+	}
+	if len(w.eventTypes) != 1 {
+		t.Fatalf("SkipEvent 未命中应写事件，实际 %v", w.eventTypes)
+	}
+}

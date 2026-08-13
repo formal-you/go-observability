@@ -218,3 +218,25 @@ func TestRecoverInputGuardEmitsSecurityEvent(t *testing.T) {
 	}
 	attrString(t, attrMap(w.attrsList[1]), "event.name", "input.threat.detected")
 }
+
+// TestErrorResponseSkipEventSkipsEventWrite 验证 SkipEvent 命中时只渲染响应体、不写事件。
+func TestErrorResponseSkipEventSkipsEventWrite(t *testing.T) {
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	handler := ErrorResponse(ErrorConfig{
+		Logger:    logger,
+		EventName: testErrEventName,
+		SkipEvent: func(error) bool { return true },
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		SetError(w, errs.NewBusiness("email_exists", errs.ErrorType("business.auth.email_exists"), "email is already registered"))
+	}))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", nil))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", rec.Code)
+	}
+	if len(w.eventTypes) != 0 {
+		t.Fatalf("SkipEvent 命中不应写事件，实际 %v", w.eventTypes)
+	}
+}
