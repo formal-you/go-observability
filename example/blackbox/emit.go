@@ -27,12 +27,12 @@ const (
 )
 
 // init 注册黑盒用到的 error.code → error.type 映射（Error Registry，启动期一次性写入）。
-// INFRA 是统一基础设施 SCOPE：第二段（OPERATION）承担组件名（REDIS/MYSQL/MONGODB/KAFKA…），
-// 第三段（REASON）承担具体故障，文法与业务码一致（ADR-0019）。
+// SCOPE 归属由失败面决定（ADR-0019）：业务拒绝用业务模块（ORDER）；系统/基础设施故障用
+// INFRA（OPERATION=组件：MYSQL/REDIS/MQ）；非基础设施系统类（如并发冲突 LOCK）保留领域 SCOPE。
 func init() {
 	mustRegisterErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT", errs.TypeFailedPrecondition)
-	mustRegisterErrorCode("USER.ROLE_UPDATE.DB_TIMEOUT", errs.TypeDeadlineExceeded)
-	mustRegisterErrorCode("MESSAGING.PUBLISH.DEADLINE_EXCEEDED", errs.TypeDeadlineExceeded)
+	mustRegisterErrorCode("INFRA.MYSQL.QUERY_TIMEOUT", errs.TypeDeadlineExceeded)
+	mustRegisterErrorCode("INFRA.MQ.PUBLISH_TIMEOUT", errs.TypeDeadlineExceeded)
 	mustRegisterErrorCode("LOCK.ACQUIRE.CONFLICT", errs.TypeAborted)
 	mustRegisterErrorCode("INFRA.REDIS.UNAVAILABLE", errs.TypeUnavailable)
 }
@@ -171,7 +171,8 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 		})
 		c.Request = c.Request.WithContext(ctx)
 		ginmw.Abort(c, mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeDeadlineExceeded, Code: "USER.ROLE_UPDATE.DB_TIMEOUT", Message: "update user role: database timeout",
+			Type: errs.TypeDeadlineExceeded, Code: "INFRA.MYSQL.QUERY_TIMEOUT", Message: "update user role: database timeout",
+			Upstream: "mysql",
 		}))
 	})
 
@@ -234,7 +235,7 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	logger.Emit(mqCtx, log.EventFromError(
 		log.NewEventName("messaging", "publish", "deadline_exceeded"),
 		mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeDeadlineExceeded, Code: "MESSAGING.PUBLISH.DEADLINE_EXCEEDED", Message: "publish order.created: deadline exceeded",
+			Type: errs.TypeDeadlineExceeded, Code: "INFRA.MQ.PUBLISH_TIMEOUT", Message: "publish order.created: deadline exceeded",
 			Upstream: "kafka", Retryable: true, Retries: 3, RetriesExhausted: true,
 		}),
 		log.EventMetadata{},

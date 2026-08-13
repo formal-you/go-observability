@@ -1,6 +1,6 @@
 # example/blackbox
 
-真实日志黑盒样例：file 模式由 `telemetry.NewFileRuntime` 在不连接 Collector 的情况下生成有效 span，通过 Gin 中间件执行四个 HTTP 请求，另生成两个后台错误场景。测试同时锁定带服务身份的 JSONL 运营投影与 OTLP LogRecord 语义。
+真实日志黑盒样例：file 模式由 `telemetry.NewFileRuntime` 在不连接 Collector 的情况下生成有效 span，通过 Gin 中间件执行四个 HTTP 请求，另生成三个后台错误场景。测试同时锁定带服务身份的 JSONL 运营投影与 OTLP LogRecord 语义。
 
 ## 本地 JSONL
 
@@ -34,6 +34,7 @@ go test ./example/blackbox -v
 | 高风险输入触发数据库故障 | 500 | ErrorEvent + SecurityEvent + AuditEvent + AccessEvent |
 | panic | 500 | runtime.panic.occurred + http.request.completed |
 | 后台 MQ 发布失败 | 无 HTTP | messaging.publish.deadline_exceeded，不伪造 AccessEvent/request_id |
+| 后台缓存不可用 | 无 HTTP | cache.read.unavailable，不伪造 AccessEvent/request_id |
 | 后台锁冲突 | 无 HTTP | lock.acquire.conflict，不伪造 AccessEvent/request_id |
 
 同一 HTTP 请求的事件共享 trace_id、span_id、request_id；HTTP method/path/status/latency 只在 AccessEvent 中出现。默认 Logger 不配置 Sampler，因此 business success 也始终有对应 AccessEvent。健康检查应使用 `AccessConfig.SkipPaths` 排除。

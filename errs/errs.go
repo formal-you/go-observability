@@ -139,6 +139,13 @@ func isBusinessErrorType(t ErrorType) bool {
 // REASON（具体故障），例如 INFRA.REDIS.UNAVAILABLE。第三段统一为 REASON，不因业务/系统
 // 分裂成 cause/reason 两套命名；业务/系统（预期拒绝 vs 非预期故障）的区分由 error.type
 // 承担，不是 error.code 段名的职责。
+// SCOPE 归属由失败面（failure surface）决定，不由包装它的业务模块决定：业务/校验拒绝
+// （KindBusiness/KindValidation）用业务模块 SCOPE；基础设施故障（KindSystem，失败面为
+// DB/缓存/MQ/网络等依赖组件）用 INFRA.*；其余系统类（如并发冲突 ABORTED）可保留领域
+// SCOPE 或保持无码。INTERNAL/panic 类不承载 error.code：识别靠 error.type + event.name
+// + stacktrace，不设具体码。
+// event.name 与 error.code 前两段只做软对齐（SHOULD）：业务码尽量与 event.name 的
+// domain.subject 同源；INFRA.* 与业务事件名天然不同源（失败面 vs 业务事实），不做匹配。
 // 已注册的 ErrorCode 恰好映射一个 ErrorType（多对一，见 RegisterErrorCode）；未注册码不强制映射。
 // 仅 BizError 必须承载；SystemError 可通过 Code 关联可选业务码。
 type ErrorCode string

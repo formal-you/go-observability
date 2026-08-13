@@ -67,8 +67,10 @@ func TestBlackboxJSONL(t *testing.T) {
 	assertRequestScenario(t, events, report, requestSystemError,
 		[]string{"error", "security", "audit", "access"},
 		[]string{"user.role_update.database_timeout", "input.threat.detected", "input.anomaly.recorded", "http.request.completed"})
+	assertSystemErrorCode(t, events)
 	assertRequestScenario(t, events, report, requestPanic,
 		[]string{"error", "access"}, []string{"runtime.panic.occurred", "http.request.completed"})
+	assertPanicNoErrorCode(t, events)
 	assertBackgroundScenarios(t, events, report)
 	assertDistinctRequestTraces(t, report)
 	assertCanonicalOrder(t, lines)
@@ -148,10 +150,11 @@ func assertBackgroundScenarios(t *testing.T, events []map[string]any, report *sc
 		scenario  string
 		eventName string
 		wantStack bool
+		wantCode  string
 	}{
-		{"background-mq", "messaging.publish.deadline_exceeded", true},
-		{"background-cache", "cache.read.unavailable", true},
-		{"background-lock", "lock.acquire.conflict", false},
+		{"background-mq", "messaging.publish.deadline_exceeded", true, "INFRA.MQ.PUBLISH_TIMEOUT"},
+		{"background-cache", "cache.read.unavailable", true, "INFRA.REDIS.UNAVAILABLE"},
+		{"background-lock", "lock.acquire.conflict", false, "LOCK.ACQUIRE.CONFLICT"},
 	} {
 		var found map[string]any
 		for _, event := range events {
@@ -181,7 +184,38 @@ func assertBackgroundScenarios(t *testing.T, events []map[string]any, report *sc
 		if !item.wantStack && hasStack && stack != "" {
 			t.Errorf("%s 不应包含 stacktrace", item.eventName)
 		}
+		if item.wantCode != "" {
+			assertString(t, found, "error.code", item.wantCode)
+		}
 	}
+}
+
+// assertSystemErrorCode 锁定基础设施故障的 SCOPE 归属：失败面是数据库时 error.code 必须
+// 落在 INFRA.*（ADR-0019），而不是包装它的业务模块 USER。
+func assertSystemErrorCode(t *testing.T, events []map[string]any) {
+	t.Helper()
+	for _, event := range eventsForRequest(events, requestSystemError) {
+		if event["type"] == "error" {
+			assertString(t, event, "error.code", "INFRA.MYSQL.QUERY_TIMEOUT")
+			return
+		}
+	}
+	t.Fatal("system error 缺少 ErrorEvent")
+}
+
+// assertPanicNoErrorCode 锁定 panic/INTERNAL 类不承载 error.code（ADR-0019）：
+// 定位靠 error.type=INTERNAL + event.name + stacktrace，不设具体错误码。
+func assertPanicNoErrorCode(t *testing.T, events []map[string]any) {
+	t.Helper()
+	for _, event := range eventsForRequest(events, requestPanic) {
+		if event["type"] == "error" {
+			if _, ok := event["error.code"]; ok {
+				t.Errorf("panic 事件不应承载 error.code: %v", event)
+			}
+			return
+		}
+	}
+	t.Fatal("panic 缺少 ErrorEvent")
 }
 
 func assertDistinctRequestTraces(t *testing.T, report *scenarioReport) {

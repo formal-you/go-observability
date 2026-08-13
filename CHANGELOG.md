@@ -11,6 +11,7 @@
 - 框架不再提供泛化错误事件名（ADR-0018 / 方案 C）：移除 `http.request.failed` / `http.request.rejected` / `rpc.request.failed` / `database.query.timed_out` 常量；HTTP/Gin/Kratos 错误出口必须由接入方经 `EventName` / `EventNameResolver` 提供具体事实名，`EventFromError` 对事件名做 `EventNamePattern` 正则校验（非法 panic）。
 - `error.code` 与 `event.name` 增加正则约束：`errs.ErrorCodePattern`（SCOPE.OPERATION.REASON）与 `log.EventNamePattern`（<domain>.<subject>.<event>），`Validate` 使用正则校验；EventName 注释明确 `<event>` 必须是注册的 Event Type、非自由文本、非生命周期 Stage。
 - `error.code` 明确单一文法 `SCOPE.OPERATION.REASON`（ADR-0019）：第三段统一 REASON、不分裂 cause/reason；SCOPE 命名空间新增统一基础设施 `INFRA`（OPERATION 承担组件名，如 `INFRA.REDIS.UNAVAILABLE`），业务/系统区分由 error.type 承担，依赖名继续由 `app.upstream_service` 承载；黑盒新增 INFRA 系统错误示例。
+- `error.code` SCOPE 归属由失败面决定（ADR-0019 补充）：业务/校验拒绝用业务模块，基础设施故障（DB/缓存/MQ/网络）用 `INFRA.*`（OPERATION=组件）；INTERNAL/panic 不承载 error.code；event.name 与 error.code 前两段软对齐（SHOULD，INFRA 与业务事件名不同源）。黑盒系统错误码迁移：`USER.ROLE_UPDATE.DB_TIMEOUT`→`INFRA.MYSQL.QUERY_TIMEOUT`、`MESSAGING.PUBLISH.DEADLINE_EXCEEDED`→`INFRA.MQ.PUBLISH_TIMEOUT`，`LOCK.ACQUIRE.CONFLICT`（并发冲突，非基础设施）保留领域 SCOPE。
 - 保留 `Result` / `app.result`
 - Writer 首个参数由 `msg` 改名为 `eventType`；file/stdout JSONL 输出键 `msg` 改为 `type`（粗分类列），`type` 加入保留键防 payload 覆盖；OTLP 仍映射 LogRecord.Body。
 （不做 event.outcome 改名/移除）；采样保留措辞改为 SHOULD：高价值失败/异常事件由 Sampling/Retention Policy 高优先级保留（SHOULD be retained，操作上需要时保证保留），不编码进 event.name / error.type 语义。

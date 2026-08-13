@@ -34,6 +34,27 @@ SCOPE 命名空间。
 - SCOPE 段不做强制注册校验：命名空间是文档约定 + Error Registry 全码注册（ADR-0015），
   未注册码保持宽松。
 
+## 补充决策（2026-08-13）
+
+同日讨论进一步明确三条约束，作为上述决策的细化：
+
+- **SCOPE 归属由失败面（failure surface）决定**，不由包装它的业务模块决定：业务/校验拒绝
+  （KindBusiness / KindValidation）用业务模块 SCOPE（ORDER/PAYMENT/USER…）；基础设施故障
+  （KindSystem，失败面为 DB/缓存/MQ/网络等依赖组件）用 `INFRA.*`（OPERATION=组件）；其余
+  系统类（非基础设施，如并发冲突 ABORTED）可保留领域 SCOPE 或保持无码。黑盒据此把
+  `USER.ROLE_UPDATE.DB_TIMEOUT` 迁移为 `INFRA.MYSQL.QUERY_TIMEOUT`、
+  `MESSAGING.PUBLISH.DEADLINE_EXCEEDED` 迁移为 `INFRA.MQ.PUBLISH_TIMEOUT`；
+  `LOCK.ACQUIRE.CONFLICT`（并发冲突，非基础设施）保留领域 SCOPE。
+- **INTERNAL/panic 不承载 error.code**：panic 是程序缺陷，既无业务码也无 INFRA 失败面；
+  定位靠 error.type=INTERNAL + event.name（runtime.panic.occurred）+ stacktrace + code.*，
+  不设具体错误码。
+- **event.name 与 error.code 前两段不做 MUST 对齐**：业务码 SHOULD 与 event.name 的
+  domain.subject 同源（如 user.role_update ↔ USER.ROLE_UPDATE，第三段不必一致）；
+  INFRA.* 与业务事件名天然不同源（失败面 vs 业务事实），且同一失败码可复用于多个业务事件
+  （如 INFRA.MYSQL.QUERY_TIMEOUT 同时出现在 user.role_update.database_timeout 与
+  order.create.database_timeout），这是「跨操作聚合同一基础设施故障」的价值。
+  因此「event.name 与 error.code 前两段必须相同」作为备选方案被否掉。
+
 ## 结果（Consequences）
 
 - 四字段体系只有一套 `SCOPE.OPERATION.REASON` 文法要记，不会因「业务/系统」维度长出第二套解析规则。
