@@ -32,7 +32,7 @@ errs 内 ErrorCode → ErrorType 的固定映射注册表（多对一：一个 c
 _Avoid_: 自动派生、运行时可变映射
 
 **ErrorCode**:
-可选的稳定具体错误码，规范文法为 `err.code = SCOPE.OPERATION.REASON`，对应（服务/模块）.（场景/操作）.（结果/具体错误）；每段只允许大写字母、数字和下划线（正则 `ErrorCodePattern` 校验）。它用于客服、业务查询和精确聚合，统一写入 app.error_code；不决定 EventName，也不替代低基数 error.type。已注册的 ErrorCode 恰好映射一个 ErrorType（多对一，见 Error Registry）。
+可选的稳定具体错误码，规范文法为 `err.code = SCOPE.OPERATION.REASON`，对应（服务/模块）.（场景/操作）.（结果/具体错误）；每段只允许大写字母、数字和下划线（正则 `ErrorCodePattern` 校验）。它用于客服、业务查询和精确聚合，统一写入 error.code；不决定 EventName，也不替代低基数 error.type。已注册的 ErrorCode 恰好映射一个 ErrorType（多对一，见 Error Registry）。
 _Avoid_: app.business_code、app.operation、从错误码自动生成 EventName
 
 **Level**:

@@ -131,7 +131,7 @@ func isBusinessErrorType(t ErrorType) bool {
 
 // ErrorCode（err.code）是可选、稳定、具体的应用错误码，规范文法为
 // err.code = SCOPE.OPERATION.REASON = （服务/模块）.（场景/操作）.（结果/具体错误），
-// 例如 ORDER.CREATE.STOCK_INSUFFICIENT。日志统一投影到 app.error_code，不用于推导
+// 例如 ORDER.CREATE.STOCK_INSUFFICIENT。日志统一投影到 error.code，不用于推导
 // ErrorType 或 EventName。它不是 <domain>.<subject>.<reason>：<domain> 是旧 ErrorType
 // 自定义词表的术语，ErrorCode 第一段是服务/模块（SCOPE）。
 // 已注册的 ErrorCode 恰好映射一个 ErrorType（多对一，见 RegisterErrorCode）；未注册码不强制映射。

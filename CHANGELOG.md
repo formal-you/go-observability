@@ -58,7 +58,7 @@
 - `telemetry` 新增独立 `Runtime`、显式 `LogOutput` 与 `WriterConfig`；构造不再修改 OTel 全局状态，需显式 `InstallGlobal`，旧 `Setup*` 入口标记 Deprecated。
 - 仓库生产示例和正式黑盒迁移到严格错误构造器；旧错误构造器与 SystemOption 保留为 Deprecated 兼容入口。
 - `event.name` 从重复 `msg` 的「类别.模块.操作」调整为「领域.对象.事实」，并禁止六类 EventType 作为首段；HTTP 错误出口按错误 Kind 默认选择 `http.request.rejected` / `http.request.failed`。
-- BizError 与 SystemError 的稳定具体错误码统一投影到 `app.error_code`；旧 `app.business_code` / `app.operation` 不再输出，旧 Go 字段仅保留源码兼容输入。
+- BizError 与 SystemError 的稳定具体错误码统一投影到 `error.code`；旧 `app.business_code` / `app.operation` 不再输出，旧 Go 字段仅保留源码兼容输入。
 - 默认运维建议改为 HTTP AccessEvent 全量保留（健康检查用 `SkipPaths` 排除）；成功 access 概率采样保留为使用方显式选择，并明确会放弃完整的跨事件 access 关联。
 - Resource 输出键修正为 `service.instance.id` / `deployment.environment.name`；`Environment` 默认值统一为 `development`。
 - `Subject.UserID` 的新事件输出从 `app.user_id` 迁移到 semconv `user.id`；旧常量保留为 Deprecated 兼容输入。

@@ -78,7 +78,7 @@ func assertBusinessRejectionCode(t *testing.T, events []map[string]any) {
 	t.Helper()
 	for _, event := range eventsForRequest(events, requestBusinessFailed) {
 		if event["type"] == "business" {
-			assertString(t, event, "app.error_code", "ORDER.CREATE.STOCK_INSUFFICIENT")
+			assertString(t, event, "error.code", "ORDER.CREATE.STOCK_INSUFFICIENT")
 			return
 		}
 	}

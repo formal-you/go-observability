@@ -26,6 +26,20 @@ const (
 	requestPanic           = "req-panic"
 )
 
+// init 注册黑盒用到的 error.code → error.type 映射（Error Registry，启动期一次性写入）。
+func init() {
+	mustRegisterErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT", errs.TypeFailedPrecondition)
+	mustRegisterErrorCode("USER.ROLE_UPDATE.DB_TIMEOUT", errs.TypeDeadlineExceeded)
+	mustRegisterErrorCode("MESSAGING.PUBLISH.DEADLINE_EXCEEDED", errs.TypeDeadlineExceeded)
+	mustRegisterErrorCode("LOCK.ACQUIRE.CONFLICT", errs.TypeAborted)
+}
+
+func mustRegisterErrorCode(code errs.ErrorCode, typ errs.ErrorType) {
+	if err := errs.RegisterErrorCode(code, typ); err != nil {
+		panic("blackbox: register error code: " + err.Error())
+	}
+}
+
 // scenarioTrace 保存一次黑盒场景的真实 OTel span 标识，供人工联调和测试关联日志。
 type scenarioTrace struct {
 	TraceID string
@@ -154,7 +168,7 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 		})
 		c.Request = c.Request.WithContext(ctx)
 		ginmw.Abort(c, mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeDeadlineExceeded, Message: "update user role: database timeout",
+			Type: errs.TypeDeadlineExceeded, Code: "USER.ROLE_UPDATE.DB_TIMEOUT", Message: "update user role: database timeout",
 		}))
 	})
 
@@ -217,7 +231,7 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	logger.Emit(mqCtx, log.EventFromError(
 		log.NewEventName("messaging", "publish", "deadline_exceeded"),
 		mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeDeadlineExceeded, Message: "publish order.created: deadline exceeded",
+			Type: errs.TypeDeadlineExceeded, Code: "MESSAGING.PUBLISH.DEADLINE_EXCEEDED", Message: "publish order.created: deadline exceeded",
 			Upstream: "kafka", Retryable: true, Retries: 3, RetriesExhausted: true,
 		}),
 		log.EventMetadata{},
@@ -229,7 +243,7 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	logger.Emit(lockCtx, log.EventFromError(
 		log.NewEventName("lock", "acquire", "conflict"),
 		mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeAborted, Message: "acquire lock order:pay:42 conflict",
+			Type: errs.TypeAborted, Code: "LOCK.ACQUIRE.CONFLICT", Message: "acquire lock order:pay:42 conflict",
 		}),
 		log.EventMetadata{},
 	))

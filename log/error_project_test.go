@@ -63,8 +63,8 @@ func TestBusinessEventFromValidationError(t *testing.T) {
 	if got := attrValue(t, attrs, "error.type").String(); got != "INVALID_ARGUMENT" {
 		t.Errorf("error.type = %q, want validation.failed", got)
 	}
-	if _, ok := attrs["app.error_code"]; ok {
-		t.Error("app.error_code 不应输出（validation 无 ErrCode）")
+	if _, ok := attrs["error.code"]; ok {
+		t.Error("error.code 不应输出（validation 无 ErrCode）")
 	}
 	if got := attrValue(t, attrs, "code.function.name").String(); got != "orderService.Create" {
 		t.Errorf("code.function.name = %q, want orderService.Create", got)
@@ -104,7 +104,7 @@ func TestBusinessEventFromBusinessError(t *testing.T) {
 	if got := attrValue(t, attrs, "error.type").String(); got != "FAILED_PRECONDITION" {
 		t.Errorf("error.type = %q, want business.stock_insufficient", got)
 	}
-	if got := attrValue(t, attrs, "app.error_code").String(); got != string(code) {
+	if got := attrValue(t, attrs, "error.code").String(); got != string(code) {
 		t.Errorf("app.error_code = %q, want %q", got, code)
 	}
 }
@@ -176,15 +176,15 @@ func TestErrorEventFromSystemError(t *testing.T) {
 	if got := attrValue(t, attrs, "app.retry_count").Int64(); got != 2 {
 		t.Errorf("app.retry_count = %d, want 2", got)
 	}
-	if _, ok := attrs["app.error_code"]; ok {
-		t.Error("app.error_code 不应输出（未设置 ErrCode）")
+	if _, ok := attrs["error.code"]; ok {
+		t.Error("error.code 不应输出（未设置 ErrCode）")
 	}
 	if got := attrValue(t, attrs, "app.result").String(); got != "error" {
 		t.Errorf("app.result = %q, want error", got)
 	}
 }
 
-// TestErrorEventCodeFromErrCode 验证 SystemError 可选 ErrCode 映射到 app.error_code。
+// TestErrorEventCodeFromErrCode 验证 SystemError 可选 ErrCode 映射到 error.code。
 func TestErrorEventCodeFromErrCode(t *testing.T) {
 	err := errs.NewSystem(errs.TypeUnavailable, "payment-gateway: 502", errs.WithCode("ORDER.PAY.UPSTREAM_5XX"))
 	ev := sysEventFromError(EventName("payment.gateway.failed"), err, EventMetadata{})
@@ -192,7 +192,7 @@ func TestErrorEventCodeFromErrCode(t *testing.T) {
 		t.Errorf("ErrorCode = %q, want ORDER.PAY.UPSTREAM_5XX", ev.Data.ErrorCode)
 	}
 	attrs := attrMap(ev.Attrs())
-	if got := attrValue(t, attrs, "app.error_code").String(); got != "ORDER.PAY.UPSTREAM_5XX" {
+	if got := attrValue(t, attrs, "error.code").String(); got != "ORDER.PAY.UPSTREAM_5XX" {
 		t.Errorf("app.error_code = %q, want ORDER.PAY.UPSTREAM_5XX", got)
 	}
 	for _, legacy := range []string{"app.operation", "app.business_code"} {

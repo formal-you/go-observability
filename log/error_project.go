@@ -38,7 +38,7 @@ func businessEventFromError(eventName EventName, err errs.AppError, md EventMeta
 
 // sysEventFromError 把 errs.AppError 投影为 ErrorEvent。
 // 适用于 KindSystem：ErrorType 取 err.ErrorType()，ErrorMessage 取 err.Error()，
-// ErrorCode 取 err.ErrCode()（SystemError 可选业务关联码落 app.error_code，可为空），
+// ErrorCode 取 err.ErrCode()（SystemError 可选业务关联码落 error.code，可为空），
 // Retryable / RetryCount / UpstreamService / Source 从错误链中的 errs.SystemError 提取，
 // 支持值和指针形式；StackTrace 仅当 errs.StackRule(err.ErrorType()) 判定为 StackMust
 // 时写入 err.Stack()，其余类别留空以控制体积；Result 固定 error。

@@ -65,7 +65,7 @@ func TestErrorResponseBusinessErrorWritesEventAndResponse(t *testing.T) {
 	attrs := attrMap(w.attrsList[0])
 	attrString(t, attrs, "event.name", string(testErrEventName))
 	attrString(t, attrs, "error.type", "FAILED_PRECONDITION")
-	attrString(t, attrs, "app.error_code", "ORDER.CREATE.STOCK_INSUFFICIENT")
+	attrString(t, attrs, "error.code", "ORDER.CREATE.STOCK_INSUFFICIENT")
 	attrString(t, attrs, "app.business_message", "stock insufficient")
 	attrString(t, attrs, "app.result", "failed")
 	attrString(t, attrs, "level", "WARN")

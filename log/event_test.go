@@ -101,7 +101,7 @@ func TestZeroValueOmission(t *testing.T) {
 		},
 	}
 	attrs := attrMap(ev.Attrs())
-	for _, k := range []string{"user.id", "app.user_id", "app.error_code", "latency_ms"} {
+	for _, k := range []string{"user.id", "app.user_id", "error.code", "latency_ms"} {
 		if _, ok := attrs[k]; ok {
 			t.Errorf("零值字段不应输出：%s", k)
 		}
@@ -126,7 +126,7 @@ func TestBusinessPayloadExtraAttrsCannotOverrideGovernanceKeys(t *testing.T) {
 			slog.String(string(KeyAppTenantID), "tenant-forged"),
 			slog.String(string(KeyAppResourceType), "forged-resource"),
 			slog.String(string(KeyAppResourceID), "resource-forged"),
-			slog.String(string(KeyAppErrorCode), "FORGED"),
+			slog.String(string(KeyErrorCode), "FORGED"),
 			slog.String(string(KeyAppBusinessCode), "FORGED_LEGACY"),
 			slog.String(string(KeyAppBusinessMessage), "forged"),
 			slog.String(string(KeyCodeFunctionName), "forged.Function"),
@@ -153,7 +153,7 @@ func TestBusinessPayloadExtraAttrsCannotOverrideGovernanceKeys(t *testing.T) {
 		string(KeyAppTenantID):        payload.Subject.TenantID,
 		string(KeyAppResourceType):    payload.Resource.Type,
 		string(KeyAppResourceID):      payload.Resource.ID,
-		string(KeyAppErrorCode):       payload.ErrorCode,
+		string(KeyErrorCode):          payload.ErrorCode,
 		string(KeyAppBusinessMessage): payload.BusinessMessage,
 		string(KeyCodeFunctionName):   payload.Source.Function,
 		string(KeyCodeFilePath):       payload.Source.Filepath,
