@@ -41,6 +41,11 @@ type ErrorConfig struct {
 	// InputGuard 输入风险守卫：写出 ErrorEvent 后调用，返回的 Security/Audit 事件
 	// 与错误事件并存（错误出口唯一）；nil 表示不补发额外事件。风险分级由接入方维护。
 	InputGuard httperr.InputGuard
+
+	// SkipEvent 命中返回 true 时跳过错误事件写出（错误事件已由接入方自行记录，
+	// 例如 Application 已发布 security/business denied 领域事件），只渲染响应体；
+	// nil 表示总是写出错误事件（默认，向后兼容）。
+	SkipEvent func(error) bool
 }
 
 // errorWriter 捕获 handler 通过 SetError 挂载的错误，供 ErrorResponse 收口。
@@ -104,8 +109,11 @@ func ErrorResponse(cfg ErrorConfig) func(http.Handler) http.Handler {
 				if requestID != "" {
 					md.RequestID = requestID
 				}
-				cfg.Logger.Emit(r.Context(), log.EventFromError(eventNameResolver(recorder.err), recorder.err, md))
-				httperr.EmitGuardEvents(cfg.Logger, r.Context(), r, recorder.err, cfg.InputGuard)
+				// SkipEvent 命中时跳过事件写出（错误事件已由接入方自行记录），只渲染响应体。
+				if cfg.SkipEvent == nil || !cfg.SkipEvent(recorder.err) {
+					cfg.Logger.Emit(r.Context(), log.EventFromError(eventNameResolver(recorder.err), recorder.err, md))
+					httperr.EmitGuardEvents(cfg.Logger, r.Context(), r, recorder.err, cfg.InputGuard)
+				}
 			}
 			status, body := projector(recorder.err, requestID)
 			writeJSON(w, status, body)
