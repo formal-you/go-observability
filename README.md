@@ -191,7 +191,7 @@ if err := w.Close(ctx); err != nil {
 ```text
 事件名结构：event.name MUST use the form <domain>.<subject>.<event>（`type` 已承载粗分类）
 
-http.request.completed
+order.payment.succeeded
    │      │      └── <event> 注册的 Event Type
    │      └───────── <subject> 对象
    └──────────────── <domain> 领域
