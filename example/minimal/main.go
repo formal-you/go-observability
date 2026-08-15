@@ -15,7 +15,8 @@ import (
 func main() {
 	ctx := context.Background()
 	providers, err := telemetry.NewFileRuntime(telemetry.Config{
-		ServiceName: "mall-monolith",
+		Resource: telemetry.ResourceConfig{ServiceName: "mall-monolith"},
+		Log:      telemetry.LogConfig{Output: telemetry.SignalOutputFile, FilePath: "logs/events.jsonl"},
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "setup file telemetry:", err)
@@ -23,7 +24,7 @@ func main() {
 	}
 	restore := providers.InstallGlobal()
 	defer restore()
-	w, err := providers.NewWriter(ctx, telemetry.WriterConfig{FilePath: "logs/events.jsonl"})
+	w, err := providers.NewWriter(ctx)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "create log writer:", err)
 		os.Exit(1)

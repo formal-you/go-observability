@@ -1,7 +1,8 @@
 # =============================================================================
 # 应用侧可观测配置结构示意（非库内置加载器）
 # 用途：给接入方 YAML/配置中心对照字段；自行用 viper/koanf/envconfig 解析后
-#       填入 telemetry.Config 与 log.NewLogger 选项。
+#       填入 telemetry.ResourceConfig / TraceConfig / MetricConfig / LogConfig
+#       与 log.NewLogger 选项。
 # =============================================================================
 
 observability:
@@ -20,12 +21,12 @@ observability:
 
   # --- OTLP 出口 ---
   otlp:
-    # disabled: 对应 OTEL_SDK_DISABLED；true = 全离线 noop Providers
+    # disabled: 对应 OTEL_SDK_DISABLED；true = Config.Enabled=false，不创建 Provider
     disabled: false
     # endpoint: telemetry.Config 的 Provider OTLP 地址，支持 host:port 或 URL
     # 注意: 显式 endpoint 或 SetupFromEnvironment 启动时读到环境变量，都会固化为 OTLP 出口
     endpoint: "127.0.0.1:4317"
-    # jsonl_path: endpoint 为空或 disabled 时的日志落盘路径
+    # jsonl_path: telemetry.LogConfig.FilePath，对应 Output=file 时的 JSONL 路径
     jsonl_path: "logs/events.jsonl"
 
   # --- 采样率与导出间隔（库默认见 telemetry）---

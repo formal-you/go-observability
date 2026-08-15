@@ -25,7 +25,7 @@
 | [0008](0008-security-audit-middleware.md) | Security / Audit 事件中间件（SecurityLog / AuditLog，拉取式 Decide/Describe） | Accepted | 2026-08-11 |
 | [0009](0009-event-name-fact-and-error-code.md) | EventName 使用领域事实，BizError / SystemError 统一 error.code | Accepted | 2026-08-11 |
 | [0010](0010-strict-error-construction.md) | 严格错误构造与 SCOPE.OPERATION.REASON / ErrorType 标准枚举 | Accepted | 2026-08-11 |
-| [0011](0011-telemetry-runtime-explicit-output.md) | Telemetry Runtime 隔离全局状态并显式选择日志出口 | Accepted | 2026-08-11 |
+| [0011](0011-telemetry-runtime-explicit-output.md) | Telemetry Runtime 隔离全局状态并显式选择日志出口 | Superseded（ADR-0020） | 2026-08-11 |
 | [0012](0012-subject-actor-context-and-privacy.md) | Subject / Actor 可信上下文与隐私边界 | Accepted | 2026-08-11 |
 | [0013](0013-bounded-stack-policy.md) | 有界 StackPolicy 与路径治理 | Accepted | 2026-08-11 |
 | [0014](0014-managed-writer-lifecycle.md) | 通过 ManagedWriter 统一 Writer 生命周期 | Accepted | 2026-08-12 |
@@ -34,6 +34,7 @@
 | [0017](0017-retain-app-result-sampling-policy.md) | 保留 app.result 结果列，Sampling/Retention 独立策略层 | Accepted | 2026-08-13 |
 | [0018](0018-event-name-convention.md) | Event Name Convention：<event> 必须是注册的 Event Type | Accepted | 2026-08-13 |
 | [0019](0019-errorcode-single-grammar-infra-scope.md) | error.code 单一文法：不分裂 reason/cause；SCOPE 失败面归属（INFRA.*），event.name/error.code 软对齐 | Accepted | 2026-08-13 |
+| [0020](0020-telemetry-per-signal-config.md) | Telemetry 按信号拆分配置并移除兼容层 | Accepted | 2026-08-15 |
 
 ## 模板
 

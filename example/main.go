@@ -1,12 +1,12 @@
 // Command example 演示 go-observability 的三信号装配（telemetry）+ Gin 全链路中间件
 // （ginmw.Trace / Recover / AccessLog / Metrics / ErrorResponse）。
-// 默认把日志写入当前工作目录的 logs/events.jsonl；设置 OTEL_EXPORTER_OTLP_ENDPOINT 时改走 OTLP。
-// 设 OTEL_SDK_DISABLED=true 可离线运行（trace/metric/log provider 全部 noop）。
+// 默认把日志写入当前工作目录的 logs/events.jsonl，并把 Trace 设为 local、Metric 设为 none；
+// 设置 OTEL_EXPORTER_OTLP_ENDPOINT 时三信号统一改走 OTLP。
+// 设 OTEL_SDK_DISABLED=true 可离线运行（trace/metric/log provider 全部 noop，日志仍写本地文件）。
 package main
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -23,30 +23,38 @@ func main() {
 	ctx := context.Background()
 
 	endpoint := telemetry.EndpointFromEnvironment()
-	output := telemetry.LogOutputFile
+	logOutput := telemetry.SignalOutputFile
+	traceOutput := telemetry.SignalOutputLocal
+	metricOutput := telemetry.SignalOutputNone
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" {
-		output = telemetry.LogOutputOTLP
+		logOutput = telemetry.SignalOutputOTLP
+		traceOutput = telemetry.SignalOutputOTLP
+		metricOutput = telemetry.SignalOutputOTLP
 	}
 	// 三信号装配：Runtime 构造与全局安装显式分开。
-	providers, err := telemetry.NewRuntime(ctx, telemetry.Config{
-		Enabled:        telemetry.EnabledFromEnvironment(),
-		ServiceName:    "go-observability",
-		ServiceVersion: "0.1.0",
-		Environment:    "dev",
-		Region:         os.Getenv("GO_OBSERVABILITY_REGION"),
-		Instance:       os.Getenv("GO_OBSERVABILITY_INSTANCE"),
-		Endpoint:       endpoint,
-		LogOutput:      output,
+	runtime, err := telemetry.NewRuntime(ctx, telemetry.Config{
+		Enabled:  telemetry.EnabledFromEnvironment(),
+		Endpoint: endpoint,
+		Resource: telemetry.ResourceConfig{
+			ServiceName:    "go-observability",
+			ServiceVersion: "0.1.0",
+			Environment:    "dev",
+			Region:         os.Getenv("GO_OBSERVABILITY_REGION"),
+			Instance:       os.Getenv("GO_OBSERVABILITY_INSTANCE"),
+		},
+		Trace:  telemetry.TraceConfig{Output: traceOutput},
+		Metric: telemetry.MetricConfig{Output: metricOutput},
+		Log:    telemetry.LogConfig{Output: logOutput, FilePath: filepath.Join("logs", "events.jsonl")},
 	})
 	if err != nil {
 		slog.Error("init telemetry", "err", err)
 		os.Exit(1)
 	}
-	restore := providers.InstallGlobal()
+	restore := runtime.InstallGlobal()
 	defer restore()
-	defer func() { _ = providers.Shutdown(ctx) }()
+	defer func() { _ = runtime.Shutdown(ctx) }()
 
-	w, err := newLogWriter(ctx, providers, output)
+	w, err := runtime.NewWriter(ctx)
 	if err != nil {
 		slog.Error("init log writer", "err", err)
 		os.Exit(1)
@@ -88,18 +96,6 @@ func mustBusinessError(cfg errs.BusinessErrorConfig) errs.BizError {
 	return err
 }
 
-// newLogWriter 根据应用已选定的出口组装 Writer；Runtime 隐藏 Provider 与 Resource 实现。
-func newLogWriter(ctx context.Context, p *telemetry.Providers, output telemetry.LogOutput) (log.ManagedWriter, error) {
-	if p == nil {
-		return nil, errors.New("nil telemetry runtime")
-	}
-	if output == telemetry.LogOutputOTLP {
-		return p.NewWriter(ctx, telemetry.WriterConfig{})
-	}
-	return p.NewWriter(ctx, telemetry.WriterConfig{FilePath: filepath.Join("logs", "events.jsonl")})
-}
-
-// closeWriter 关闭 Runtime 创建的托管 writer。
 func closeWriter(ctx context.Context, w log.ManagedWriter) {
 	_ = w.Close(ctx)
 }

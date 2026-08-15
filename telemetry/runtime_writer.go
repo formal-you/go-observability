@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/formal-you/go-observability/log"
 	"github.com/formal-you/go-observability/writer/file"
@@ -13,36 +12,27 @@ import (
 	stdoutwriter "github.com/formal-you/go-observability/writer/stdout"
 )
 
-// NewWriter 按 Runtime 的 LogOutput 创建 ManagedWriter。
+// NewWriter 按 Runtime 保存的 LogConfig 创建 ManagedWriter。
 //
 // file/stdout Writer 接收 Runtime 的 Resource identity；OTLP Writer 复用 Runtime 拥有的
 // LoggerProvider，因此关闭 Writer 不会提前关闭 Provider。返回值的 Close 幂等，应用仍应
 // 在 Runtime.Shutdown 前调用它，以释放 Writer 自己拥有的资源。
-func (r *Runtime) NewWriter(ctx context.Context, cfg WriterConfig) (log.ManagedWriter, error) {
+func (r *Runtime) NewWriter(ctx context.Context) (log.ManagedWriter, error) {
 	if r == nil {
 		return nil, errors.New("telemetry: nil runtime")
 	}
-	switch r.logOutput {
-	case LogOutputFile:
-		if strings.TrimSpace(cfg.FilePath) == "" {
-			return nil, errors.New("telemetry: file output requires file path")
-		}
-		if len(cfg.StdoutOptions) != 0 {
-			return nil, errors.New("telemetry: stdout options do not apply to file output")
-		}
+	switch r.logConfig.Output {
+	case SignalOutputFile:
 		// 复制调用方 slice 后追加进程级 metadata，避免修改调用方持有的配置。
 		// metadata 选项最后应用，事件和调用方选项都不能覆盖 Runtime 的服务身份。
-		opts := append([]file.Option(nil), cfg.FileOptions...)
+		opts := append([]file.Option(nil), r.logConfig.FileOptions...)
 		opts = append(opts, file.WithResourceMetadata(r.fileMetadata))
-		writer, err := file.New(cfg.FilePath, opts...)
+		writer, err := file.New(r.logConfig.FilePath, opts...)
 		if err != nil {
 			return nil, err
 		}
 		return log.ManageWriter(writer), nil
-	case LogOutputOTLP:
-		if cfg.FilePath != "" || len(cfg.FileOptions) != 0 || len(cfg.StdoutOptions) != 0 {
-			return nil, errors.New("telemetry: writer options do not apply to otlp output")
-		}
+	case SignalOutputOTLP:
 		if r.loggerProvider == nil {
 			return nil, errors.New("telemetry: otlp output requires logger provider")
 		}
@@ -53,24 +43,20 @@ func (r *Runtime) NewWriter(ctx context.Context, cfg WriterConfig) (log.ManagedW
 			return nil, err
 		}
 		return log.ManageWriter(writer), nil
-	case LogOutputStdout:
-		if cfg.FilePath != "" || len(cfg.FileOptions) != 0 {
-			return nil, errors.New("telemetry: file options do not apply to stdout output")
+	case SignalOutputStdout:
+		opts := append([]stdoutwriter.Option(nil), r.logConfig.StdoutOptions...)
+		if r.resource != nil {
+			opts = append(opts, stdoutwriter.WithResource(r.resource))
 		}
-		opts := append([]stdoutwriter.Option(nil), cfg.StdoutOptions...)
-		opts = append(opts, stdoutwriter.WithResource(r.resource))
 		writer, err := stdoutwriter.New(ctx, opts...)
 		if err != nil {
 			return nil, err
 		}
 		return log.ManageWriter(writer), nil
-	case LogOutputNone:
-		if cfg.FilePath != "" || len(cfg.FileOptions) != 0 || len(cfg.StdoutOptions) != 0 {
-			return nil, errors.New("telemetry: writer options do not apply to none output")
-		}
+	case SignalOutputNone:
 		return log.ManageWriter(noopWriter{}), nil
 	default:
-		return nil, fmt.Errorf("telemetry: invalid log output %q", r.logOutput)
+		return nil, fmt.Errorf("telemetry: invalid log output %q", r.logConfig.Output)
 	}
 }
 

@@ -27,71 +27,177 @@ const (
 )
 
 func normalizeAndValidateConfig(cfg *Config) error {
-	// 先验证身份与出口，再补齐默认值，确保配置错误在创建任何 Exporter 前返回。
-	if strings.TrimSpace(cfg.ServiceName) == "" {
+	if !cfg.Enabled {
+		return normalizeDisabledConfig(cfg)
+	}
+	if strings.TrimSpace(cfg.Resource.ServiceName) == "" {
 		return errors.New("telemetry: service name is required")
 	}
-	switch cfg.LogOutput {
-	case LogOutputFile, LogOutputOTLP, LogOutputStdout, LogOutputNone:
-	default:
-		return fmt.Errorf("telemetry: invalid log output %q", cfg.LogOutput)
+	if err := normalizeAndValidateLog(&cfg.Log); err != nil {
+		return err
 	}
-	switch outputOf(cfg.TraceOutput) {
-	case LogOutputOTLP, LogOutputFile, LogOutputStdout, LogOutputNone:
-	default:
-		return fmt.Errorf("telemetry: invalid trace output %q", cfg.TraceOutput)
+	if err := normalizeAndValidateTrace(&cfg.Trace); err != nil {
+		return err
 	}
-	switch outputOf(cfg.MetricOutput) {
-	case LogOutputOTLP, LogOutputFile, LogOutputStdout, LogOutputNone:
-	default:
-		return fmt.Errorf("telemetry: invalid metric output %q", cfg.MetricOutput)
+	if err := normalizeAndValidateMetric(&cfg.Metric); err != nil {
+		return err
 	}
-	if outputOf(cfg.TraceOutput) == LogOutputFile && strings.TrimSpace(cfg.TraceFile) == "" {
-		return errors.New("telemetry: trace file output requires trace_file path")
-	}
-	if outputOf(cfg.MetricOutput) == LogOutputFile && strings.TrimSpace(cfg.MetricFile) == "" {
-		return errors.New("telemetry: metric file output requires metric_file path")
-	}
-	if cfg.TraceSampleRatio == 0 {
-		cfg.TraceSampleRatio = defaultTraceSampleRatio
-	}
-	if cfg.TraceSampleRatio < 0 || cfg.TraceSampleRatio > 1 {
-		return errors.New("telemetry: trace sample ratio must be in (0, 1]")
-	}
-	if cfg.TraceBatchTimeout == 0 {
-		cfg.TraceBatchTimeout = defaultTraceBatchTimeout
-	}
-	if cfg.TraceBatchTimeout < 0 {
-		return errors.New("telemetry: trace batch timeout must be positive")
-	}
-	if cfg.MetricExportInterval == 0 {
-		cfg.MetricExportInterval = defaultMetricExportInterval
-	}
-	if cfg.MetricExportInterval < 0 {
-		return errors.New("telemetry: metric export interval must be positive")
-	}
-	if cfg.LogBatchTimeout == 0 {
-		cfg.LogBatchTimeout = defaultLogBatchTimeout
-	}
-	if cfg.LogBatchTimeout < 0 {
-		return errors.New("telemetry: log batch timeout must be positive")
-	}
-	if cfg.LogQueueSize == 0 {
-		cfg.LogQueueSize = defaultLogQueueSize
-	}
-	if cfg.LogQueueSize < 0 {
-		return errors.New("telemetry: log queue size must be positive")
-	}
-	if cfg.Environment == "" {
-		cfg.Environment = "development"
+	if cfg.Resource.Environment == "" {
+		cfg.Resource.Environment = "development"
 	}
 	return nil
 }
 
-func resourceForConfig(cfg Config) *resource.Resource {
+// normalizeDisabledConfig 保留日志 Writer 能力，但不创建任何 Provider。
+// 与旧兼容行为一致：Log.Output 为空或 otlp 时归一化为 file，便于本地 JSONL 开发。
+func normalizeDisabledConfig(cfg *Config) error {
+	if cfg.Log.Output == "" || cfg.Log.Output == SignalOutputOTLP {
+		cfg.Log.Output = SignalOutputFile
+	}
+	if err := validateSignalOutput(cfg.Log.Output, "log", false); err != nil {
+		return err
+	}
+	switch cfg.Log.Output {
+	case SignalOutputFile:
+		if strings.TrimSpace(cfg.Log.FilePath) == "" {
+			return errors.New("telemetry: file output requires file path")
+		}
+	case SignalOutputStdout:
+		if cfg.Log.FilePath != "" || len(cfg.Log.FileOptions) != 0 {
+			return errors.New("telemetry: file options do not apply to stdout output")
+		}
+	case SignalOutputNone:
+		if cfg.Log.FilePath != "" || len(cfg.Log.FileOptions) != 0 || len(cfg.Log.StdoutOptions) != 0 {
+			return errors.New("telemetry: writer options do not apply to none output")
+		}
+	}
+	return nil
+}
+
+func normalizeAndValidateLog(cfg *LogConfig) error {
+	if err := validateSignalOutput(cfg.Output, "log", false); err != nil {
+		return err
+	}
+	switch cfg.Output {
+	case SignalOutputFile:
+		if strings.TrimSpace(cfg.FilePath) == "" {
+			return errors.New("telemetry: file output requires file path")
+		}
+		if len(cfg.StdoutOptions) != 0 {
+			return errors.New("telemetry: stdout options do not apply to file output")
+		}
+	case SignalOutputOTLP:
+		if cfg.FilePath != "" || len(cfg.FileOptions) != 0 || len(cfg.StdoutOptions) != 0 {
+			return errors.New("telemetry: writer options do not apply to otlp output")
+		}
+	case SignalOutputStdout:
+		if cfg.FilePath != "" || len(cfg.FileOptions) != 0 {
+			return errors.New("telemetry: file options do not apply to stdout output")
+		}
+	case SignalOutputNone:
+		if cfg.FilePath != "" || len(cfg.FileOptions) != 0 || len(cfg.StdoutOptions) != 0 {
+			return errors.New("telemetry: writer options do not apply to none output")
+		}
+	default:
+		return fmt.Errorf("telemetry: invalid log output %q", cfg.Output)
+	}
+	if err := normalizePositive(&cfg.BatchTimeout, defaultLogBatchTimeout, "log batch timeout"); err != nil {
+		return err
+	}
+	return normalizePositive(&cfg.QueueSize, defaultLogQueueSize, "log queue size")
+}
+
+func normalizeAndValidateTrace(cfg *TraceConfig) error {
+	if cfg.Output == "" {
+		cfg.Output = SignalOutputOTLP
+	}
+	if err := validateSignalOutput(cfg.Output, "trace", true); err != nil {
+		return err
+	}
+	switch cfg.Output {
+	case SignalOutputFile:
+		if strings.TrimSpace(cfg.FilePath) == "" {
+			return errors.New("telemetry: trace file output requires trace_file path")
+		}
+	case SignalOutputLocal, SignalOutputNone:
+		if cfg.FilePath != "" {
+			return fmt.Errorf("telemetry: trace file path does not apply to %s output", cfg.Output)
+		}
+		if cfg.Exporter != nil {
+			return fmt.Errorf("telemetry: trace exporter does not apply to %s output", cfg.Output)
+		}
+	default:
+		if cfg.FilePath != "" {
+			return errors.New("telemetry: trace file path does not apply to selected output")
+		}
+	}
+	if cfg.Output != SignalOutputOTLP && cfg.Exporter != nil {
+		return fmt.Errorf("telemetry: trace exporter does not apply to %s output", cfg.Output)
+	}
+	if cfg.SampleRatio == 0 {
+		cfg.SampleRatio = defaultTraceSampleRatio
+	}
+	if cfg.SampleRatio < 0 || cfg.SampleRatio > 1 {
+		return errors.New("telemetry: trace sample ratio must be in (0, 1]")
+	}
+	return normalizePositive(&cfg.BatchTimeout, defaultTraceBatchTimeout, "trace batch timeout")
+}
+
+func normalizeAndValidateMetric(cfg *MetricConfig) error {
+	if cfg.Output == "" {
+		cfg.Output = SignalOutputOTLP
+	}
+	if err := validateSignalOutput(cfg.Output, "metric", true); err != nil {
+		return err
+	}
+	if cfg.Output == SignalOutputLocal {
+		return errors.New("telemetry: local output is only valid for trace")
+	}
+	switch cfg.Output {
+	case SignalOutputFile:
+		if strings.TrimSpace(cfg.FilePath) == "" {
+			return errors.New("telemetry: metric file output requires metric_file path")
+		}
+	default:
+		if cfg.FilePath != "" {
+			return errors.New("telemetry: metric file path does not apply to selected output")
+		}
+	}
+	if cfg.Output != SignalOutputOTLP && cfg.Reader != nil {
+		return fmt.Errorf("telemetry: metric reader does not apply to %s output", cfg.Output)
+	}
+	return normalizePositive(&cfg.ExportInterval, defaultMetricExportInterval, "metric export interval")
+}
+
+func validateSignalOutput(output SignalOutput, name string, allowLocal bool) error {
+	switch output {
+	case SignalOutputFile, SignalOutputOTLP, SignalOutputStdout, SignalOutputNone:
+		return nil
+	case SignalOutputLocal:
+		if allowLocal {
+			return nil
+		}
+		return fmt.Errorf("telemetry: local output is not valid for %s", name)
+	default:
+		return fmt.Errorf("telemetry: invalid %s output %q", name, output)
+	}
+}
+
+// normalizePositive 为零值字段应用默认值并拒绝负数；duration 与整型队列容量共用。
+func normalizePositive[T int | time.Duration](value *T, def T, name string) error {
+	if *value == 0 {
+		*value = def
+	}
+	if *value < 0 {
+		return fmt.Errorf("telemetry: %s must be positive", name)
+	}
+	return nil
+}
+
+func resourceForConfig(cfg ResourceConfig) *resource.Resource {
 	// 显式 Resource 是高级注入点：一旦提供，就由调用方承担其属性完整性。
-	if cfg.Resource != nil {
-		return cfg.Resource
+	if cfg.Override != nil {
+		return cfg.Override
 	}
 	attrs := make([]attribute.KeyValue, 0, 5)
 	if cfg.ServiceName != "" {
@@ -134,19 +240,19 @@ func resourceMetadata(res *resource.Resource) file.ResourceMetadata {
 	return metadata
 }
 
-// EnabledFromEnvironment 读取兼容入口使用的 OTEL_SDK_DISABLED 开关。
+// EnabledFromEnvironment 读取 OTEL_SDK_DISABLED 环境变量并映射为 Config.Enabled。
 // 环境变量值忽略首尾空白和大小写；只有 true 表示禁用。
 func EnabledFromEnvironment() bool {
 	return !strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_SDK_DISABLED")), "true")
 }
 
-// EndpointFromEnvironment 读取兼容入口使用的 OTLP endpoint；未设置时返回本地默认地址。
+// EndpointFromEnvironment 读取 OTEL_EXPORTER_OTLP_ENDPOINT；未设置时返回本地默认地址。
 func EndpointFromEnvironment() string {
 	return defaultIfEmpty(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")), defaultEndpoint)
 }
 
 func endpointURL(endpoint string) (string, error) {
-	// 所有三种 OTLP signal 共用统一解析规则，避免不同 Exporter 对非法地址各自回退。
+	// 所有 OTLP signal 共用统一解析规则，避免不同 Exporter 对非法地址各自回退。
 	normalized, err := otlpendpoint.Parse(endpoint)
 	if err != nil {
 		return "", fmt.Errorf("telemetry: %w", err)
@@ -161,10 +267,28 @@ func defaultIfEmpty(value, fallback string) string {
 	return value
 }
 
-// outputOf 归一化信号输出目标：空值按 OTLP 处理（与历史行为一致，保持向后兼容）。
-func outputOf(o LogOutput) LogOutput {
+func normalizedTraceOutput(o SignalOutput) SignalOutput {
 	if o == "" {
-		return LogOutputOTLP
+		return SignalOutputOTLP
 	}
 	return o
+}
+
+func normalizedMetricOutput(o SignalOutput) SignalOutput {
+	if o == "" {
+		return SignalOutputOTLP
+	}
+	return o
+}
+
+// otlpEndpointRequired 报告是否有信号会在 NewRuntime 中实际创建 OTLP exporter/reader。
+// 注入自定义 Exporter/Reader 时，对应信号不消费 Endpoint。
+func otlpEndpointRequired(cfg Config) bool {
+	if normalizedTraceOutput(cfg.Trace.Output) == SignalOutputOTLP && cfg.Trace.Exporter == nil {
+		return true
+	}
+	if normalizedMetricOutput(cfg.Metric.Output) == SignalOutputOTLP && cfg.Metric.Reader == nil {
+		return true
+	}
+	return cfg.Log.Output == SignalOutputOTLP
 }

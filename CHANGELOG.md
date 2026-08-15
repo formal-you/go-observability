@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Changed
+- `telemetry` 破坏性重构为按信号拆分配置：`Config` 拆为 `Resource` / `Trace` / `Metric` / `Log`；统一 `SignalOutput`（`file`/`otlp`/`stdout`/`none`，Trace 另有 `local`）；`Runtime.NewWriter` 改为 `NewWriter(ctx)`，日志参数进入 `LogConfig`；删除 `LogOutput`、`Providers`、`WriterConfig`、`Setup*`、`NewLogWriter`、`Runtime.Resource`、`Runtime.LoggerProvider` 兼容层。迁移：`ServiceName` 等移入 `Resource`，`LogOutputX` 改为 `SignalOutputX`，`TraceOutput/MetricOutput` 移入 `Trace/Metric.Output`，`NewWriter(ctx, WriterConfig{...})` 改为 `NewWriter(ctx)`。
 
 - Gin `Abort(nil)` 的固定系统错误改为包初始化时构造并验证，请求路径只复用已验证错误，避免在请求处理中触发库内固定契约构造失败。
 - ErrorType 由 `domain.reason` 自定义词表迁移为 OTel/gRPC 标准枚举（gRPC canonical code，跨模块闭合枚举）：旧常量移除，映射如 `db.query_timeout → DEADLINE_EXCEEDED`、`db.connection_error → UNAVAILABLE`、`runtime.panic → INTERNAL`、`business.* → FAILED_PRECONDITION`；`SetStackPolicy` 改为按精确 code 覆盖。
@@ -59,6 +60,7 @@
 - Error / Security / Audit payload 新增 `ExtraAttrs`（canonical 键守卫 + 保留键过滤）；新增框架级事实名 `input.threat.detected` / `input.anomaly.recorded` 与键 `app.input_field` / `app.input_hash` / `app.input_truncated`。
 
 ### Changed
+- `telemetry` 破坏性重构为按信号拆分配置：`Config` 拆为 `Resource` / `Trace` / `Metric` / `Log`；统一 `SignalOutput`（`file`/`otlp`/`stdout`/`none`，Trace 另有 `local`）；`Runtime.NewWriter` 改为 `NewWriter(ctx)`，日志参数进入 `LogConfig`；删除 `LogOutput`、`Providers`、`WriterConfig`、`Setup*`、`NewLogWriter`、`Runtime.Resource`、`Runtime.LoggerProvider` 兼容层。迁移：`ServiceName` 等移入 `Resource`，`LogOutputX` 改为 `SignalOutputX`，`TraceOutput/MetricOutput` 移入 `Trace/Metric.Output`，`NewWriter(ctx, WriterConfig{...})` 改为 `NewWriter(ctx)`。
 - 收紧 `telemetry.Runtime` 的推荐公共表面：`Resource()` / `LoggerProvider()` 标记 Deprecated 并移入兼容层；仓库内部与正式黑盒改用 `Tracer`、`Meter`、`NewWriter`、`Stats` 和生命周期方法，不再探测或持有 Runtime 内部 Provider。
 - `telemetry` 新增独立 `Runtime`、显式 `LogOutput` 与 `WriterConfig`；构造不再修改 OTel 全局状态，需显式 `InstallGlobal`，旧 `Setup*` 入口标记 Deprecated。
 - 仓库生产示例和正式黑盒迁移到严格错误构造器；旧错误构造器与 SystemOption 保留为 Deprecated 兼容入口。

@@ -28,20 +28,28 @@ func TestRuntimeOTLPUnavailableIsObservableBlackBox(t *testing.T) {
 		t.Fatalf("close reserved endpoint: %v", err)
 	}
 	runtime, err := telemetry.NewRuntime(context.Background(), telemetry.Config{
-		Enabled:              true,
-		ServiceName:          "otlp-unavailable",
-		Endpoint:             endpoint,
-		LogOutput:            telemetry.LogOutputOTLP,
-		LogBatchTimeout:      10 * time.Millisecond,
-		TraceExporter:        noOpTraceExporter{},
-		MetricReader:         sdkmetric.NewManualReader(),
-		TraceBatchTimeout:    time.Hour,
-		MetricExportInterval: time.Hour,
+		Enabled:  true,
+		Resource: telemetry.ResourceConfig{ServiceName: "otlp-unavailable"},
+		Endpoint: endpoint,
+		Trace: telemetry.TraceConfig{
+			Output:       telemetry.SignalOutputOTLP,
+			Exporter:     noOpTraceExporter{},
+			BatchTimeout: time.Hour,
+		},
+		Metric: telemetry.MetricConfig{
+			Output:         telemetry.SignalOutputOTLP,
+			Reader:         sdkmetric.NewManualReader(),
+			ExportInterval: time.Hour,
+		},
+		Log: telemetry.LogConfig{
+			Output:       telemetry.SignalOutputOTLP,
+			BatchTimeout: 10 * time.Millisecond,
+		},
 	})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
-	writer, err := runtime.NewWriter(context.Background(), telemetry.WriterConfig{})
+	writer, err := runtime.NewWriter(context.Background())
 	if err != nil {
 		t.Fatalf("NewWriter: %v", err)
 	}

@@ -1,6 +1,6 @@
 # ADR-0011：Telemetry Runtime 隔离全局状态并显式选择日志出口
 
-- 状态：Accepted
+- 状态：Superseded（ADR-0020）
 - 日期：2026-08-11
 - 关联：ADR-0010
 

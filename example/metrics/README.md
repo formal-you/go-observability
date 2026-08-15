@@ -1,6 +1,6 @@
 # 使用方指标示例
 
-本库提供 `telemetry.Providers.Meter`，但不替使用方定义业务指标。本示例创建 HTTP 耗时直方图和支付计数器，并展示低基数属性。
+本库提供 `telemetry.Runtime.Meter`，但不替使用方定义业务指标。本示例把 `Trace=none、Metric=otlp、Log=none` 分开装配，创建 HTTP 耗时直方图和支付计数器，并展示低基数属性。
 
 离线验证程序可启动：
 

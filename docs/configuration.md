@@ -2,7 +2,7 @@
 
 配置分三层：应用代码负责事件、Logger 和 `telemetry.Config`；进程环境负责启用状态与 OTLP 地址；Collector 和存储由部署平台维护。本库不读取 YAML 配置文件，仓库中的 YAML 只作为可复制模板。
 
-新代码使用 `telemetry.NewRuntime`，显式设置 `Config.LogOutput`，再调用 `InstallGlobal` 和 `NewWriter`。构造 Runtime 不修改进程全局 OTel 状态；应用应保存并调用恢复函数。`Setup*`、`NewLogWriter` 仅用于兼容旧接入。
+`telemetry.Config` 按信号拆为 `Resource` / `Trace` / `Metric` / `Log`。应用先 `NewRuntime`，再显式调用 `InstallGlobal`；日志 Writer 通过 `Runtime.NewWriter(ctx)` 创建，参数已进入 `Config.Log`。构造 Runtime 不修改进程全局 OTel 状态；应用应保存并调用恢复函数。
 
 ## OTel 版本边界
 
@@ -14,85 +14,145 @@ semconv 升级将作为独立变更，同步验证 schema URL、API、Resource �
 
 ## telemetry.Config
 
+### 顶层
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Enabled` | 应用或 `EnabledFromEnvironment` 设置 | `false` 返回不含 Provider 的 Runtime；`Log.Output` 为空或 `otlp` 时归一化为 `file` |
+| `Endpoint` | `127.0.0.1:4317` | OTLP gRPC endpoint，可用 `host:port` 或 URL；仅在有信号选择 OTLP 时解析 |
+
+### ResourceConfig
+
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `ServiceName` | 无 | 启用 telemetry 时必填，写入 `service.name` |
 | `ServiceVersion` | 空 | 写入 `service.version` |
 | `Environment` | `development` | 写入 `deployment.environment.name` |
 | `Region` / `Instance` | 省略 | `Region` 写入低基数 `region`；`Instance` 写入 `service.instance.id` |
-| `Endpoint` | 环境变量或 `127.0.0.1:4317` | OTLP gRPC endpoint，可用 `host:port` 或 URL |
-| `Enabled` | 应用或 `EnabledFromEnvironment` 设置 | `false` 返回不含 Provider 的 Runtime |
-| `LogOutput` | 无 | 必填，选择 `file` / `otlp` / `stdout` / `none` |
-| `TraceSampleRatio` | `0.1` | SDK 头部采样比例，范围 `(0, 1]` |
-| `TraceBatchTimeout` | `5s` | span 批量导出间隔 |
-| `MetricExportInterval` | `15s` | metric 周期导出间隔 |
-| `LogBatchTimeout` | `1s` | log 批量导出间隔 |
-| `LogQueueSize` | `2048` | OTLP Log BatchProcessor 有界队列容量；满队列时由 OTel SDK 记录 dropped log records 诊断 |
-| `TraceExporter` | 空 | 注入公开 `sdktrace.SpanExporter`，用于测试或自定义 Trace 出口；空值使用 OTLP |
-| `MetricReader` | 空 | 注入公开 `sdkmetric.Reader`，用于测试或自定义 Metric 出口；空值使用 OTLP 周期 Reader |
-| `Resource` | 自动构建 | 自定义 OpenTelemetry Resource |
+| `Override` | 空 | 自定义 OpenTelemetry Resource；非空时由调用方负责属性完整性 |
+
+### TraceConfig
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Output` | `otlp` | `otlp` / `file` / `stdout` / `none` / `local`；`local` 只生成合法 TraceID/SpanID 不导出完整 Span |
+| `FilePath` | 空 | `Output=file` 时必填 |
+| `SampleRatio` | `0.1` | SDK 头部采样比例，范围 `(0, 1]` |
+| `BatchTimeout` | `5s` | span 批量导出间隔 |
+| `Exporter` | 空 | 注入公开 `sdktrace.SpanExporter`，仅 `Output=otlp` 可用 |
+
+### MetricConfig
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Output` | `otlp` | `otlp` / `file` / `stdout` / `none` |
+| `FilePath` | 空 | `Output=file` 时必填 |
+| `ExportInterval` | `15s` | metric 周期导出间隔 |
+| `Reader` | 空 | 注入公开 `sdkmetric.Reader`，仅 `Output=otlp` 可用 |
+
+### LogConfig
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Output` | 无 | 必填，选择 `file` / `otlp` / `stdout` / `none` |
+| `FilePath` | 空 | `Output=file` 时必填 |
+| `FileOptions` | 空 | 仅 `Output=file` |
+| `StdoutOptions` | 空 | 仅 `Output=stdout` |
+| `BatchTimeout` | `1s` | log 批量导出间隔 |
+| `QueueSize` | `2048` | OTLP Log BatchProcessor 有界队列容量；满队列时由 OTel SDK 记录 dropped log records 诊断 |
 
 ```go
-providers, err := telemetry.NewRuntime(ctx, telemetry.Config{
-	Enabled:         true,
-	ServiceName:     "order-api",
-	ServiceVersion:  "0.1.0",
-	Environment:     "production",
-	LogOutput:       telemetry.LogOutputOTLP,
-	TraceSampleRatio: 1.0,
+runtime, err := telemetry.NewRuntime(ctx, telemetry.Config{
+	Enabled:  true,
+	Endpoint: "127.0.0.1:4317",
+	Resource: telemetry.ResourceConfig{
+		ServiceName:    "order-api",
+		ServiceVersion: "0.1.0",
+		Environment:    "production",
+	},
+	Trace: telemetry.TraceConfig{
+		Output:      telemetry.SignalOutputOTLP,
+		SampleRatio: 1.0,
+	},
+	Metric: telemetry.MetricConfig{
+		Output: telemetry.SignalOutputOTLP,
+	},
+	Log: telemetry.LogConfig{
+		Output: telemetry.SignalOutputOTLP,
+	},
 })
 if err != nil {
 	return err
 }
-restore := providers.InstallGlobal()
+restore := runtime.InstallGlobal()
 defer restore()
 defer func() {
-	if err := providers.Shutdown(context.Background()); err != nil {
+	if err := runtime.Shutdown(context.Background()); err != nil {
 		slog.Error("shutdown telemetry", "err", err)
 	}
 }()
+
+writer, err := runtime.NewWriter(ctx)
+if err != nil {
+	return err
+}
+defer writer.Close(ctx)
 ```
 
-`NewRuntime` 不安装全局 Provider；`InstallGlobal` 才安装 Runtime 中非空的 Provider 和 W3C Trace Context/Baggage propagator。`ServiceName` 在 file-only 与 OTLP 模式均必填。库类型不负责监听配置变化；运行中修改需由应用重建并安全切换 Provider。
+`NewRuntime` 不安装全局 Provider；`InstallGlobal` 才安装 Runtime 中非空的 Provider 和 W3C Trace Context/Baggage propagator。`Resource.ServiceName` 在 file-only 与 OTLP 模式均必填。库类型不负责监听配置变化；运行中修改需由应用重建并安全切换 Provider。
 
 ### 小单体 File-Only
 
-不部署 Collector 的单体应用可使用 `telemetry.NewFileRuntime`。它不连接任何 OTLP
-exporter，只在进程内生成合法 TraceID/SpanID，并把服务身份扁平写入每条 JSONL；完整
-Trace 树不会被保存，需链路查询时再使用 OTLP/Tempo 装配。
+不部署 Collector 的单体应用可使用 `telemetry.NewFileRuntime`。它等价于
+`Trace=local、Metric=none、Log=file`：不连接任何 OTLP exporter，只在进程内生成合法
+TraceID/SpanID，并把服务身份扁平写入每条 JSONL；完整 Trace 树不会被保存，需链路查询
+时再使用 OTLP/Tempo 装配。
 
 ```go
-providers, err := telemetry.NewFileRuntime(telemetry.Config{
-	ServiceName: "mall-monolith",
-	ServiceVersion: "1.0.0",
-	Environment: "production",
-	Instance: "shop-server-01",
+runtime, err := telemetry.NewFileRuntime(telemetry.Config{
+	Resource: telemetry.ResourceConfig{
+		ServiceName:    "mall-monolith",
+		ServiceVersion: "1.0.0",
+		Environment:    "production",
+		Instance:       "shop-server-01",
+	},
+	Log: telemetry.LogConfig{
+		Output:   telemetry.SignalOutputFile,
+		FilePath: "logs/events.jsonl",
+	},
 })
 if err != nil {
 	return err
 }
-defer providers.Shutdown(ctx)
-restore := providers.InstallGlobal()
+defer runtime.Shutdown(ctx)
+restore := runtime.InstallGlobal()
 defer restore()
-writer, err := providers.NewWriter(ctx, telemetry.WriterConfig{FilePath: "logs/events.jsonl"})
+writer, err := runtime.NewWriter(ctx)
 ```
 
 文件中的规范服务身份键为 `service.name`、`service.version`、`service.instance.id` 和
 `deployment.environment.name`。`example/config/file-only.example.yaml` 只是配置模板，
 不会被库自动读取；应用需自行解析 YAML 后映射到 `telemetry.Config`。
 
-需要本地文件轮转时，在应用配置层读取参数并传给 file Writer：
+需要本地文件轮转时，把选项写入 `LogConfig.FileOptions`：
 
 ```go
-writer, err := providers.NewWriter(ctx, telemetry.WriterConfig{FilePath: "logs/events.jsonl", FileOptions: []file.Option{
-	file.WithRotation(file.RotationConfig{
-		MaxSizeMB: 100,
-		MaxBackups: 10,
-		MaxAgeDays: 30,
-		Compress: true,
-		LocalTime: true,
-	}),
-}})
+runtime, err := telemetry.NewFileRuntime(telemetry.Config{
+	Resource: telemetry.ResourceConfig{ServiceName: "mall-monolith"},
+	Log: telemetry.LogConfig{
+		Output:   telemetry.SignalOutputFile,
+		FilePath: "logs/events.jsonl",
+		FileOptions: []file.Option{
+			file.WithRotation(file.RotationConfig{
+				MaxSizeMB: 100,
+				MaxBackups: 10,
+				MaxAgeDays: 30,
+				Compress:   true,
+				LocalTime:  true,
+			}),
+		},
+	},
+})
 ```
 
 轮转由文件大小触发；`MaxBackups=0`、`MaxAgeDays=0` 分别表示不按数量、天数清理。
@@ -100,14 +160,14 @@ writer, err := providers.NewWriter(ctx, telemetry.WriterConfig{FilePath: "logs/e
 
 ## 日志出口
 
-`Runtime.NewWriter` 的选择规则：
+`Runtime.NewWriter(ctx)` 根据 `Config.Log.Output` 创建 Writer：
 
-- `LogOutputOTLP`：复用 Runtime 的 LoggerProvider，WriterConfig 必须为空。
-- `LogOutputFile`：要求 `WriterConfig.FilePath`，并注入 Resource 服务身份。
-- `LogOutputStdout`：使用 stdout Writer，可传 `StdoutOptions`。
-- `LogOutputNone`：返回 no-op Writer，不能传其他 Writer 配置。
+- `SignalOutputOTLP`：复用 Runtime 的 LoggerProvider，Writer 不拥有也不会关闭 Provider。
+- `SignalOutputFile`：要求 `Log.FilePath`，并注入 Resource 服务身份。
+- `SignalOutputStdout`：使用 stdout Writer，可传 `Log.StdoutOptions`。
+- `SignalOutputNone`：返回 no-op Writer。
 
-出口由 `Config.LogOutput` 固化；后续修改环境变量不会改变已有 Runtime，需要重新构造后再切换。
+出口由 `Config.Log.Output` 固化；后续修改环境变量不会改变已有 Runtime，需要重新构造后再切换。
 
 应用应检查构造错误，配置 `log.WithErrorHandler` 观察异步写入失败，并在退出时调用 `ManagedWriter.Close(ctx)`。`Runtime.NewWriter` 返回 `log.ManagedWriter`，其关闭操作幂等。需要同时写多个出口（如 stdout + 文件 + OTLP）时，用 `log.NewMultiWriter(writers...)` 组合 Writer；它会尝试关闭全部可关闭子 Writer 并聚合关闭错误，任一写入失败也不阻断其余。仅实现 `log.Writer` 的自定义 Adapter 可通过 `log.ManageWriter` 获得 no-op 关闭能力。完整代码见 [README](../README.md) 和 [`example/main.go`](../example/main.go)。
 
@@ -160,7 +220,7 @@ Gin 中间件应按 `Trace -> AccessLog -> Recover -> 其他链尾中间件` 注
 
 ## 头部与尾部采样
 
-`TraceSampleRatio=0.1` 在应用 SDK 入口丢弃约 90% trace。被丢弃的数据从未导出，Collector `tail_sampling` 无法恢复。若需要按错误、延迟或属性在 Collector 侧决定保留，应用侧通常应设 `TraceSampleRatio=1.0`，再由 Collector 尾部采样；这会增加出口与 Collector 的吞吐和内存压力。
+`Trace.SampleRatio=0.1` 在应用 SDK 入口丢弃约 90% trace。被丢弃的数据从未导出，Collector `tail_sampling` 无法恢复。若需要按错误、延迟或属性在 Collector 侧决定保留，应用侧通常应设 `Trace.SampleRatio=1.0`，再由 Collector 尾部采样；这会增加出口与 Collector 的吞吐和内存压力。
 
 日志事件采样由 log 包 `Sampler` 控制，与 trace 采样相互独立。不要假设保留日志就一定能查询到对应 trace。
 

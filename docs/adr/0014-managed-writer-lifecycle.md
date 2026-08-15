@@ -31,3 +31,9 @@
 - 旧 Writer 仍可注入 `Logger`，并可用 `ManageWriter` 获得兼容的托管生命周期。
 - `MultiWriter` 的关闭顺序为构造顺序，所有子 Writer 都会被尝试关闭；调用方需要观察聚合关闭错误。
 - file/stdout/OTLP Writer 的具体 `Close` 实现仍属于各自 Adapter，核心 `log/` 不引入外部依赖。
+
+## 补充（2026-08-15）
+
+- ADR-0020 删除 `Runtime.NewLogWriter` 兼容层，并将 `Runtime.NewWriter(ctx, WriterConfig)` 改为
+  `Runtime.NewWriter(ctx)`；日志文件路径与 options 已并入 `Config.Log`。
+- `log.ManagedWriter`、`log.ManageWriter`、`NewMultiWriter` 的关闭与聚合契约保持不变。
