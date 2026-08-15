@@ -203,12 +203,13 @@ order.payment.succeeded
 
 ## 🗂️ 语义注册表：error.code、error.type、event.name 不再自由漂移
 
-日志系统最容易退化的地方不是“怎么写”，而是“怎么命名”。这里的三个注册表把最容易漂移的三个字段变成可枚举、可校验、冲突早失败的 Go API：
+日志系统最容易退化的地方不是“怎么写”，而是“怎么命名”。这里的注册表把最容易漂移的字段变成可枚举、可校验、冲突早失败的 Go API：
 
 | 注册表 | 管什么 | 关键入口 |
 |:---|:---|:---|
 | `EventName` | `event.name` 必须是 `<domain>.<subject>.<event>`，首段不能重复六类 `type` | `log.EventNamePattern`、`log.NewEventName`、框架级常量 / 接入方领域常量 |
 | `ErrorType` | `error.type` 必须是 16 个 OTel/gRPC canonical code 的闭合枚举 | `errs.ErrorType.Validate`、`errs.ParseErrorType` |
+| `ErrorCode` | `error.code` 必须是 `SCOPE.OPERATION.REASON`，每段仅大写字母/数字/下划线；基础设施故障用 `INFRA.*` | `errs.ErrorCodePattern`、`errs.ParseErrorCode`、`ErrorCode.Validate` |
 | `Error Registry` | `error.code → error.type`，可选再绑定一个错误 `event.name` | `RegisterErrorCode` / `RegisterErrorContract` / `MustRegister...` / `RegisteredErrorType` / `RegisteredEventName` |
 
 框架级事件名登记在 `log/types.go`；接入方领域事件名以常量维护自己的注册表（见 [`example/mall`](example/mall/README.md)），禁止在业务代码里散落手写字符串。
