@@ -15,6 +15,7 @@
 <p align="center">
   <a href="#user-content-quick-start">🚀 快速开始</a> ·
   <a href="#user-content-event-model">🧩 事件模型</a> ·
+  <a href="#user-content-registry">🗂️ 语义注册表</a> ·
   <a href="#user-content-data-flow">🗺️ 数据流</a> ·
   <a href="#user-content-packages">📦 包导航</a> ·
   <a href="#user-content-security">🛡️ 安全边界</a>
@@ -46,6 +47,7 @@
 | 🪞 | **双投影** | JSONL/stdout 保留运营友好扁平列，OTLP 映射正确的 LogRecord 顶层字段 |
 | 🔗 | **链路关联** | 从 context 关联 trace/span，不重复制造伪属性 |
 | 🧨 | **错误投影** | 普通 error、值/指针错误和 `%w` 链都能稳定提取 |
+| 🗂️ | **语义注册表** | error.code、error.type、event.name 的固定映射与校验，漂移早暴露 |
 | 🛡️ | **日志治理** | 可注入 Sampler、递归 Masker、写入错误回调 |
 | 🚚 | **三种 Writer** | file、stdout、OTLP gRPC 共享同一套事件模型 |
 | 🛡️ | **Security / Audit 中间件** | `SecurityLog` / `AuditLog`（gin + net/http）把认证/授权判定与审计留痕自动写成事件 |
@@ -165,6 +167,59 @@ http.request.completed
 ```
 
 `event.name` MUST use the form `<domain>.<subject>.<event>`（正则 `EventNamePattern` 校验）；`<event>` MUST 是注册的 Event Type（稳定语义发生，唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；首段不得是 `access` / `business` / `error` / `security` / `audit` / `probe`，这些粗分类只由 `type` 表达。框架级事件名由核心包维护，领域事件由接入方自建注册表。
+
+<a name="registry"></a>
+
+## 🗂️ 语义注册表：error.code、error.type、event.name 不再自由漂移
+
+日志系统最容易退化的地方不是“怎么写”，而是“怎么命名”。这里的三个注册表把最容易漂移的三个字段变成可枚举、可校验、冲突早失败的 Go API：
+
+| 注册表 | 管什么 | 关键入口 |
+|:---|:---|:---|
+| `EventName` | `event.name` 必须是 `<domain>.<subject>.<event>`，首段不能重复六类 `type` | `log.EventNamePattern`、`log.NewEventName`、框架级常量 / 接入方领域常量 |
+| `ErrorType` | `error.type` 必须是 16 个 OTel/gRPC canonical code 的闭合枚举 | `errs.ErrorType.Validate`、`errs.ParseErrorType` |
+| `Error Registry` | `error.code → error.type`，可选再绑定一个错误 `event.name` | `RegisterErrorCode` / `RegisterErrorContract` / `MustRegister...` / `RegisteredErrorType` / `RegisteredEventName` |
+
+框架级事件名登记在 `log/types.go`；接入方领域事件名以常量维护自己的注册表（见 [`example/mall`](example/mall/README.md)），禁止在业务代码里散落手写字符串。
+
+错误注册表在启动期一次性写入，并在严格构造器中校验：同一个 `error.code` 只能映射到唯一的 `error.type`（以及可选的唯一错误事件名）。
+
+```go
+func init() {
+    // 业务/校验错误：只注册 code → type；领域事件由 Application 另行发布
+    errs.MustRegisterErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT", errs.TypeFailedPrecondition)
+
+    // 系统/基础设施错误：注册 code → type + 错误事件名
+    // errs 不依赖 log，所以事件名文法先由接入方按 log.EventNamePattern 校验
+    if err := log.EventName("db.query.deadline_exceeded").Validate(); err != nil {
+        panic(err)
+    }
+    errs.MustRegisterErrorContract(
+        "INFRA.MYSQL.QUERY_TIMEOUT",
+        errs.TypeDeadlineExceeded,
+        "db.query.deadline_exceeded",
+    )
+}
+```
+
+注册表可以反查，严格构造器会拒绝漂移：
+
+```go
+typ, ok := errs.ErrorCode("INFRA.MYSQL.QUERY_TIMEOUT").RegisteredErrorType()
+name, hasName := errs.ErrorCode("INFRA.MYSQL.QUERY_TIMEOUT").RegisteredEventName()
+
+// 注册表要求 DEADLINE_EXCEEDED，下面的构造会在启动期直接失败
+_, err := errs.NewSystemError(errs.SystemErrorConfig{
+    Type:    errs.TypeUnavailable,
+    Code:    "INFRA.MYSQL.QUERY_TIMEOUT",
+    Message: "database timeout",
+})
+// err != nil：error.code 已注册为 DEADLINE_EXCEEDED
+_ = typ
+_ = ok
+_ = name
+_ = hasName
+```
 
 ---
 
