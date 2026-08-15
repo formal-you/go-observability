@@ -43,7 +43,14 @@ Invoke-WebRequest -Method Post http://127.0.0.1:8083/api/v1/admin/users/42/role 
 }
 ```
 
+# 业务拒绝：ErrorResponse 写 business 错误事件，mallInputGuard 再补发 audit 事件
+# （携带失败输入摘要 app.input_field 等）
+Invoke-WebRequest -Method Post http://127.0.0.1:8083/api/v1/orders -Headers @{ 'X-Fail' = 'stock' }
+```
+
 审计事件现在包含 `app.before` / `app.after`、`client.address`、`user_agent.original`，
 且 `app.actor_user_id` / `app.actor_role` 由 `fakeIdentity` 注入可信上下文生成。
+库存不足失败路径会同时产生 `order.create.stock_insufficient`（business）与
+`input.anomaly.recorded`（audit），后者携带 `app.input_field` / `app.input_hash` / `app.input_truncated`。
 
 服务展示：`mall.EventProductViewed` / `EventOrderCreated`、业务拒绝错误、`SecurityLog` / `AuditLog`、Sampler / Masker 治理与三信号装配。

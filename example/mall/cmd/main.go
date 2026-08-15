@@ -25,6 +25,7 @@ import (
 	"github.com/formal-you/go-observability/example/mall"
 	log "github.com/formal-you/go-observability/log"
 	ginmw "github.com/formal-you/go-observability/middleware/gin"
+	"github.com/formal-you/go-observability/middleware/httperr"
 	"github.com/formal-you/go-observability/middleware/otelutil"
 	"github.com/formal-you/go-observability/telemetry"
 )
@@ -60,6 +61,29 @@ func fakeIdentity() gin.HandlerFunc {
 		}))
 		c.Next()
 	}
+}
+
+// mallInputGuard 在错误出口补发审计事件，携带失败输入摘要（app.input_*）。
+// 仅当 handler 经 WithInputSummary 挂载了输入摘要时触发，避免为无输入错误的失败制造噪音。
+func mallInputGuard(ctx context.Context, r *http.Request, _ error, summary httperr.InputSummary) []log.EventPayload {
+	if len(summary.Fields) == 0 {
+		return nil
+	}
+	md := httperr.EventMetadataFromContext(ctx)
+	md.Level = log.LevelInfo
+	md.RequestID = r.Header.Get("X-Request-ID")
+	return []log.EventPayload{log.AuditEvent{
+		EventMetadata: md,
+		Data: log.AuditPayload{
+			EventName:      log.EventNameInputAnomalyRecorded,
+			Action:         "order.create.rejected",
+			AuditEventType: "business.rejection",
+			Resource:       log.Resource{Type: "order"},
+			Reason:         "业务拒绝，记录失败输入摘要",
+			Result:         log.ResultDenied,
+			ExtraAttrs:     summary.Attrs(),
+		},
+	}}
 }
 
 func main() {
@@ -193,6 +217,7 @@ func run(ctx context.Context) error {
 		ginmw.ErrorResponse(ginmw.ErrorConfig{
 			Logger:       logger,
 			GetRequestID: requestID,
+			InputGuard:   mallInputGuard,
 			EventNameResolver: func(err error) log.EventName {
 				// 框架不提供泛化错误事件名（ADR-0018），接入方必须按实际错误反查注册表，
 				// 禁止按 Kind 固定返回同一事件名。
@@ -240,6 +265,10 @@ func run(ctx context.Context) error {
 	router.POST("/api/v1/orders", func(c *gin.Context) {
 		orderID := "ORD-1001"
 		if c.GetHeader("X-Fail") == "stock" {
+			ctx := httperr.WithInputSummary(c.Request.Context(), httperr.InputSummary{
+				Fields: []string{"product_id", "quantity"},
+			})
+			c.Request = c.Request.WithContext(ctx)
 			ginmw.Abort(c, stockInsufficientErr)
 			return
 		}
