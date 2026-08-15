@@ -25,6 +25,7 @@ ADR 按主题分目录存放，编号仍全局递增、不重用。
 | [0015](errors/0015-error-registry.md) | Error Registry：error.code 到 error.type 的固定映射 | Accepted | 2026-08-12 |
 | [0016](errors/0016-errortype-otel-grpc-standard-enum.md) | ErrorType 复用 OTel/gRPC 标准枚举（跨模块） | Accepted | 2026-08-13 |
 | [0019](errors/0019-errorcode-single-grammar-infra-scope.md) | error.code 单一文法：不分裂 reason/cause；SCOPE 失败面归属（INFRA.*），event.name/error.code 软对齐 | Accepted | 2026-08-13 |
+| [0021](errors/0021-panic-boundary-and-recover.md) | Panic 只用于启动期契约校验，Recover 是请求期最后保险 | Accepted | 2026-08-16 |
 
 ### 事件模型（events）
 
