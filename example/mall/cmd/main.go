@@ -32,7 +32,16 @@ import (
 // init 在启动期一次性注册 Error Registry；注册输入是常量，失败即编码错误。
 func init() {
 	errs.MustRegisterErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT", errs.TypeFailedPrecondition)
-	errs.MustRegisterErrorContract("INFRA.MYSQL.QUERY_TIMEOUT", errs.TypeDeadlineExceeded, "user.role_update.database_timeout")
+	mustRegisterErrorContract("INFRA.MYSQL.QUERY_TIMEOUT", errs.TypeDeadlineExceeded, "user.role_update.database_timeout")
+}
+
+// mustRegisterErrorContract 在注册前先校验错误事件名，确保非法事件名在启动期 fail-fast，
+// 而不是等到请求期 EventFromError 才暴露。
+func mustRegisterErrorContract(code errs.ErrorCode, typ errs.ErrorType, eventName string) {
+	if err := log.EventName(eventName).Validate(); err != nil {
+		panic("mall: invalid error event name: " + err.Error())
+	}
+	errs.MustRegisterErrorContract(code, typ, eventName)
 }
 
 func main() {
