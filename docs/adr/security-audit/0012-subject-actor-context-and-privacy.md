@@ -1,8 +1,8 @@
-# ADR-0012：Subject / Actor 可信上下文与隐私边界
+# ADR 0012：Subject / Actor 可信上下文与隐私边界
 
-- 状态：Accepted
-- 日期：2026-08-11
-- 关联：ADR-0007、ADR-0008、ADR-0011
+  状态：Accepted
+  日期：2026 08 11
+  关联：ADR 0007、ADR 0008、ADR 0011
 
 ## 背景（Context）
 
@@ -10,12 +10,12 @@
 
 ## 决策（Decision）
 
-- Subject 表示事件关联的用户与租户；Actor 表示执行安全或审计动作的用户与角色。二者不是 Metric 维度。
-- 用户标识迁移为 semconv `user.id`；租户继续使用 vendor 键 `app.tenant_id`。Actor 继续使用 `app.actor_user_id` 与 `app.actor_role`，避免把被操作用户与操作者混为一人。
-- `IdentityContext` 是统一的 Subject / Actor 上下文值。使用方通过 `IdentityExtractor` 注入可信认证结果；仓库提供基于 `context.Context` 的默认适配器。
-- 提取器返回的非空字段优先于事件载荷中的同名字段。空字段不删除事件已经明确提供的值。只有 SecurityEvent 与 AuditEvent 接受 Actor 自动注入。
-- `FieldMasker` 的默认敏感键覆盖凭证、Cookie、证件号、手机号和常见原始 request body 键，并递归处理结构化值。Logger 仍要求使用方显式启用 Masker，避免对已有数据形状做隐式修改；生产配置未启用脱敏属于接入错误。
-- 原始 password、token、authorization、cookie、证件号、手机号和 request body 不得作为事件字段进入持久化日志。无法仅靠键名识别的自由文本与自定义类型必须在进入事件前净化。
+  Subject 表示事件关联的用户与租户；Actor 表示执行安全或审计动作的用户与角色。二者不是 Metric 维度。
+  用户标识迁移为 semconv `user.id`；租户继续使用 vendor 键 `app.tenant_id`。Actor 继续使用 `app.actor_user_id` 与 `app.actor_role`，避免把被操作用户与操作者混为一人。
+  `IdentityContext` 是统一的 Subject / Actor 上下文值。使用方通过 `IdentityExtractor` 注入可信认证结果；仓库提供基于 `context.Context` 的默认适配器。
+  提取器返回的非空字段优先于事件载荷中的同名字段。空字段不删除事件已经明确提供的值。只有 SecurityEvent 与 AuditEvent 接受 Actor 自动注入。
+  `FieldMasker` 的默认敏感键覆盖凭证、Cookie、证件号、手机号和常见原始 request body 键，并递归处理结构化值。Logger 仍要求使用方显式启用 Masker，避免对已有数据形状做隐式修改；生产配置未启用脱敏属于接入错误。
+  原始 password、token、authorization、cookie、证件号、手机号和 request body 不得作为事件字段进入持久化日志。无法仅靠键名识别的自由文本与自定义类型必须在进入事件前净化。
 
 ## 结果（Consequences）
 

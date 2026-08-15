@@ -2,11 +2,11 @@
 
 - 状态：Accepted
 - 日期：2026-08-12
-- 关联：ADR-0001（ErrorCode 三段式）、ADR-0016（ErrorType OTel/gRPC 标准枚举，取代 ADR-0002）、ADR-0010（严格错误构造）
+- 关联：ADR-0001（ErrorCode 三段式）、ADR-0016（ErrorType OTel/gRPC 标准枚举）、ADR-0010（严格错误构造）
 
 ## 背景（Context）
 
-ADR-0002 已规定 ErrorType 与 ErrorCode 是「多对一」：多个三段式 ErrorCode 归入同一个低基数
+ErrorType 与 ErrorCode 是「多对一」：多个三段式 ErrorCode 归入同一个低基数
 ErrorType。但该关系只停留在文档层面：错误对象独立携带 code 与 type，任何 code 都可以配任意
 type，既无法在构造期发现「同一 code 映射到不同 type」的漂移，也无法回答「这个 error.code
 到底归属哪个 error.type」。改造方案要求语义注册表化：`error.code → exactly one error.type`。

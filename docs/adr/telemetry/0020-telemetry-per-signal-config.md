@@ -2,11 +2,11 @@
 
 - 状态：Accepted
 - 日期：2026-08-15
-- 关联：ADR-0011、ADR-0014
+- 关联：ADR-0014（取代旧版 Runtime 方案）
 
 ## 背景（Context）
 
-ADR-0011 引入 `Runtime` 后，`telemetry.Config` 仍是扁平结构：`LogOutput`、`TraceOutput`、
+旧版 Runtime 引入后，`telemetry.Config` 仍是扁平结构：`LogOutput`、`TraceOutput`、
 `MetricOutput` 共享同一个 `LogOutput` 枚举，日志 Writer 参数还拆在 `WriterConfig` 中，
 使用方需要在两个地方表达同一个日志出口。旧 `Setup*`、`Providers`、`NewLogWriter`
 兼容层让公共表面同时存在两套语义，示例和文档也必须解释“新代码用哪套、旧代码用哪套”。
@@ -31,5 +31,5 @@ ADR-0011 引入 `Runtime` 后，`telemetry.Config` 仍是扁平结构：`LogOutp
   不再受非法 Endpoint 影响。
 - `NewFileRuntime` 变成薄的预设构造器，示例不再需要手写三段 local/file/none 配置。
 - 公共 API 为破坏性变更：接入方必须迁移 Config 字段和 `NewWriter(ctx)` 调用方式。
-- ADR-0011 被本 ADR 取代；ADR-0014 的 ManagedWriter 生命周期契约继续有效，仅
+- 旧版 Runtime 方案被本 ADR 取代；ADR-0014 的 ManagedWriter 生命周期契约继续有效，仅
   `Runtime.NewWriter` 签名和 `NewLogWriter` 兼容层发生变化。

@@ -5,7 +5,7 @@
 
 ## 约定
 
-- 命名：`NNNN-短横线标题.md`，编号递增、不重用、不删改历史。
+- 命名：`NNNN-短横线标题.md`，编号递增、不重用；无后续影响的低价值/被取代决策可删除。
 - 模板：背景（Context）→ 决策（Decision）→ 结果（Consequences），采用 Nygard ADR 风格。
 - 状态：Proposed / Accepted / Deprecated / Superseded（被取代时在正文标注关联）。
 - 定位：ADR 只记决策与理由；术语以 `CONTEXT.md` 为准，代码行为以代码为准。
@@ -20,7 +20,6 @@ ADR 按主题分目录存放，编号仍全局递增、不重用。
 | 编号 | 标题 | 状态 | 日期 |
 | --- | --- | --- | --- |
 | [0001](errors/0001-errorcode-three-segment-format.md) | ErrorCode 采用三段式（服务/模块）.（场景/操作）.（结果/具体错误） | Accepted | 2026-08-11 |
-| [0002](errors/0002-errortype-low-cardinality-domain-reason.md) | ErrorType 映射 OTel error.type，保持低基数，采用 domain.reason 格式 | Superseded（ADR-0016） | 2026-08-11 |
 | [0010](errors/0010-strict-error-construction.md) | 严格错误构造与 SCOPE.OPERATION.REASON / ErrorType 标准枚举 | Accepted | 2026-08-11 |
 | [0013](errors/0013-bounded-stack-policy.md) | 有界 StackPolicy 与路径治理 | Accepted | 2026-08-11 |
 | [0015](errors/0015-error-registry.md) | Error Registry：error.code 到 error.type 的固定映射 | Accepted | 2026-08-12 |
@@ -55,15 +54,9 @@ ADR 按主题分目录存放，编号仍全局递增、不重用。
 
 | 编号 | 标题 | 状态 | 日期 |
 | --- | --- | --- | --- |
-| [0011](telemetry/0011-telemetry-runtime-explicit-output.md) | Telemetry Runtime 隔离全局状态并显式选择日志出口 | Superseded（ADR-0020） | 2026-08-11 |
 | [0014](telemetry/0014-managed-writer-lifecycle.md) | 通过 ManagedWriter 统一 Writer 生命周期 | Accepted | 2026-08-12 |
 | [0020](telemetry/0020-telemetry-per-signal-config.md) | Telemetry 按信号拆分配置并移除兼容层 | Accepted | 2026-08-15 |
 
-### 包结构（package）
-
-| 编号 | 标题 | 状态 | 日期 |
-| --- | --- | --- | --- |
-| [0003](package/0003-move-root-log-package-to-log-subdir.md) | 核心 log 包迁移至 log/ 子目录，导入路径改为 .../go-observability/log | Accepted | 2026-08-11 |
 
 ## 模板
 

@@ -1,8 +1,8 @@
-# ADR-0013：有界 StackPolicy 与路径治理
+# ADR 0013：有界 StackPolicy 与路径治理
 
-- 状态：Accepted
-- 日期：2026-08-11
-- 关联：ADR-0010、ADR-0012、ADR-0016（取代 ADR-0002）
+  状态：Accepted
+  日期：2026 08 11
+  关联：ADR 0010、ADR 0012、ADR 0016（取代 ADR 0002）
 
 ## 背景（Context）
 
@@ -10,12 +10,12 @@
 
 ## 决策（Decision）
 
-- `StackConfig` 统一配置最大 UTF-8 字节数、路径策略与 ErrorType 精确 code 覆盖（gRPC 枚举，见 ADR-0016）。配置只应在进程启动阶段设置。
-- 最大字节数包含稳定截断标记。截断不得产生非法 UTF-8；日志使用 `app.stacktrace_truncated=true` 区分超限截断，未发生截断时为 false，没有堆栈时不输出该键。
-- 路径策略为 `full`、`base`、`redacted`：分别保留完整路径、仅保留文件名、或用固定文本替代路径。该策略同时作用于 stacktrace 与 `code.file.path`。
-- 开发默认值为 64 KiB + full；production profile 为 16 KiB + base，并可覆盖高频 ErrorType。
-- 严格 `SetStackConfig` 必须保证 `INTERNAL`（含 panic）仍为 must。panic 堆栈可以截断和裁剪路径，但不能静默变为 none。
-- 外部 Error Storage 不是核心依赖。未来接入只能通过注入接口写出，并以稳定 `app.error_id` 关联；本 ADR 不引入对象存储客户端。
+  `StackConfig` 统一配置最大 UTF 8 字节数、路径策略与 ErrorType 精确 code 覆盖（gRPC 枚举，见 ADR 0016）。配置只应在进程启动阶段设置。
+  最大字节数包含稳定截断标记。截断不得产生非法 UTF 8；日志使用 `app.stacktrace_truncated=true` 区分超限截断，未发生截断时为 false，没有堆栈时不输出该键。
+  路径策略为 `full`、`base`、`redacted`：分别保留完整路径、仅保留文件名、或用固定文本替代路径。该策略同时作用于 stacktrace 与 `code.file.path`。
+  开发默认值为 64 KiB + full；production profile 为 16 KiB + base，并可覆盖高频 ErrorType。
+  严格 `SetStackConfig` 必须保证 `INTERNAL`（含 panic）仍为 must。panic 堆栈可以截断和裁剪路径，但不能静默变为 none。
+  外部 Error Storage 不是核心依赖。未来接入只能通过注入接口写出，并以稳定 `app.error_id` 关联；本 ADR 不引入对象存储客户端。
 
 ## 结果（Consequences）
 
