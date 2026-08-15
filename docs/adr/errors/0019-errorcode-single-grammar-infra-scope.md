@@ -26,6 +26,17 @@ SCOPE 命名空间。
   - 统一基础设施命名空间 `INFRA`：第二段（OPERATION）承担组件名（REDIS / MYSQL /
     MONGODB / KAFKA …），第三段（REASON）承担具体故障，例如 `INFRA.REDIS.UNAVAILABLE`、
     `INFRA.MYSQL.CONNECTION_POOL_EXHAUSTED`、`INFRA.MQ.CONSUMER_LAG_EXCEEDED`。
+- 最终同源规则：
+
+  ```text
+  业务错误：
+    event.name = <domain>.<subject>.<event>
+    error.code = <DOMAIN>.<SUBJECT>.<REASON>
+
+  基础设施错误：
+    event.name = <domain>.<subject>.<event>
+    error.code = INFRA.<COMPONENT>.<REASON>
+  ```
 - 不用依赖名直接作为 SCOPE（如 `REDIS.CONNECTION_POOL_EXHAUSTED`）：避免 SCOPE/OPERATION
   槽位两套读法与技术栈迁移（如 Redis→Valkey）导致的错误码改迁；依赖名由 `app.upstream_service`
   属性承载。

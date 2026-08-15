@@ -214,6 +214,16 @@ order.payment.succeeded
 
 错误注册表在启动期一次性写入，并在严格构造器中校验：同一个 `error.code` 只能映射到唯一的 `error.type`（以及可选的唯一错误事件名）。
 
+```text
+业务错误：
+  event.name = <domain>.<subject>.<event>
+  error.code = <DOMAIN>.<SUBJECT>.<REASON>
+
+基础设施错误：
+  event.name = <domain>.<subject>.<event>
+  error.code = INFRA.<COMPONENT>.<REASON>
+```
+
 ```go
 func init() {
     // 业务/校验错误：只注册 code → type；领域事件由 Application 另行发布

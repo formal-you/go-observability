@@ -199,6 +199,18 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 6. **samber 边界**：samber 生态只允许出现在 `example/` 与 `docs/samber-comparison.md`，核心包保持零外部依赖。
 7. **采样边界**：默认 `Trace.SampleRatio=0.1` 是 SDK 头部采样——未选中的 trace 不会被导出，Collector 看不到，也无法通过 `tail_sampling` 恢复。需要 Collector 按错误/延迟决定保留时，SDK 应导出完整 trace（通常 `1.0`），再在 Collector 执行尾部采样，并评估吞吐、费用与敏感数据风险。 采样保留属独立 Sampling/Retention Policy 层（高价值事件 SHOULD be retained，操作上需要时保证保留），不编码进事件/错误语义。
 
+**error.code 前两段同源规则**：
+
+```text
+业务错误：
+  event.name = <domain>.<subject>.<event>
+  error.code = <DOMAIN>.<SUBJECT>.<REASON>
+
+基础设施错误：
+  event.name = <domain>.<subject>.<event>
+  error.code = INFRA.<COMPONENT>.<REASON>
+```
+
 ## 7. 三信号装配（`telemetry`）
 
 - `NewRuntime`：按 `Resource / Trace / Metric / Log` 四组 Config 创建独立 Provider，不安装全局状态；`InstallGlobal` 显式安装并返回幂等恢复函数。

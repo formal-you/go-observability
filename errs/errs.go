@@ -144,8 +144,8 @@ func isBusinessErrorType(t ErrorType) bool {
 // DB/缓存/MQ/网络等依赖组件）用 INFRA.*；其余系统类（如并发冲突 ABORTED）可保留领域
 // SCOPE 或保持无码。INTERNAL/panic 类不承载 error.code：识别靠 error.type + event.name
 // + stacktrace，不设具体码。
-// event.name 与 error.code 前两段只做软对齐（SHOULD）：业务码尽量与 event.name 的
-// domain.subject 同源；INFRA.* 与业务事件名天然不同源（失败面 vs 业务事实），不做匹配。
+// 业务错误码使用 `<DOMAIN>.<SUBJECT>.<REASON>`，前两段与 event.name 的 `<domain>.<subject>`
+// 同源；基础设施错误码使用 `INFRA.<COMPONENT>.<REASON>`，不要求与业务事件名前两段同名。
 // 已注册的 ErrorCode 恰好映射一个 ErrorType（多对一，见 RegisterErrorCode）；未注册码不强制映射。
 // 仅 BizError 必须承载；SystemError 可通过 Code 关联可选业务码。
 type ErrorCode string
