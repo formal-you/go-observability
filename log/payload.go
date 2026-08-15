@@ -80,11 +80,7 @@ func (e BusinessPayload) Attrs() []slog.Attr {
 	attrs = appendString(attrs, KeyCodeFunctionName, e.Source.Function)
 	attrs = appendString(attrs, KeyCodeFilePath, e.Source.Filepath)
 	attrs = appendInt(attrs, KeyCodeLineNumber, e.Source.Line)
-	for _, attr := range e.ExtraAttrs {
-		if isBusinessExtraAttrKeyAllowed(attr.Key) {
-			attrs = append(attrs, attr)
-		}
-	}
+	attrs = appendExtraAttrs(attrs, e.ExtraAttrs, businessPayloadCanonicalKeys)
 	return appendString(attrs, KeyAppResult, string(e.Result))
 }
 
@@ -103,17 +99,6 @@ var businessPayloadCanonicalKeys = map[string]struct{}{
 	string(KeyCodeFilePath):       {},
 	string(KeyCodeLineNumber):     {},
 	string(KeyAppResult):          {},
-}
-
-func isBusinessExtraAttrKeyAllowed(key string) bool {
-	if key == "" {
-		return false
-	}
-	if _, canonical := businessPayloadCanonicalKeys[key]; canonical {
-		return false
-	}
-	_, reserved := reservedKeys[key]
-	return !reserved
 }
 
 // ErrorPayload 记录系统错误、panic、依赖失败或重试上下文。
@@ -164,11 +149,7 @@ func (e ErrorPayload) Attrs() []slog.Attr {
 	attrs = appendString(attrs, KeyCodeFunctionName, e.Source.Function)
 	attrs = appendString(attrs, KeyCodeFilePath, e.Source.Filepath)
 	attrs = appendInt(attrs, KeyCodeLineNumber, e.Source.Line)
-	for _, attr := range e.ExtraAttrs {
-		if isErrorExtraAttrKeyAllowed(attr.Key) {
-			attrs = append(attrs, attr)
-		}
-	}
+	attrs = appendExtraAttrs(attrs, e.ExtraAttrs, errorPayloadCanonicalKeys)
 	return appendString(attrs, KeyAppResult, string(e.Result))
 }
 
@@ -190,19 +171,6 @@ var errorPayloadCanonicalKeys = map[string]struct{}{
 	string(KeyCodeFilePath):           {},
 	string(KeyCodeLineNumber):         {},
 	string(KeyAppResult):              {},
-}
-
-// isErrorExtraAttrKeyAllowed 判断 ExtraAttrs 键是否允许注入 ErrorPayload：
-// 空键、canonical 键与公共保留键一律忽略。
-func isErrorExtraAttrKeyAllowed(key string) bool {
-	if key == "" {
-		return false
-	}
-	if _, canonical := errorPayloadCanonicalKeys[key]; canonical {
-		return false
-	}
-	_, reserved := reservedKeys[key]
-	return !reserved
 }
 
 // AuditPayload 记录高权限操作与敏感资源变更（审计，防篡改存储）。
@@ -242,11 +210,7 @@ func (e AuditPayload) Attrs() []slog.Attr {
 	attrs = appendFields(attrs, KeyAppAfter, e.After)
 	attrs = appendString(attrs, KeyAppReason, e.Reason)
 	attrs = appendString(attrs, KeyAppApprovalID, e.ApprovalID)
-	for _, attr := range e.ExtraAttrs {
-		if isAuditExtraAttrKeyAllowed(attr.Key) {
-			attrs = append(attrs, attr)
-		}
-	}
+	attrs = appendExtraAttrs(attrs, e.ExtraAttrs, auditPayloadCanonicalKeys)
 	return appendString(attrs, KeyAppResult, string(e.Result))
 }
 
@@ -266,19 +230,6 @@ var auditPayloadCanonicalKeys = map[string]struct{}{
 	string(KeyAppReason):         {},
 	string(KeyAppApprovalID):     {},
 	string(KeyAppResult):         {},
-}
-
-// isAuditExtraAttrKeyAllowed 判断 ExtraAttrs 键是否允许注入 AuditPayload：
-// 空键、canonical 键与公共保留键一律忽略。
-func isAuditExtraAttrKeyAllowed(key string) bool {
-	if key == "" {
-		return false
-	}
-	if _, canonical := auditPayloadCanonicalKeys[key]; canonical {
-		return false
-	}
-	_, reserved := reservedKeys[key]
-	return !reserved
 }
 
 // SecurityPayload 记录认证、鉴权、风险或访问拦截行为（可直连 SIEM）。
@@ -307,11 +258,7 @@ func (e SecurityPayload) Attrs() []slog.Attr {
 	attrs = appendString(attrs, KeyAppFailureReason, e.FailureReason)
 	attrs = appendString(attrs, KeyAppActionTaken, e.ActionTaken)
 	attrs = appendInt(attrs, KeyAppRiskScore, e.RiskScore)
-	for _, attr := range e.ExtraAttrs {
-		if isSecurityExtraAttrKeyAllowed(attr.Key) {
-			attrs = append(attrs, attr)
-		}
-	}
+	attrs = appendExtraAttrs(attrs, e.ExtraAttrs, securityPayloadCanonicalKeys)
 	return appendString(attrs, KeyAppResult, string(e.Result))
 }
 
@@ -326,19 +273,6 @@ var securityPayloadCanonicalKeys = map[string]struct{}{
 	string(KeyAppActionTaken):       {},
 	string(KeyAppRiskScore):         {},
 	string(KeyAppResult):            {},
-}
-
-// isSecurityExtraAttrKeyAllowed 判断 ExtraAttrs 键是否允许注入 SecurityPayload：
-// 空键、canonical 键与公共保留键一律忽略。
-func isSecurityExtraAttrKeyAllowed(key string) bool {
-	if key == "" {
-		return false
-	}
-	if _, canonical := securityPayloadCanonicalKeys[key]; canonical {
-		return false
-	}
-	_, reserved := reservedKeys[key]
-	return !reserved
 }
 
 // ProbePayload 记录健康、就绪、存活与启动探测结果。

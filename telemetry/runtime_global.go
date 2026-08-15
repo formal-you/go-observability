@@ -59,6 +59,7 @@ func (r *Runtime) InstallGlobal() func() {
 	return restore
 }
 
+// w3cPropagator 构建 W3C Trace Context 与 Baggage 组合传播器。
 func w3cPropagator() propagation.TextMapPropagator {
 	// TraceContext 传播 TraceID/SpanID，Baggage 传播经应用明确允许的跨服务上下文。
 	return propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
@@ -109,6 +110,7 @@ func (r *Runtime) Shutdown(ctx context.Context) error {
 	return r.shutdownErr
 }
 
+// appendError 仅在 err 非 nil 时追加，避免 Shutdown 聚合中出现 nil 错误。
 func appendError(errs []error, err error) []error {
 	if err != nil {
 		return append(errs, err)

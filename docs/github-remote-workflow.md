@@ -58,7 +58,7 @@ git rev-list --left-right --count origin/main...HEAD
 1. 运行本地门禁并确认差异只包含目标 Issue。
 2. push 当前非默认分支；普通新分支使用 `git push -u origin <branch>`，重放后的既有分支使用 `--force-with-lease`。
 3. 优先使用 GitHub connector 创建 PR；若 connector 因 token 权限返回 `403 Resource not accessible by personal access token`，保留已推送分支并回退到已认证的 `gh pr create`。
-4. 未完成规格使用 Draft；验收和本地门禁已完成时创建 Ready PR。正文包含 Issue 关键字、影响、兼容性和真实验证结果。
+4. 未完成规格使用 Draft；验收和本地门禁已完成时创建 Ready PR。正文包含 Issue 关键字、影响、兼容性和真实验证结果。正文使用 GitHub 识别关键词 `Closes #N`（或 `Fixes #N` / `Resolves #N`）才能在合并时自动关闭 Issue；中文表述（如「解决 #N」）不会触发自动关闭。
 5. 创建后运行 `gh pr view <N> --json baseRefName,headRefName,isDraft,state,statusCheckRollup,url`，核对目标分支和检查状态。
 
 ## CI 与审查
@@ -78,7 +78,7 @@ gh pr view <N> --repo formal-you/go-observability --json state,mergedAt,mergeCom
 git fetch origin main
 ```
 
-然后核对关联 Issue 状态。更新本地 `main` 前先确认它没有独有提交：
+然后核对关联 Issue 状态：仅当 PR 正文使用了 `Closes #N` 等 GitHub 识别关键词时，合并才会自动关闭 Issue；否则需手动执行 `gh issue close <N> --repo formal-you/go-observability --reason completed`，并用 `gh issue view <N> --json state,stateReason` 验证 stateReason=COMPLETED。更新本地 `main` 前先确认它没有独有提交：
 
 ```powershell
 git switch main

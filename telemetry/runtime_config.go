@@ -26,6 +26,7 @@ const (
 	defaultLogQueueSize         = 2048
 )
 
+// normalizeAndValidateConfig 归一化并校验完整 Config；disabled 走独立路径。
 func normalizeAndValidateConfig(cfg *Config) error {
 	if !cfg.Enabled {
 		return normalizeDisabledConfig(cfg)
@@ -74,6 +75,7 @@ func normalizeDisabledConfig(cfg *Config) error {
 	return nil
 }
 
+// normalizeAndValidateLog 归一化并校验 Log 信号配置及 Writer 选项。
 func normalizeAndValidateLog(cfg *LogConfig) error {
 	if err := validateSignalOutput(cfg.Output, "log", false); err != nil {
 		return err
@@ -107,6 +109,7 @@ func normalizeAndValidateLog(cfg *LogConfig) error {
 	return normalizePositive(&cfg.QueueSize, defaultLogQueueSize, "log queue size")
 }
 
+// normalizeAndValidateTrace 归一化并校验 Trace 信号配置，含 local 与注入 Exporter 边界。
 func normalizeAndValidateTrace(cfg *TraceConfig) error {
 	if cfg.Output == "" {
 		cfg.Output = SignalOutputOTLP
@@ -143,6 +146,7 @@ func normalizeAndValidateTrace(cfg *TraceConfig) error {
 	return normalizePositive(&cfg.BatchTimeout, defaultTraceBatchTimeout, "trace batch timeout")
 }
 
+// normalizeAndValidateMetric 归一化并校验 Metric 信号配置，local 仅限 Trace。
 func normalizeAndValidateMetric(cfg *MetricConfig) error {
 	if cfg.Output == "" {
 		cfg.Output = SignalOutputOTLP
@@ -169,6 +173,7 @@ func normalizeAndValidateMetric(cfg *MetricConfig) error {
 	return normalizePositive(&cfg.ExportInterval, defaultMetricExportInterval, "metric export interval")
 }
 
+// validateSignalOutput 校验信号输出枚举；allowLocal 为 true 时才接受 Trace 专用 local。
 func validateSignalOutput(output SignalOutput, name string, allowLocal bool) error {
 	switch output {
 	case SignalOutputFile, SignalOutputOTLP, SignalOutputStdout, SignalOutputNone:
@@ -194,6 +199,7 @@ func normalizePositive[T int | time.Duration](value *T, def T, name string) erro
 	return nil
 }
 
+// resourceForConfig 从 ResourceConfig 构建 OTel Resource；Override 优先于服务身份字段。
 func resourceForConfig(cfg ResourceConfig) *resource.Resource {
 	// 显式 Resource 是高级注入点：一旦提供，就由调用方承担其属性完整性。
 	if cfg.Override != nil {
@@ -218,6 +224,7 @@ func resourceForConfig(cfg ResourceConfig) *resource.Resource {
 	return resource.NewWithAttributes("https://opentelemetry.io/schemas/1.41.0", attrs...)
 }
 
+// resourceMetadata 把 OTel Resource 投影为 file Writer 的进程级服务身份元数据。
 func resourceMetadata(res *resource.Resource) file.ResourceMetadata {
 	// file Writer 没有 OTel Resource 层，因此只投影稳定的进程级服务身份键。
 	// 其他 Resource Attributes 不复制到每条 JSONL，避免扩大文件日志字段面。
@@ -251,6 +258,7 @@ func EndpointFromEnvironment() string {
 	return defaultIfEmpty(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")), defaultEndpoint)
 }
 
+// endpointURL 统一解析并规范化 OTLP endpoint，避免不同 Exporter 各自回退。
 func endpointURL(endpoint string) (string, error) {
 	// 所有 OTLP signal 共用统一解析规则，避免不同 Exporter 对非法地址各自回退。
 	normalized, err := otlpendpoint.Parse(endpoint)
@@ -260,6 +268,7 @@ func endpointURL(endpoint string) (string, error) {
 	return normalized, nil
 }
 
+// defaultIfEmpty 在 value 为空时返回 fallback。
 func defaultIfEmpty(value, fallback string) string {
 	if value == "" {
 		return fallback
@@ -267,6 +276,7 @@ func defaultIfEmpty(value, fallback string) string {
 	return value
 }
 
+// normalizedTraceOutput 把空 Trace Output 归一化为 OTLP。
 func normalizedTraceOutput(o SignalOutput) SignalOutput {
 	if o == "" {
 		return SignalOutputOTLP
@@ -274,6 +284,7 @@ func normalizedTraceOutput(o SignalOutput) SignalOutput {
 	return o
 }
 
+// normalizedMetricOutput 把空 Metric Output 归一化为 OTLP。
 func normalizedMetricOutput(o SignalOutput) SignalOutput {
 	if o == "" {
 		return SignalOutputOTLP

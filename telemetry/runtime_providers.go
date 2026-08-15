@@ -147,6 +147,7 @@ type runtimeBuild struct {
 	metricFile     *os.File
 }
 
+// newRuntimeBuild 创建带诊断计数器的 Runtime 构造回滚容器。
 func newRuntimeBuild() *runtimeBuild {
 	return &runtimeBuild{counters: new(runtimeCounters)}
 }
@@ -170,6 +171,7 @@ func (b *runtimeBuild) close(ctx context.Context) {
 	}
 }
 
+// newTracerProvider 按 TraceConfig 创建 TracerProvider；无 exporter 时使用 NeverSample 本地模式。
 func newTracerProvider(cfg TraceConfig, res *resource.Resource, exporter sdktrace.SpanExporter) *sdktrace.TracerProvider {
 	if exporter == nil {
 		return sdktrace.NewTracerProvider(
@@ -184,6 +186,7 @@ func newTracerProvider(cfg TraceConfig, res *resource.Resource, exporter sdktrac
 	)
 }
 
+// newLoggerProvider 创建带计数包装、批量导出和 Resource 的 LoggerProvider。
 func newLoggerProvider(cfg LogConfig, exporter sdklog.Exporter, res *resource.Resource, counters *runtimeCounters) *sdklog.LoggerProvider {
 	// BatchProcessor 提供并发安全的有界队列并在后台批量调用 Exporter。
 	// Logger.Emit 只负责把 LogRecord 交给 SDK，不代表 Collector 已经持久化。
@@ -197,6 +200,7 @@ func newLoggerProvider(cfg LogConfig, exporter sdklog.Exporter, res *resource.Re
 	)
 }
 
+// countingLogExporter 包装 Log Exporter，并把导出失败写入 Runtime 诊断计数。
 type countingLogExporter struct {
 	delegate sdklog.Exporter
 	errors   *atomic.Uint64

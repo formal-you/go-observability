@@ -299,13 +299,21 @@ func levelRank(level Level) int {
 	}
 }
 
+// hasAttr 判断 attrs 中是否已存在指定键（区分大小写）。
+func hasAttr(attrs []slog.Attr, key Key) bool {
+	for _, a := range attrs {
+		if a.Key == string(key) {
+			return true
+		}
+	}
+	return false
+}
+
 // ensureTimestamp 为没有显式事件时间的记录补齐当前时间，保证不同 Writer
 // 看到同一事件的时间一致，也让 file-only JSONL 每行都可独立排序查询。
 func ensureTimestamp(attrs []slog.Attr) []slog.Attr {
-	for _, a := range attrs {
-		if a.Key == string(KeyTimestamp) {
-			return attrs
-		}
+	if hasAttr(attrs, KeyTimestamp) {
+		return attrs
 	}
 	return append(attrs, slog.Time(string(KeyTimestamp), time.Now()))
 }
@@ -314,15 +322,11 @@ func ensureTimestamp(attrs []slog.Attr) []slog.Attr {
 // 缺失时前置插入，保证 file/stdout 扁平投影里 trace/span 出现在 event.name 之前，
 // 符合固定字段顺序（timestamp → level → type → trace/span/request/latency → event.name）。
 func fillTraceContext(attrs []slog.Attr, tc TraceContext) []slog.Attr {
-	have := make(map[string]bool, len(attrs))
-	for _, a := range attrs {
-		have[a.Key] = true
-	}
 	missing := make([]slog.Attr, 0, 2)
-	if tc.TraceID != "" && !have[string(KeyTraceID)] {
+	if tc.TraceID != "" && !hasAttr(attrs, KeyTraceID) {
 		missing = append(missing, slog.String(string(KeyTraceID), tc.TraceID))
 	}
-	if tc.SpanID != "" && !have[string(KeySpanID)] {
+	if tc.SpanID != "" && !hasAttr(attrs, KeySpanID) {
 		missing = append(missing, slog.String(string(KeySpanID), tc.SpanID))
 	}
 	if len(missing) == 0 {
@@ -336,23 +340,19 @@ func mergeBaseMetadata(attrs []slog.Attr, base EventMetadata) []slog.Attr {
 	if base == (EventMetadata{}) {
 		return attrs
 	}
-	have := make(map[string]bool, len(attrs))
-	for _, a := range attrs {
-		have[a.Key] = true
-	}
-	if !have[string(KeyLevel)] && base.Level != "" {
+	if base.Level != "" && !hasAttr(attrs, KeyLevel) {
 		attrs = append(attrs, slog.String(string(KeyLevel), string(base.Level)))
 	}
-	if !have[string(KeyTraceID)] && base.TraceID != "" {
+	if base.TraceID != "" && !hasAttr(attrs, KeyTraceID) {
 		attrs = append(attrs, slog.String(string(KeyTraceID), base.TraceID))
 	}
-	if !have[string(KeySpanID)] && base.SpanID != "" {
+	if base.SpanID != "" && !hasAttr(attrs, KeySpanID) {
 		attrs = append(attrs, slog.String(string(KeySpanID), base.SpanID))
 	}
-	if !have[string(KeyRequestID)] && base.RequestID != "" {
+	if base.RequestID != "" && !hasAttr(attrs, KeyRequestID) {
 		attrs = append(attrs, slog.String(string(KeyRequestID), base.RequestID))
 	}
-	if !have[string(KeyLatencyMS)] && base.LatencyMS != 0 {
+	if base.LatencyMS != 0 && !hasAttr(attrs, KeyLatencyMS) {
 		attrs = append(attrs, slog.Int64(string(KeyLatencyMS), base.LatencyMS))
 	}
 	return attrs

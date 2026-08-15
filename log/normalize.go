@@ -40,6 +40,29 @@ var reservedKeys = map[string]struct{}{
 	"deployment.environment.name": {},
 }
 
+// extraAttrAllowed 判断 ExtraAttrs 键是否允许注入载荷：
+// 空键、canonical 键与公共保留键一律忽略。
+func extraAttrAllowed(key string, canonical map[string]struct{}) bool {
+	if key == "" {
+		return false
+	}
+	if _, ok := canonical[key]; ok {
+		return false
+	}
+	_, reserved := reservedKeys[key]
+	return !reserved
+}
+
+// appendExtraAttrs 追加允许注入的 ExtraAttrs；canonical 是载荷的固定字段键集合。
+func appendExtraAttrs(attrs []slog.Attr, extra []slog.Attr, canonical map[string]struct{}) []slog.Attr {
+	for _, attr := range extra {
+		if extraAttrAllowed(attr.Key, canonical) {
+			attrs = append(attrs, attr)
+		}
+	}
+	return attrs
+}
+
 // eventAttrs 归一化：先写 metadata，再追加 payload attrs（过滤空键与保留键）。
 func eventAttrs[T EventPayload](ev event[T]) []slog.Attr {
 	attrs := make([]slog.Attr, 0, 16)
