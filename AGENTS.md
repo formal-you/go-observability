@@ -10,6 +10,7 @@
 ## 按任务读取
 
 - **任何代码或文档变更**：先读 [开发工作流](docs/workflow.md)，其中包含验证、文档同步和 Git 提交门禁。
+- **创建、重命名分支或调整分支治理**：先读 [分支命名规范](docs/branching.md)。
 - **任何 Go 实现、公共 API、并发或代码注释变更**：先读 [代码与注释准则](docs/coding-standards.md)；中文叙述保留标准英文术语，并明确资源所有权与并发契约。
 - **需求、缺陷、公共行为或测试变更**：先读 [正式测试契约](docs/testing.md)；独立黑盒测试是需求验收依据。
 - **事件名、错误字段、采样或术语变更**：先读 [领域术语](CONTEXT.md) 与相关 [ADR](docs/adr/README.md)；EventName / ErrorCode 本次决策见 [ADR-0009](docs/adr/events/0009-event-name-fact-and-error-code.md)。
