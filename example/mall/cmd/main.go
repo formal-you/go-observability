@@ -29,10 +29,20 @@ import (
 	"github.com/formal-you/go-observability/telemetry"
 )
 
-// init 在启动期一次性注册 Error Registry；注册输入是常量，失败即编码错误。
+// stockInsufficientErr 在启动期构造一次，请求处理时直接复用，避免请求路径 panic。
+var stockInsufficientErr errs.BizError
+
+// init 在启动期一次性注册 Error Registry，并构造请求处理所需的业务错误；
+// 注册与构造输入均为常量，失败即编码错误，应在接流量前暴露。
 func init() {
 	errs.MustRegisterErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT", errs.TypeFailedPrecondition)
 	errs.MustRegisterErrorContract("INFRA.MYSQL.QUERY_TIMEOUT", errs.TypeDeadlineExceeded, "user.role_update.database_timeout")
+
+	stockInsufficientErr = mustBusinessError(errs.BusinessErrorConfig{
+		Code:    "ORDER.CREATE.STOCK_INSUFFICIENT",
+		Type:    errs.TypeFailedPrecondition,
+		Message: "商品库存不足",
+	})
 }
 
 func main() {
@@ -196,11 +206,7 @@ func run(ctx context.Context) error {
 	router.POST("/api/v1/orders", func(c *gin.Context) {
 		orderID := "ORD-1001"
 		if c.GetHeader("X-Fail") == "stock" {
-			ginmw.Abort(c, mustBusinessError(errs.BusinessErrorConfig{
-				Code:    "ORDER.CREATE.STOCK_INSUFFICIENT",
-				Type:    errs.TypeFailedPrecondition,
-				Message: "商品库存不足",
-			}))
+			ginmw.Abort(c, stockInsufficientErr)
 			return
 		}
 		logger.Emit(c.Request.Context(), log.BusinessEvent{
@@ -226,7 +232,8 @@ func run(ctx context.Context) error {
 	return router.Run(":8083")
 }
 
-// mustBusinessError 把严格构造错误直接 panic：示例中的配置错误应尽早暴露。
+// mustBusinessError 是启动期构造业务错误的 Must 变体：构建失败直接 panic（fail-fast）。
+// 只应在 init / 装配阶段调用；请求路径禁止调用，避免运行时 panic 被 Recover 兜住。
 func mustBusinessError(cfg errs.BusinessErrorConfig) errs.BizError {
 	err, buildErr := errs.NewBusinessError(cfg)
 	if buildErr != nil {
