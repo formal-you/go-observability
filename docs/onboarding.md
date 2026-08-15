@@ -17,7 +17,7 @@ OTEL_SDK_DISABLED=true go run ./example
 tail -n 1 ./logs/events.jsonl
 ```
 
-主示例从根目录运行时，离线 JSONL 路径是 `logs/events.jsonl`。路径按进程当前工作目录解析，不是按 `example/main.go` 所在目录解析。
+主示例从根目录运行时，离线 JSONL 路径是 `logs/events.jsonl`。路径按进程当前工作目录解析，不是按 `example/09_gin/main.go` 所在目录解析。
 
 ## 推荐阅读顺序
 

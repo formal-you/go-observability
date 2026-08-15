@@ -4,7 +4,7 @@
 #
 #   docker compose -f observability/docker-compose.yml up -d
 #   # 然后：
-#   set -a && source example/config/.env.example && set +a   # 按需取消注释
+#   set -a && source example/16_config/.env.example && set +a   # 按需取消注释
 #   go run ./example
 #
 # 若要把应用也放进 compose，取消下面 app 服务注释并改 build 上下文。

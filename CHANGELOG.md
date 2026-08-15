@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Changed
+- `example/` 重构为编号教学课程：原 `minimal/nethttp/metrics/samber/config/otel/errorhandler` 与根 `example/main.go` 分别迁移为 `01_quickstart` 至 `16_config` 的教学目录；新增 `02_events`、`03_errors`、`04_sampler_masker`、`05_multiwriter`、`07_telemetry`、`10_grpc`、`11_kratos`、`12_security_audit`、`14_otel_logs`，并把 `mall` 扩展为端到端参考服务；`example/otel` 改写为使用本项目 `telemetry` 的 OTel Logs 双投影示例，不再保留上游裸 OTel demo。
 
 - 配置指南补充 Trace 采样决策传播、Masker 作用域、semconv 版本差距、OTLP 队列溢出告警、传输安全边界和 MultiWriter 写入语义；`writer/file` 在轮转未设置保留上限时输出 WARN 自诊断。
 - `telemetry` 破坏性重构为按信号拆分配置：`Config` 拆为 `Resource` / `Trace` / `Metric` / `Log`；统一 `SignalOutput`（`file`/`otlp`/`stdout`/`none`，Trace 另有 `local`）；`Runtime.NewWriter` 改为 `NewWriter(ctx)`，日志参数进入 `LogConfig`；删除 `LogOutput`、`Providers`、`WriterConfig`、`Setup*`、`NewLogWriter`、`Runtime.Resource`、`Runtime.LoggerProvider` 兼容层。迁移：`ServiceName` 等移入 `Resource`，`LogOutputX` 改为 `SignalOutputX`，`TraceOutput/MetricOutput` 移入 `Trace/Metric.Output`，`NewWriter(ctx, WriterConfig{...})` 改为 `NewWriter(ctx)`。
@@ -22,6 +23,7 @@
 - 新增 ADR-0018（Event Name Convention）与 ADR-0017（保留 app.result / Sampling/Retention 独立层），并把三层事件模型（Event/Error/Sampling）同步到 README、architecture、otel-logs 等文档。
 
 ### Added
+- `example/` 新增教学示例：六类事件、错误建模与投影、Sampler/Masker 治理、MultiWriter、四种 Runtime 预设、gRPC/kratos 适配、Security/Audit 中间件与 OTel Logs 双投影；`example/mall/cmd` 提供可运行的端到端小商城，`example/04_sampler_masker` 增加行为验证测试。
 
 - 新增 Error Registry：`errs.RegisterErrorCode` 注册 ErrorCode→ErrorType 固定映射（多对一），`ErrorCode.RegisteredErrorType` 反查；严格构造器对已注册码强制类型一致，未注册码保持既有行为。
 - Error Registry 扩展为 ErrorCode → {ErrorType, EventName?}：新增 rrs.RegisterErrorContract(code, typ, eventName) 一次性注册错误码 + type + 错误事件名（系统/基础设施码路径）与 ErrorCode.RegisteredEventName() 反查；事件名以不透明字符串存储，文法由接入方校验（errs 不 import log，避免循环依赖）。

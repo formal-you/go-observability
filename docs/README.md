@@ -25,6 +25,6 @@
 | [go-observability-architecture.drawio](go-observability-architecture.drawio) | 可编辑架构图 |
 | [module-map.html](module-map.html) | 浏览器直接打开的 UML 模块地图 |
 
-可复制的部署配置位于 [`example/config`](../example/config/)；本地 LGTM 栈位于 [`observability`](../observability/)；分信号模板位于 [`observability/templates`](../observability/templates/)。
+可复制的部署配置位于 [`example/16_config`](../example/16_config/)；本地 LGTM 栈位于 [`observability`](../observability/)；分信号模板位于 [`observability/templates`](../observability/templates/)。
 
 开源协作文档：[贡献指南](../CONTRIBUTING.md)、[贡献者公约](../CODE_OF_CONDUCT.md)、[安全政策](../SECURITY.md)、[支持渠道](../SUPPORT.md)、[变更记录](../CHANGELOG.md)。

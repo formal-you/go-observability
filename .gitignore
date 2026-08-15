@@ -12,7 +12,7 @@
 
 # 示例运行日志与本地 env（保留 .env.example）
 example/logs/
-example/config/.env
+example/16_config/.env
 samber-out.jsonl
 *.jsonl
 !**/testdata/**/*.jsonl
