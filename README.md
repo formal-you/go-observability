@@ -13,6 +13,7 @@
 </p>
 
 <p align="center">
+  <a href="#user-content-exports">🚦 出口组合</a> ·
   <a href="#user-content-quick-start">🚀 快速开始</a> ·
   <a href="#user-content-event-model">🧩 事件模型</a> ·
   <a href="#user-content-registry">🗂️ 语义注册表</a> ·
@@ -53,6 +54,36 @@
 | 🛡️ | **Security / Audit 中间件** | `SecurityLog` / `AuditLog`（gin + net/http）把认证/授权判定与审计留痕自动写成事件 |
 | 📡 | **统一 telemetry** | Trace、Metric、Log Provider、Resource 与 Shutdown 集中装配 |
 | 🧰 | **可运行参考栈** | Gin、net/http、Metric 示例与本地 LGTM 环境 |
+
+<a name="exports"></a>
+
+## 🚦 出口组合速查
+
+`Enabled` 是总开关；`Trace` / `Metric` / `Log` 各自选择出口，常见组合如下：
+
+| 场景 | Enabled | Trace | Metric | Log | 说明 |
+| --- | --- | --- | --- | --- | --- |
+| 生产全链路 | true | otlp | otlp | otlp | 三信号发 Collector，需 `Endpoint` |
+| 本地开发 | true | stdout | stdout | stdout | 三信号全打 stdout |
+| 混合出口 | true | otlp | file | file | Trace 进 Collector，Metric/Log 落本地 |
+| file-only 小单体 | true | local | none | file | 用 `NewFileRuntime` |
+| 只写本地日志 | false | 忽略 | 忽略 | file/stdout/none | 不创建 Provider，只保留 Log Writer |
+| 完全关闭 | false | 忽略 | 忽略 | none | 不采集、不写日志 |
+
+三个常见档位已有快捷函数：
+
+```go
+// 只开日志
+runtime, _ := telemetry.NewLogRuntime(ctx, "order-api", telemetry.SignalOutputFile, "logs/events.jsonl")
+
+// 全 OTLP
+runtime, _ = telemetry.NewOTLPRuntime(ctx, "order-api", "otel-collector:4317")
+
+// 全文件
+runtime, _ = telemetry.NewAllFileRuntime(ctx, "order-api", "logs")
+```
+
+完整字段与配置模板见 [配置指南](docs/configuration.md)。
 
 ---
 
