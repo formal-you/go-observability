@@ -22,11 +22,12 @@ type ErrorConfig struct {
 	Logger *log.Logger
 
 	// EventName 固定错误事实名；仅在 EventNameResolver 为空时使用。
-	// 两者都为空时按错误 Kind 默认解析为 http.request.rejected / http.request.failed。
+	// 两者都为空时 panic（ADR-0018：框架不提供泛化错误事件名）。
 	EventName log.EventName
 
-	// EventNameResolver 按错误选择事实名；优先于 EventName。领域应用可返回
-	// order.payment.rejected 等更具体名称，nil 使用上述默认规则。
+	// EventNameResolver 按错误选择事实名；优先于 EventName。领域应用必须按实际错误
+	// 返回注册表里的具体事实名（如系统错误码经 RegisteredEventName 反查，业务错误码经
+	// 接入方注册表映射），禁止返回固定或手写字符串。
 	EventNameResolver httperr.EventNameResolver
 
 	// GetRequestID 从请求提取 request_id：写入响应体并补充到事件 metadata；
