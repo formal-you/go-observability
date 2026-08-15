@@ -1,6 +1,6 @@
 # ADR-0002：ErrorType 映射 OTel error.type，保持低基数，采用 domain.reason 格式
 
-- 状态：Superseded（被 [ADR-0016](0016-errortype-otel-grpc-standard-enum.md) 取代）
+- 状态：Superseded（被 [ADR-0016](../errors/0016-errortype-otel-grpc-standard-enum.md) 取代）
 - 日期：2026-08-11
 - 关联：ADR-0001（ErrorCode 三段式）
 - 注：ErrorType 改为复用 OTel/gRPC 标准枚举后，本文档的 domain.reason 决策已被取代；ErrorCode 与 ErrorType 的多对一关系在 ADR-0015/0016 中延续。

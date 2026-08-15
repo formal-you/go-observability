@@ -13,28 +13,57 @@
 
 ## 索引
 
+ADR 按主题分目录存放，编号仍全局递增、不重用。
+
+### 错误模型（errors）
+
 | 编号 | 标题 | 状态 | 日期 |
 | --- | --- | --- | --- |
-| [0001](0001-errorcode-three-segment-format.md) | ErrorCode 采用三段式（服务/模块）.（场景/操作）.（结果/具体错误） | Accepted | 2026-08-11 |
-| [0002](0002-errortype-low-cardinality-domain-reason.md) | ErrorType 映射 OTel error.type，保持低基数，采用 domain.reason 格式 | Superseded（ADR-0016） | 2026-08-11 |
-| [0003](0003-move-root-log-package-to-log-subdir.md) | 核心 log 包迁移至 log/ 子目录，导入路径改为 .../go-observability/log | Accepted | 2026-08-11 |
-| [0004](0004-eventtype-as-logrecord-body.md) | msg/event_type 映射 OTel LogRecord.Body，事件字段进属性 | Accepted | 2026-08-11 |
-| [0005](0005-error-middleware-httperr-core.md) | 错误收口中间件抽取 httperr 契约核心 + 框架薄壳 | Accepted | 2026-08-11 |
-| [0006](0006-middleware-framework-grouped.md) | 中间件按框架体系分组（gin / http / grpc / kratos） | Accepted | 2026-08-11 |
-| [0007](0007-security-audit-events-for-bypassed-input.md) | 非法输入触发系统错误的事件记录策略（Security / Audit 并存，方案 D） | Accepted | 2026-08-11 |
-| [0008](0008-security-audit-middleware.md) | Security / Audit 事件中间件（SecurityLog / AuditLog，拉取式 Decide/Describe） | Accepted | 2026-08-11 |
-| [0009](0009-event-name-fact-and-error-code.md) | EventName 使用领域事实，BizError / SystemError 统一 error.code | Accepted | 2026-08-11 |
-| [0010](0010-strict-error-construction.md) | 严格错误构造与 SCOPE.OPERATION.REASON / ErrorType 标准枚举 | Accepted | 2026-08-11 |
-| [0011](0011-telemetry-runtime-explicit-output.md) | Telemetry Runtime 隔离全局状态并显式选择日志出口 | Superseded（ADR-0020） | 2026-08-11 |
-| [0012](0012-subject-actor-context-and-privacy.md) | Subject / Actor 可信上下文与隐私边界 | Accepted | 2026-08-11 |
-| [0013](0013-bounded-stack-policy.md) | 有界 StackPolicy 与路径治理 | Accepted | 2026-08-11 |
-| [0014](0014-managed-writer-lifecycle.md) | 通过 ManagedWriter 统一 Writer 生命周期 | Accepted | 2026-08-12 |
-| [0015](0015-error-registry.md) | Error Registry：error.code 到 error.type 的固定映射 | Accepted | 2026-08-12 |
-| [0016](0016-errortype-otel-grpc-standard-enum.md) | ErrorType 复用 OTel/gRPC 标准枚举（跨模块） | Accepted | 2026-08-13 |
-| [0017](0017-retain-app-result-sampling-policy.md) | 保留 app.result 结果列，Sampling/Retention 独立策略层 | Accepted | 2026-08-13 |
-| [0018](0018-event-name-convention.md) | Event Name Convention：<event> 必须是注册的 Event Type | Accepted | 2026-08-13 |
-| [0019](0019-errorcode-single-grammar-infra-scope.md) | error.code 单一文法：不分裂 reason/cause；SCOPE 失败面归属（INFRA.*），event.name/error.code 软对齐 | Accepted | 2026-08-13 |
-| [0020](0020-telemetry-per-signal-config.md) | Telemetry 按信号拆分配置并移除兼容层 | Accepted | 2026-08-15 |
+| [0001](errors/0001-errorcode-three-segment-format.md) | ErrorCode 采用三段式（服务/模块）.（场景/操作）.（结果/具体错误） | Accepted | 2026-08-11 |
+| [0002](errors/0002-errortype-low-cardinality-domain-reason.md) | ErrorType 映射 OTel error.type，保持低基数，采用 domain.reason 格式 | Superseded（ADR-0016） | 2026-08-11 |
+| [0010](errors/0010-strict-error-construction.md) | 严格错误构造与 SCOPE.OPERATION.REASON / ErrorType 标准枚举 | Accepted | 2026-08-11 |
+| [0013](errors/0013-bounded-stack-policy.md) | 有界 StackPolicy 与路径治理 | Accepted | 2026-08-11 |
+| [0015](errors/0015-error-registry.md) | Error Registry：error.code 到 error.type 的固定映射 | Accepted | 2026-08-12 |
+| [0016](errors/0016-errortype-otel-grpc-standard-enum.md) | ErrorType 复用 OTel/gRPC 标准枚举（跨模块） | Accepted | 2026-08-13 |
+| [0019](errors/0019-errorcode-single-grammar-infra-scope.md) | error.code 单一文法：不分裂 reason/cause；SCOPE 失败面归属（INFRA.*），event.name/error.code 软对齐 | Accepted | 2026-08-13 |
+
+### 事件模型（events）
+
+| 编号 | 标题 | 状态 | 日期 |
+| --- | --- | --- | --- |
+| [0004](events/0004-eventtype-as-logrecord-body.md) | type/event_type 映射 OTel LogRecord.Body，事件字段进属性 | Accepted | 2026-08-11 |
+| [0009](events/0009-event-name-fact-and-error-code.md) | EventName 使用领域事实，BizError / SystemError 统一 error.code | Accepted | 2026-08-11 |
+| [0017](events/0017-retain-app-result-sampling-policy.md) | 保留 app.result 结果列，Sampling/Retention 独立策略层 | Accepted | 2026-08-13 |
+| [0018](events/0018-event-name-convention.md) | Event Name Convention：<event> 必须是注册的 Event Type | Accepted | 2026-08-13 |
+
+### 安全与审计（security-audit）
+
+| 编号 | 标题 | 状态 | 日期 |
+| --- | --- | --- | --- |
+| [0007](security-audit/0007-security-audit-events-for-bypassed-input.md) | 非法输入触发系统错误的事件记录策略（Security / Audit 并存，方案 D） | Accepted | 2026-08-11 |
+| [0008](security-audit/0008-security-audit-middleware.md) | Security / Audit 事件中间件（SecurityLog / AuditLog，拉取式 Decide/Describe） | Accepted | 2026-08-11 |
+| [0012](security-audit/0012-subject-actor-context-and-privacy.md) | Subject / Actor 可信上下文与隐私边界 | Accepted | 2026-08-11 |
+
+### 中间件（middleware）
+
+| 编号 | 标题 | 状态 | 日期 |
+| --- | --- | --- | --- |
+| [0005](middleware/0005-error-middleware-httperr-core.md) | 错误收口中间件抽取 httperr 契约核心 + 框架薄壳 | Accepted | 2026-08-11 |
+| [0006](middleware/0006-middleware-framework-grouped.md) | 中间件按框架体系分组（gin / http / grpc / kratos） | Accepted | 2026-08-11 |
+
+### 遥测装配（telemetry）
+
+| 编号 | 标题 | 状态 | 日期 |
+| --- | --- | --- | --- |
+| [0011](telemetry/0011-telemetry-runtime-explicit-output.md) | Telemetry Runtime 隔离全局状态并显式选择日志出口 | Superseded（ADR-0020） | 2026-08-11 |
+| [0014](telemetry/0014-managed-writer-lifecycle.md) | 通过 ManagedWriter 统一 Writer 生命周期 | Accepted | 2026-08-12 |
+| [0020](telemetry/0020-telemetry-per-signal-config.md) | Telemetry 按信号拆分配置并移除兼容层 | Accepted | 2026-08-15 |
+
+### 包结构（package）
+
+| 编号 | 标题 | 状态 | 日期 |
+| --- | --- | --- | --- |
+| [0003](package/0003-move-root-log-package-to-log-subdir.md) | 核心 log 包迁移至 log/ 子目录，导入路径改为 .../go-observability/log | Accepted | 2026-08-11 |
 
 ## 模板
 
