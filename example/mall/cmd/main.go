@@ -150,15 +150,21 @@ func run(ctx context.Context) error {
 			Logger:       logger,
 			GetRequestID: requestID,
 			EventNameResolver: func(err error) log.EventName {
-				// 框架不提供泛化错误事件名，接入方必须按错误选择具体事实名。
+				// 框架不提供泛化错误事件名（ADR-0018），接入方必须按实际错误反查注册表，
+				// 禁止按 Kind 固定返回同一事件名。
 				var appErr errs.AppError
-				if errors.As(err, &appErr) {
-					switch appErr.Kind() {
-					case errs.KindValidation, errs.KindBusiness:
-						return log.NewEventName("order", "create", "stock_insufficient")
-					}
+				if !errors.As(err, &appErr) {
+					return mall.EventSystemError
 				}
-				return log.NewEventName("user", "role_update", "database_timeout")
+				// 系统/基础设施错误：Error Registry 反查 code → type + 错误事件名。
+				if name, ok := appErr.ErrCode().RegisteredEventName(); ok {
+					return log.EventName(name)
+				}
+				// 业务/校验错误：从 mall 自建注册表按错误码映射领域事件名。
+				if name, ok := mall.EventNameForErrorCode(appErr.ErrCode()); ok {
+					return name
+				}
+				return mall.EventSystemError
 			},
 		}),
 	)

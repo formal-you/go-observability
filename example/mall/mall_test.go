@@ -24,6 +24,18 @@ func TestB4Registry(t *testing.T) {
 	}
 }
 
+// TestEventNameForErrorCode 验收业务错误码到领域错误事件名的接入方注册表映射。
+func TestEventNameForErrorCode(t *testing.T) {
+	name, ok := mall.EventNameForErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT")
+	if !ok || name != mall.EventOrderCreateStockInsufficient {
+		t.Fatalf("EventNameForErrorCode(ORDER.CREATE.STOCK_INSUFFICIENT) = %q, %v; want %q, true",
+			name, ok, mall.EventOrderCreateStockInsufficient)
+	}
+	if _, ok := mall.EventNameForErrorCode("ORDER.UNKNOWN.NOT_REGISTERED"); ok {
+		t.Error("unknown code should return false")
+	}
+}
+
 // TestOrderPaidExtraAttrs 验收 CASE-B4-01：ExtraAttrs 扁平含 app.order_id 等。
 func TestOrderPaidExtraAttrs(t *testing.T) {
 	ev := log.BusinessEvent{

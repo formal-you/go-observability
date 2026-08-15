@@ -5,6 +5,7 @@ package mall
 import (
 	"log/slog"
 
+	"github.com/formal-you/go-observability/errs"
 	log "github.com/formal-you/go-observability/log"
 )
 
@@ -36,6 +37,27 @@ func AllBusinessEvents() []log.EventName {
 		EventUserRegistered,
 		EventCouponRedeemed,
 	}
+}
+
+// 错误事件名：错误收口中间件（ginmw.ErrorResponse）经 EventNameResolver 使用的领域事实名。
+// 与 B4 业务事件清单分开：错误事件名承载“本次操作以何种事实失败/被拒绝”，
+// 业务码到事件名的映射由接入方自建注册表维护，禁止在 resolver 里按 Kind 固定或手写。
+const (
+	// EventOrderCreateStockInsufficient 下单被库存不足拒绝（业务拒绝领域事件名）。
+	EventOrderCreateStockInsufficient log.EventName = "order.create.stock_insufficient"
+	// EventSystemError 未命中任何错误码注册表的系统错误兜底事实名。
+	EventSystemError log.EventName = "system.error.occurred"
+)
+
+// businessErrorEvents 建立业务错误码到领域事件名的固定映射（接入方自建注册表）。
+var businessErrorEvents = map[errs.ErrorCode]log.EventName{
+	"ORDER.CREATE.STOCK_INSUFFICIENT": EventOrderCreateStockInsufficient,
+}
+
+// EventNameForErrorCode 返回业务错误码对应的领域错误事件名；未知码返回 false。
+func EventNameForErrorCode(code errs.ErrorCode) (log.EventName, bool) {
+	name, ok := businessErrorEvents[code]
+	return name, ok
 }
 
 // 事件专属键（app.* vendor；金额分 int64；时间 RFC3339）。
