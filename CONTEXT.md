@@ -20,7 +20,7 @@ _Avoid_: 日志行、log message（指结构化事件时）
 _Avoid_: 日志级别（Level 是另一维度）、EventName
 
 **EventName**:
-事件的稳定事实名，event.name MUST use the form <domain>.<subject>.<event>（如 http.request.completed、order.payment.succeeded）；<event> MUST 是注册的 Event Type（稳定语义发生，唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；写入 event.name，正则 EventNamePattern 校验；粗分类已由 type/EventType 承载，首段不得重复六类前缀。
+事件的稳定事实名，event.name MUST use the form <domain>.<subject>.<event>（如 http.request.completed、order.payment.succeeded）；<event> MUST 是注册的 Event Type（稳定语义发生，唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；输入键 event.name（正则 EventNamePattern 校验）；OTLP 投影为顶层 LogRecord.EventName（不进入 attributes），file/stdout 双投影保留扁平 event.name 列；粗分类已由 type/EventType 承载，首段不得重复六类前缀。
 _Avoid_: 类别.模块.操作、随意字符串、生命周期 Stage、EventType 前缀
 
 **ErrorType**:

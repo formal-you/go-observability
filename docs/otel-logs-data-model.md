@@ -55,7 +55,7 @@ API 层 Record 之外，SDK 在导出前附加：
 | `timestamp` / `observedTimestamp` | `attrkv.Record` 内 `time.Now()` |
 | `severity` / `severityText` | `level` 属性（DEBUG/INFO/WARN/ERROR）映射 |
 | `body` | **`type`（Writer 首个参数） = event_type 粗分类**（access/business/error/security/audit/probe，见 ADR-0004） |
-| `eventName` | `event.name` 属性（`<domain>.<subject>.<event>`，如 order.payment.succeeded） |
+| `eventName` | `event.name` 输入属性（`<domain>.<subject>.<event>`，如 order.payment.succeeded）经 `attrkv.Record` 提升为顶层字段，不进入 attributes |
 | attributes | 其余扁平字段（剥离 timestamp/level/event.name/trace_id/span_id 后） |
 | `trace_id` / `span_id` / `traceFlags` | 由 sdk/log 从 ctx 的 span context 自动关联（不写属性） |
 | `resource` / `scope` | `telemetry` 装配的 Provider / Logger 提供 |
@@ -64,6 +64,7 @@ API 层 Record 之外，SDK 在导出前附加：
 ## 5. 注意点
 
 - **EventName 语义**：OTel 明确「非空 event_name 的记录被解释为事件记录」，且事件名应唯一标识事件的属性/正文结构。本仓库用 `event.name = <domain>.<subject>.<event>`（正则 `EventNamePattern` 校验）；`<event>` MUST 是注册的 Event Type（稳定语义发生，唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；`type` 单独承载 access/business/error/security/audit/probe 粗分类。
+- **EventName 是顶层字段，不是嵌套属性**：`event_name` 早期作为 attribute，后来被提升为 LogRecord 顶层字段（与 Timestamp / SeverityNumber 同级）。OTLP 落地应使用顶层 `EventName`，不要把 `event.name` 写成 `event: { name: ... }` 这类 JSON 子对象；file/stdout 双投影仍保留扁平 `event.name` 列（见 [架构说明](architecture.md#5-双投影同一事件两种出口)）。
 - **Body 低基数**：Body 不放高基数自由文本，放 event_type 粗分类（决策见 ADR-0004）。
 - **trace/span 不走属性**：trace_id/span_id 由 ctx 自动关联，双投影规则见 [架构说明](architecture.md#5-双投影同一事件两种出口)。
 - **版本差异**：`event_name` 是较新的数据模型字段；早期 Collector/后端不支持时，Body 仍保留 event_type 作为兜底分组键。
