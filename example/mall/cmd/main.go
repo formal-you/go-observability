@@ -72,6 +72,14 @@ func mallInputGuard(ctx context.Context, r *http.Request, _ error, summary httpe
 	md := httperr.EventMetadataFromContext(ctx)
 	md.Level = log.LevelInfo
 	md.RequestID = r.Header.Get("X-Request-ID")
+	extra := summary.Attrs()
+	// 低敏、低基数参数值可直接落日志；敏感值应使用 Hash / Truncated，不落原文。
+	if productID := r.URL.Query().Get("product_id"); productID != "" {
+		extra = append(extra, slog.String(string(mall.KeyProductID), productID))
+	}
+	if quantity := r.URL.Query().Get("quantity"); quantity != "" {
+		extra = append(extra, slog.String(string(mall.KeyQuantity), quantity))
+	}
 	return []log.EventPayload{log.AuditEvent{
 		EventMetadata: md,
 		Data: log.AuditPayload{
@@ -81,7 +89,7 @@ func mallInputGuard(ctx context.Context, r *http.Request, _ error, summary httpe
 			Resource:       log.Resource{Type: "order"},
 			Reason:         "业务拒绝，记录失败输入摘要",
 			Result:         log.ResultDenied,
-			ExtraAttrs:     summary.Attrs(),
+			ExtraAttrs:     extra,
 		},
 	}}
 }
