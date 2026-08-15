@@ -1,0 +1,21 @@
+# 全 OTLP 配置结构示意。应用自行解析后映射到 telemetry.Config；
+# 只使用默认采样/批量/队列时，可直接调用 telemetry.NewOTLPRuntime。
+service:
+  name: order-api
+  version: "0.1.0"
+  environment: production
+
+otlp:
+  # k8s 中指向 Collector Service/DaemonSet，例如 otel-collector:4317
+  endpoint: 127.0.0.1:4317
+
+trace:
+  sample_ratio: 0.1
+  batch_timeout: 5s
+
+metric:
+  export_interval: 15s
+
+log:
+  batch_timeout: 1s
+  queue_size: 2048

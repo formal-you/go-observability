@@ -35,7 +35,7 @@ type ResourceMetadata struct {
 }
 
 // RotationConfig 控制基于文件大小的日志轮转。MaxSizeMB 必须大于零；
-// MaxBackups/MaxAgeDays 为零表示不按该维度删除旧文件。
+// MaxBackups/MaxAgeDays 为零表示不按该维度删除旧文件；两者同时为零时无任何保留上限。
 type RotationConfig struct {
 	MaxSizeMB  int
 	MaxBackups int
@@ -72,6 +72,9 @@ func New(path string, opts ...Option) (*Writer, error) {
 	if w.rotation != nil {
 		if err := validateRotation(*w.rotation); err != nil {
 			return nil, err
+		}
+		if w.rotation.MaxBackups == 0 && w.rotation.MaxAgeDays == 0 {
+			slog.Warn("file rotation has no retention limit", "path", path)
 		}
 		w.file = &lumberjack.Logger{
 			Filename:   path,

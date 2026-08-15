@@ -1,0 +1,23 @@
+# All-file 配置结构示意。应用自行解析后映射到 telemetry.Config；
+# 只使用默认批量/间隔时，可直接调用 telemetry.NewAllFileRuntime。
+service:
+  name: order-api
+  version: "0.1.0"
+  environment: development
+
+files:
+  dir: logs
+
+trace:
+  batch_timeout: 5s
+
+metric:
+  export_interval: 15s
+
+log:
+  rotation:
+    max_size_mb: 100
+    max_backups: 10
+    max_age_days: 30
+    compress: true
+    local_time: true

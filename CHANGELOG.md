@@ -5,6 +5,8 @@
 ## [Unreleased]
 
 ### Changed
+
+- 配置指南补充 Trace 采样决策传播、Masker 作用域、semconv 版本差距、OTLP 队列溢出告警、传输安全边界和 MultiWriter 写入语义；`writer/file` 在轮转未设置保留上限时输出 WARN 自诊断。
 - `telemetry` 破坏性重构为按信号拆分配置：`Config` 拆为 `Resource` / `Trace` / `Metric` / `Log`；统一 `SignalOutput`（`file`/`otlp`/`stdout`/`none`，Trace 另有 `local`）；`Runtime.NewWriter` 改为 `NewWriter(ctx)`，日志参数进入 `LogConfig`；删除 `LogOutput`、`Providers`、`WriterConfig`、`Setup*`、`NewLogWriter`、`Runtime.Resource`、`Runtime.LoggerProvider` 兼容层。迁移：`ServiceName` 等移入 `Resource`，`LogOutputX` 改为 `SignalOutputX`，`TraceOutput/MetricOutput` 移入 `Trace/Metric.Output`，`NewWriter(ctx, WriterConfig{...})` 改为 `NewWriter(ctx)`。
 
 - Gin `Abort(nil)` 的固定系统错误改为包初始化时构造并验证，请求路径只复用已验证错误，避免在请求处理中触发库内固定契约构造失败。
@@ -25,6 +27,7 @@
 - Error Registry 扩展为 ErrorCode → {ErrorType, EventName?}：新增 rrs.RegisterErrorContract(code, typ, eventName) 一次性注册错误码 + type + 错误事件名（系统/基础设施码路径）与 ErrorCode.RegisteredEventName() 反查；事件名以不透明字符串存储，文法由接入方校验（errs 不 import log，避免循环依赖）。
 - 新增 `errs.MustRegisterErrorCode` / `errs.MustRegisterErrorContract`：注册失败（非法文法/重复冲突）直接 panic，供启动期以常量/全局预定义注册使用；error 变体保留给需要处理失败的调用方。
 - 新增 `log.ManagedWriter`、`log.ManageWriter` 与托管 `MultiWriter`；`telemetry.Runtime.NewWriter` 现在返回具备幂等关闭能力的 Writer，保留仅实现 `Write` 的旧 Adapter 兼容性。
+- 新增 telemetry 快捷预设构造器 `NewLogRuntime` / `NewOTLPRuntime` / `NewAllFileRuntime`，并新增对应配置模板 `log-only.example.yaml` / `otlp.example.yaml` / `all-file.example.yaml`。
 - 新增严格错误值验证与配置式构造器：ErrorCode 使用 `SCOPE.OPERATION.REASON`，ErrorType 复用 OTel/gRPC 标准枚举（gRPC canonical code），并支持保留 cause 链。
 - 六类类型化事件、`Logger` / `Writer` 接口，以及 JSONL、stdout、OTLP Writer。
 - `AccessPayload` 新增 `RPCInfo`（semconv `rpc.*`）与框架级事件名 `rpc.request.completed`，支持 gRPC 传输层访问事件。
