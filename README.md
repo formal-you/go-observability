@@ -207,10 +207,8 @@ order.payment.succeeded
 
 | 注册表 | 管什么 | 关键入口 |
 |:---|:---|:---|
-| `EventName` | `event.name` 必须是 `<domain>.<subject>.<event>`，首段不能重复六类 `type` | `log.EventNamePattern`、`log.NewEventName`、框架级常量 / 接入方领域常量 |
-| `ErrorType` | `error.type` 必须是 16 个 OTel/gRPC canonical code 的闭合枚举 | `errs.ErrorType.Validate`、`errs.ParseErrorType` |
-| `ErrorCode` | `error.code` 必须是 `SCOPE.OPERATION.REASON`，每段仅大写字母/数字/下划线；基础设施故障用 `INFRA.*` | `errs.ErrorCodePattern`、`errs.ParseErrorCode`、`ErrorCode.Validate` |
-| `Error Registry` | `error.code → error.type`，可选再绑定一个错误 `event.name` | `RegisterErrorCode` / `RegisterErrorContract` / `MustRegister...` / `RegisteredErrorType` / `RegisteredEventName` |
+| `Event Registry` | `event.name` 必须是 `<domain>.<subject>.<event>`，首段不能重复六类 `type`；`<event>` 是已注册的 Event Type | `log.EventNamePattern`、`log.NewEventName`、框架级常量 / 接入方领域常量 |
+| `Error Registry` | `error.code` 使用 `SCOPE.OPERATION.REASON`，每个 `error.code` 恰好映射到一个 `error.type`（OTel/gRPC canonical code），并可选绑定错误事件名 | `errs.ErrorCodePattern`、`errs.ParseErrorCode`、`errs.ParseErrorType`、`RegisterErrorCode` / `RegisterErrorContract` / `MustRegister...` / `RegisteredErrorType` / `RegisteredEventName` |
 
 框架级事件名登记在 `log/types.go`；接入方领域事件名以常量维护自己的注册表（见 [`example/mall`](example/mall/README.md)），禁止在业务代码里散落手写字符串。
 
