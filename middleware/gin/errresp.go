@@ -68,33 +68,17 @@ func mustBuildFallbackError() error {
 // 它在 handler 外层注册，于 c.Next() 后读取 c.Errors.Last()：
 // 无错误直接放行；有错误则按 errs.Kind 映射状态码与响应体，经 log.EventFromError
 // 投影并写出错误事件，再 AbortWithStatusJSON 终止请求。
+// ErrorResponse 返回收口显式业务/系统错误的 Gin 中间件。
+// 它在 handler 外层注册，于 c.Next() 后读取 c.Errors.Last()：
+// 无错误直接放行；有错误则按 errs.Kind 映射状态码与响应体，经 log.EventFromError
+// 投影并写出错误事件，再 AbortWithStatusJSON 终止请求。
 func ErrorResponse(cfg ErrorConfig) gin.HandlerFunc {
 	if cfg.Logger == nil {
 		panic("ginmw: Logger 不能为空")
 	}
-	eventNameResolver := cfg.EventNameResolver
-	if eventNameResolver == nil {
-		if cfg.EventName != "" {
-			if err := cfg.EventName.Validate(); err != nil {
-				panic("ginmw: invalid EventName: " + err.Error())
-			}
-			eventNameResolver = func(error) log.EventName { return cfg.EventName }
-		} else {
-			// ADR-0018：框架不提供泛化错误事件名，错误事件名由接入方定义并经正则校验。
-			panic("ginmw: ErrorConfig 必须提供 EventName 或 EventNameResolver")
-		}
-	}
-	statusForError := cfg.StatusForError
-	if statusForError == nil {
-		statusForError = httperr.StatusForError
-	}
-	projector := cfg.ResponseProjector
-	if projector == nil {
-		// 默认投影组合调用方可能覆盖的 StatusForError 与缺省响应体，保证向后兼容。
-		projector = func(err error, requestID string) (int, any) {
-			return statusForError(err), httperr.ResponseBody(err, requestID)
-		}
-	}
+	eventNameResolver := resolveEventNameResolver(cfg)
+	statusForError := orStatusForError(cfg.StatusForError)
+	projector := orProjector(cfg.ResponseProjector, statusForError)
 
 	return func(c *gin.Context) {
 		c.Next()
@@ -110,8 +94,6 @@ func ErrorResponse(cfg ErrorConfig) gin.HandlerFunc {
 			md.RequestID = cfg.GetRequestID(c)
 		}
 
-		// 统一走 log.EventFromError 投影，避免中间件重复维护字段映射；
-		// Level 由 EventFromError 按 Kind 推导，不在此覆盖。
 		// SkipEvent 命中时跳过事件写出（错误事件已由接入方自行记录），只渲染响应体。
 		if cfg.SkipEvent == nil || !cfg.SkipEvent(err) {
 			ev := log.EventFromError(eventNameResolver(err), err, md)
@@ -121,6 +103,38 @@ func ErrorResponse(cfg ErrorConfig) gin.HandlerFunc {
 
 		status, body := projector(err, md.RequestID)
 		c.AbortWithStatusJSON(status, body)
+	}
+}
+
+// resolveEventNameResolver 解析错误事件名来源：优先 EventNameResolver；否则用固定
+// EventName（需通过 Validate）；两者都为空时 panic（ADR-0018 不提供泛化错误事件名）。
+func resolveEventNameResolver(cfg ErrorConfig) httperr.EventNameResolver {
+	if cfg.EventNameResolver != nil {
+		return cfg.EventNameResolver
+	}
+	if cfg.EventName != "" {
+		if err := cfg.EventName.Validate(); err != nil {
+			panic("ginmw: invalid EventName: " + err.Error())
+		}
+		return func(error) log.EventName { return cfg.EventName }
+	}
+	panic("ginmw: ErrorConfig 必须提供 EventName 或 EventNameResolver")
+}
+
+func orStatusForError(f func(error) int) func(error) int {
+	if f != nil {
+		return f
+	}
+	return httperr.StatusForError
+}
+
+func orProjector(p httperr.Projector, statusForError func(error) int) httperr.Projector {
+	if p != nil {
+		return p
+	}
+	// 默认投影组合调用方可能覆盖的 StatusForError 与缺省响应体，保证向后兼容。
+	return func(err error, requestID string) (int, any) {
+		return statusForError(err), httperr.ResponseBody(err, requestID)
 	}
 }
 
