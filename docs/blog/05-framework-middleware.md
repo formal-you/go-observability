@@ -77,6 +77,34 @@ kratos 适配提供：
 - `ErrorLog`：错误事件日志；
 - `GRPCErrorMapper`：gRPC status 映射。
 
+
+## 代码对比：Gin 错误收口
+
+传统做法通常每个 handler 自己决定状态码和响应体：
+
+```go
+if bizErr {
+    c.JSON(409, gin.H{"code": "STOCK_INSUFFICIENT", "message": "库存不足"})
+    return
+}
+```
+
+`go-observability`：
+
+```go
+router.Use(ginmw.ErrorResponse(ginmw.ErrorConfig{
+    Logger: logger,
+    EventNameResolver: func(err error) log.EventName {
+        return log.NewEventName("order", "create", "stock_insufficient")
+    },
+}))
+
+// handler 只挂载错误：
+ginmw.Abort(c, bizErr)
+```
+
+状态码、响应体和错误事件统一在收口中间件处理，handler 不再各写一套。
+
 ## 六、最佳实践
 
 1. 错误收口只做“判定 + 渲染”，具体事件名由接入方 resolver 提供；

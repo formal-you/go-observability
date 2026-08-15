@@ -55,6 +55,33 @@ Log: telemetry.LogConfig{
 
 业务侧始终是同一个 `Logger.Emit`，出口切换只发生在装配层。
 
+
+## 代码对比：两种出口
+
+传统做法往往写两套埋点：
+
+```go
+fileSink.Info("order paid", "order_id", id)   // JSONL 本地
+otlpSink.Info("order paid", "order_id", id)   // OTLP 后端
+```
+
+`go-observability` 只写一次：
+
+```go
+logger.Emit(ctx, log.BusinessEvent{ /* 同一事件 */ })
+```
+
+出口在装配层切换：
+
+```go
+Log: telemetry.LogConfig{
+    Output:   telemetry.SignalOutputFile, // 或 SignalOutputOTLP
+    FilePath: "logs/otel-logs.jsonl",
+},
+```
+
+业务代码不感知出口，字段也不会因为两套实现而漂移。
+
 ## 五、最佳实践
 
 1. 不要把出口选择写进业务代码；

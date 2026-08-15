@@ -55,6 +55,37 @@ exhaust  level=ERROR retry_exhausted=true
 
 错误事件名必须由接入方从注册表传入，框架不自动派生泛化错误事件名，避免“万能错误”让告警失效。
 
+
+## 代码对比：记录一个业务错误
+
+传统写法容易丢失错误分类：
+
+```go
+if err != nil {
+    slog.Error("create order failed", "error", err.Error())
+}
+```
+
+`go-observability`：
+
+```go
+biz, buildErr := errs.NewBusinessError(errs.BusinessErrorConfig{
+    Code:    "ORDER.CREATE.STOCK_INSUFFICIENT",
+    Type:    errs.TypeFailedPrecondition,
+    Message: "商品库存不足",
+})
+if buildErr != nil {
+    return buildErr
+}
+logger.Emit(ctx, log.EventFromError(
+    log.NewEventName("order", "create", "stock_insufficient"),
+    biz,
+    log.EventMetadata{},
+))
+```
+
+后者保留 `ErrorKind` / `ErrorType` / `ErrorCode`，收口层能自动映射状态码和告警级别。
+
 ## 五、最佳实践
 
 1. 进程启动期用 `MustRegisterErrorCode` 固定 `ErrorCode -> ErrorType` 映射；

@@ -62,6 +62,34 @@ runtime, err := telemetry.NewRuntime(ctx, telemetry.Config{
 InstallGlobal -> NewWriter -> Emit -> Close Writer -> Shutdown Runtime
 ```
 
+
+## 代码对比：三信号初始化
+
+传统做法要分别维护三个 Provider：
+
+```go
+tp := initTraceProvider()
+mp := initMeterProvider()
+lp := initLoggerProvider()
+```
+
+`go-observability`：
+
+```go
+runtime, err := telemetry.NewRuntime(ctx, telemetry.Config{
+    Enabled:  true,
+    Endpoint: "otel-collector:4317",
+    Resource: telemetry.ResourceConfig{ServiceName: "order-api"},
+    Trace:    telemetry.TraceConfig{Output: telemetry.SignalOutputOTLP},
+    Metric:   telemetry.MetricConfig{Output: telemetry.SignalOutputOTLP},
+    Log:      telemetry.LogConfig{Output: telemetry.SignalOutputOTLP},
+})
+restore := runtime.InstallGlobal()
+defer restore()
+```
+
+三信号共享一个 `Resource` 和一个 `Shutdown`，初始化/关闭顺序由 Runtime 统一管理。
+
 ## 五、最佳实践
 
 1. `service.name` 只在 `Resource` 配置一次，三信号共用；

@@ -63,6 +63,39 @@ tail -n 1 ./logs/events.jsonl
 | 采样/脱敏治理 | ❌ 分散 | ✅ Sampler / Masker 注入点 |
 | 链路关联 | ⚠️ 手动 | ✅ TraceExtractor 自动补全 |
 
+
+## 代码对比：同样记录一次支付成功
+
+传统 `slog` 写法：
+
+```go
+slog.Info("order paid",
+    "order_id", orderID,
+    "amount_cents", amountCents,
+    "channel", "wechat",
+)
+```
+
+`go-observability` 写法：
+
+```go
+logger.Emit(ctx, log.BusinessEvent{
+    EventMetadata: log.EventMetadata{Level: log.LevelInfo},
+    Data: log.BusinessPayload{
+        EventName: log.NewEventName("order", "payment", "succeeded"),
+        Resource:  log.Resource{Type: "order", ID: orderID},
+        Result:    log.ResultSuccess,
+        ExtraAttrs: []slog.Attr{
+            slog.String("app.order_id", orderID),
+            slog.Int64("app.amount_cents", amountCents),
+            slog.String("app.pay_channel", "wechat"),
+        },
+    },
+})
+```
+
+后者把 `event.name`、`app.result`、`app.*` 都固定下来，查询和告警不再靠猜字段名。
+
 ## 五、这套系列会讲什么
 
 | 文章 | 主问题 |

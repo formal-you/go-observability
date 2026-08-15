@@ -71,6 +71,33 @@ cat ./logs/multiwriter.jsonl
 
 `NewMultiWriter` 串行写入，任一 Writer 失败不阻断其余，最终用 `errors.Join` 聚合错误。
 
+
+## 代码对比：采样与脱敏
+
+传统写法往往散落在业务代码里：
+
+```go
+if !shouldKeep(level, eventName) {
+    return
+}
+safe := redact(attrs, "token")
+slog.Info("event", safe...)
+```
+
+`go-observability` 把治理注入 Logger：
+
+```go
+logger := log.NewLogger(w,
+    log.WithMasker(log.FieldMasker{Keys: []string{"app.secret"}}),
+    log.WithSampler(log.EventTypeKeepSampler{
+        KeepTypes: []log.EventType{log.EventError, log.EventSecurity, log.EventAudit},
+        Fallback:  log.SamplerFunc(func(context.Context, []slog.Attr) bool { return false }),
+    }),
+)
+```
+
+治理顺序固定，业务代码只负责 `Emit`。
+
 ## 五、最佳实践
 
 1. 高价值结果（`failed` / `error` / `blocked` / `denied`）必须保留；

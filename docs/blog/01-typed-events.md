@@ -55,6 +55,42 @@ cat ./logs/events-six.jsonl
 
 领域字段只能通过 `ExtraAttrs` 注入 `app.*` 键，核心库不会散落登记具体业务字段。
 
+
+## 代码对比：一条访问日志
+
+传统写法：
+
+```go
+slog.Info("request completed",
+    "method", r.Method,
+    "path", r.URL.Path,
+    "status", 200,
+    "latency_ms", 12,
+)
+```
+
+`go-observability`：
+
+```go
+logger.Emit(ctx, log.AccessEvent{
+    EventMetadata: log.EventMetadata{
+        Level:     log.LevelInfo,
+        LatencyMS: 12,
+    },
+    Data: log.AccessPayload{
+        EventName: log.EventNameHTTPRequestCompleted,
+        HTTP: log.HTTPInfo{
+            Method:     r.Method,
+            URLPath:    r.URL.Path,
+            StatusCode: 200,
+        },
+        Result: log.ResultSuccess,
+    },
+})
+```
+
+前者是自由字段，后者把 HTTP 语义固定到 `HTTPInfo`，跨服务查询统一。
+
 ## 五、最佳实践
 
 1. 事件名三段式：`<domain>.<subject>.<event>`，例如 `order.payment.succeeded`；

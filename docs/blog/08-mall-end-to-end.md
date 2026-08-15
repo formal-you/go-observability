@@ -72,6 +72,24 @@ go test ./example/blackbox -v
 
 它保证示例承诺的行为是可复现的，而不是文档写写而已。
 
+
+## 代码对比：端到端之前 vs 之后
+
+传统 mall 可能把日志、错误、安全和链路分散在各 handler；本示例把注册表、错误体系、治理和中间件组合进一个服务：
+
+```go
+logger := log.NewLogger(w,
+    log.WithTraceExtractor(otelutil.NewTraceExtractor()),
+    log.WithMasker(log.FieldMasker{}),
+    log.WithSampler(log.EventTypeKeepSampler{
+        KeepTypes: []log.EventType{log.EventBusiness, log.EventError, log.EventSecurity, log.EventAudit},
+        Fallback:  log.NewResultKeepSampler(1.0),
+    }),
+)
+```
+
+配合 `mall.EventOrderCreated` / `EventProductViewed` 注册表，业务代码只构造领域事实，不再手写字段名。
+
 ## 七、下一步
 
 把本系列文章配合仓库示例一起读：先跑 `01_quickstart`，再按编号课程推进；遇到问题从 `blackbox` 反查字段契约。

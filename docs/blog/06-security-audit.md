@@ -56,6 +56,44 @@ app.reason
 
 这些字段用于追溯“谁在何时对什么资源做了什么”，不是普通访问日志。
 
+
+## 代码对比：安全事件
+
+传统做法在 handler 里手动拼字段：
+
+```go
+if riskHit {
+    slog.Warn("login denied",
+        "user_id", userID,
+        "reason", "risk_score_below_threshold",
+    )
+}
+```
+
+`go-observability`：
+
+```go
+router.Use(ginmw.SecurityLog(ginmw.SecurityConfig{
+    Logger: logger,
+    Decide: func(c *gin.Context) *log.SecurityPayload {
+        if c.GetHeader("X-Risk") != "high" {
+            return nil
+        }
+        return &log.SecurityPayload{
+            EventName:         log.NewEventName("auth", "login", "denied"),
+            Subject:           log.Subject{UserID: c.GetHeader("X-User-ID")},
+            SecurityEventType: "auth.failure",
+            FailureReason:     "risk_score_below_threshold",
+            ActionTaken:       "blocked",
+            RiskScore:         90,
+            Result:            log.ResultDenied,
+        }
+    },
+}))
+```
+
+安全判定留在认证/授权边界，事件结构由库统一。
+
 ## 五、最佳实践
 
 1. 安全判定放在认证/授权中间件，不散落在 handler；
