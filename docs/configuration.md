@@ -132,13 +132,13 @@ Config
 | 只写本地日志 | false | 忽略 | 忽略 | file/stdout/none | 不创建 Provider，只保留 Log Writer |
 | 完全关闭 | false | 忽略 | 忽略 | none | 不采集、不写日志 |
 
-三个默认档位已提供快捷函数，只需必填参数；配置文件见 [`example/config/`](../example/config/README.md)：
+三个默认档位已提供快捷函数，只需必填参数；配置文件见 [`example/16_config/`](../example/16_config/README.md)：
 
 | 快捷函数 | 签名 | 配置模板 |
 | --- | --- | --- |
-| `NewLogRuntime` | `(ctx, serviceName, output, filePath)` | [`log-only.example.yaml`](../example/config/log-only.example.yaml) |
-| `NewOTLPRuntime` | `(ctx, serviceName, endpoint)` | [`otlp.example.yaml`](../example/config/otlp.example.yaml) |
-| `NewAllFileRuntime` | `(ctx, serviceName, dir)` | [`all-file.example.yaml`](../example/config/all-file.example.yaml) |
+| `NewLogRuntime` | `(ctx, serviceName, output, filePath)` | [`log-only.example.yaml`](../example/16_config/log-only.example.yaml) |
+| `NewOTLPRuntime` | `(ctx, serviceName, endpoint)` | [`otlp.example.yaml`](../example/16_config/otlp.example.yaml) |
+| `NewAllFileRuntime` | `(ctx, serviceName, dir)` | [`all-file.example.yaml`](../example/16_config/all-file.example.yaml) |
 
 ```go
 // 1. 只开 Log：output 为 file 或 stdout
@@ -246,7 +246,7 @@ writer, err := runtime.NewWriter(ctx)
 ```
 
 文件中的规范服务身份键为 `service.name`、`service.version`、`service.instance.id` 和
-`deployment.environment.name`。`example/config/file-only.example.yaml` 只是配置模板，
+`deployment.environment.name`。`example/16_config/file-only.example.yaml` 只是配置模板，
 不会被库自动读取；应用需自行解析 YAML 后映射到 `telemetry.Config`。
 
 需要本地文件轮转时，把选项写入 `LogConfig.FileOptions`：
@@ -284,7 +284,7 @@ runtime, err := telemetry.NewFileRuntime(telemetry.Config{
 
 出口由 `Config.Log.Output` 固化；后续修改环境变量不会改变已有 Runtime，需要重新构造后再切换。
 
-应用应检查构造错误，配置 `log.WithErrorHandler` 观察异步写入失败，并在退出时调用 `ManagedWriter.Close(ctx)`。`Runtime.NewWriter` 返回 `log.ManagedWriter`，其关闭操作幂等。需要同时写多个出口（如 stdout + 文件 + OTLP）时，用 `log.NewMultiWriter(writers...)` 组合 Writer；写入阶段任一子 Writer 失败不阻断其余，最终用 `errors.Join` 聚合错误；关闭阶段同样尝试关闭全部可关闭子 Writer 并聚合关闭错误。仅实现 `log.Writer` 的自定义 Adapter 可通过 `log.ManageWriter` 获得 no-op 关闭能力。完整代码见 [README](../README.md) 和 [`example/main.go`](../example/main.go)。
+应用应检查构造错误，配置 `log.WithErrorHandler` 观察异步写入失败，并在退出时调用 `ManagedWriter.Close(ctx)`。`Runtime.NewWriter` 返回 `log.ManagedWriter`，其关闭操作幂等。需要同时写多个出口（如 stdout + 文件 + OTLP）时，用 `log.NewMultiWriter(writers...)` 组合 Writer；写入阶段任一子 Writer 失败不阻断其余，最终用 `errors.Join` 聚合错误；关闭阶段同样尝试关闭全部可关闭子 Writer 并聚合关闭错误。仅实现 `log.Writer` 的自定义 Adapter 可通过 `log.ManageWriter` 获得 no-op 关闭能力。完整代码见 [README](../README.md) 和 [`example/09_gin/main.go`](../example/09_gin/main.go)。
 
 ## OTLP 队列溢出与告警
 
@@ -369,8 +369,8 @@ Gin 中间件应按 `Trace -> AccessLog -> Recover -> 其他链尾中间件` 注
 
 ## 部署配置
 
-- 环境变量模板：[`example/config/.env.example`](../example/config/.env.example)
-- 应用配置结构示意：[`example/config/app.example.yaml`](../example/config/app.example.yaml)
-- Collector 示例：[`example/config/collector.example.yaml`](../example/config/collector.example.yaml)
+- 环境变量模板：[`example/16_config/.env.example`](../example/16_config/.env.example)
+- 应用配置结构示意：[`example/16_config/app.example.yaml`](../example/16_config/app.example.yaml)
+- Collector 示例：[`example/16_config/collector.example.yaml`](../example/16_config/collector.example.yaml)
 - 本地参考栈：[`observability`](../observability/)
 - 分信号模板：[`observability/templates`](../observability/templates/)

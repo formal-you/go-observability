@@ -68,7 +68,7 @@
 运行最小示例：
 
 ```bash
-go run ./example/minimal
+go run ./example/01_quickstart
 ```
 
 得到一条可直接检索的 JSONL 事件：
@@ -93,7 +93,7 @@ go run ./example/minimal
 ```bash
 git clone https://github.com/formal-you/go-observability.git
 cd go-observability
-go run ./example/minimal
+go run ./example/01_quickstart
 ```
 
 查看输出：
@@ -144,7 +144,7 @@ if err := w.Close(ctx); err != nil {
 }
 ```
 
-完整代码见 [`example/minimal/main.go`](example/minimal/main.go)。
+完整代码见 [`example/01_quickstart/main.go`](example/01_quickstart/main.go)。
 
 > [!IMPORTANT]
 > `Logger.Emit` 不返回 Writer 错误。生产接入必须配置 `WithErrorHandler`，并在退出前关闭 Writer，随后调用 `telemetry.Runtime.Shutdown`。
@@ -399,7 +399,7 @@ go-observability/
 exporter，只生成本地有效 trace/span 用于日志关联，并把 `service.name`、
 `service.version`、`service.instance.id`、`deployment.environment.name` 写入每条 JSONL。
 完整 Trace 树不会落盘；需要 Tempo 查询时再切换到 OTLP 模式。配置模板见
-[`example/config/file-only.example.yaml`](example/config/file-only.example.yaml)。
+[`example/16_config/file-only.example.yaml`](example/16_config/file-only.example.yaml)。
 带最低级别、输出路径和文件轮转的可运行配置见
 [`example/blackbox/config.example.yaml`](example/blackbox/config.example.yaml)。
 

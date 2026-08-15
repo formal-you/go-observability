@@ -1,8 +1,8 @@
-﻿# =============================================================================
+# =============================================================================
 # OTel Collector（contrib）— 本仓库 LGTM 参考栈使用的配置（字段注释）
 # 启动：docker compose -f observability/docker-compose.yml up -d
 # 应用：OTEL_EXPORTER_OTLP_ENDPOINT=127.0.0.1:4317
-# 更完整的「复制到生产」注释版见 example/config/collector.example.yaml
+# 更完整的「复制到生产」注释版见 example/16_config/collector.example.yaml
 # =============================================================================
 #
 # 数据流：
@@ -12,7 +12,7 @@
 # 频率分两层，别混：
 #   SDK 侧（应用进程内，telemetry.Config，Collector 管不到）：
 #     trace 头部采样 0.1；导出间隔 trace 5s / metric 15s / log 1s
-#     —— 字段与说明见 example/config/app.example.yaml 的 sampling / export 段
+#     —— 字段与说明见 example/16_config/app.example.yaml 的 sampling / export 段
 #   Collector 侧（本文件）：
 #     processors.batch.timeout=1s / send_batch_size=256 是接收端二次凑批，
 #     只影响发送延迟与批量大小，不决定 SDK 何时导出、采样多少

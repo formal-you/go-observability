@@ -60,7 +60,7 @@ Collector 的 `tail_sampling` 只能处理已经到达 Collector 的 trace。SDK
 ## 配置入口
 
 - 应用与环境变量：[配置指南](../docs/configuration.md)
-- 带注释的应用/Collector 模板：[`example/config`](../example/config/)
+- 带注释的应用/Collector 模板：[`example/16_config`](../example/16_config/)
 - 可复制的分信号管线：[`templates`](templates/)
 - 指标命名建议：[`templates/metric-names.example.md`](templates/metric-names.example.md)
 

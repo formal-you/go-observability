@@ -1,6 +1,6 @@
 # 与 samber slog 生态的关系
 
-[`example/samber`](../example/samber/) 展示如何把本项目事件属性交给 samber 的 handler 链。它是互操作示例，不代表核心 writer 已由 samber 实现。
+[`example/15_samber`](../example/15_samber/) 展示如何把本项目事件属性交给 samber 的 handler 链。它是互操作示例，不代表核心 writer 已由 samber 实现。
 
 | 能力 | 本项目 | samber 生态 |
 | --- | --- | --- |

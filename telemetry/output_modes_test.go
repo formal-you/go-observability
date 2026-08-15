@@ -35,7 +35,7 @@ func TestRuntimeOutputNoneDisablesTraceMetric(t *testing.T) {
 }
 
 // TestRuntimeFileOutputsWriteTraceMetricFiles 验证 Trace/Metric Output=file 时
-// Trace/Metric 落到指定文件（stdout exporters + WithWriter，参考 example/otel）。
+// Trace/Metric 落到指定文件（stdout exporters + WithWriter，参考 example/14_otel_logs）。
 func TestRuntimeFileOutputsWriteTraceMetricFiles(t *testing.T) {
 	dir := t.TempDir()
 	tracePath := filepath.Join(dir, "traces.json")

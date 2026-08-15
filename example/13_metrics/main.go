@@ -4,10 +4,10 @@
 // 本文件演示使用方自定义指标（业务 counter）模板。
 // 跑法：
 //
-//	OTEL_EXPORTER_OTLP_ENDPOINT=127.0.0.1:4317 go run ./example/metrics
+//	OTEL_EXPORTER_OTLP_ENDPOINT=127.0.0.1:4317 go run ./example/13_metrics
 //
 // 需本地 observability 栈（Mimir）已起；仅验证编译可无 endpoint（provider 仍会尝试连默认地址）。
-// 离线：OTEL_SDK_DISABLED=true go run ./example/metrics
+// 离线：OTEL_SDK_DISABLED=true go run ./example/13_metrics
 package main
 
 import (
