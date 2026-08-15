@@ -240,3 +240,12 @@ func TestErrorResponseSkipEventSkipsEventWrite(t *testing.T) {
 		t.Fatalf("SkipEvent 命中不应写事件，实际 %v", w.eventTypes)
 	}
 }
+
+func TestRecoverPanicsOnInvalidEventName(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic for invalid Recover EventName")
+		}
+	}()
+	Recover(ErrorConfig{EventName: log.EventName("bad name")})
+}

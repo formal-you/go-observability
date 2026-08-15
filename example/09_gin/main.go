@@ -62,6 +62,14 @@ func main() {
 	defer closeWriter(ctx, w)
 	logger := log.NewLogger(w)
 
+	stockInsufficientErr, err := errs.NewBusinessError(errs.BusinessErrorConfig{
+		Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "FAILED_PRECONDITION", Message: "库存不足",
+	})
+	if err != nil {
+		slog.Error("build business error", "err", err)
+		os.Exit(1)
+	}
+
 	// 全链路中间件（注册顺序即执行顺序）：
 	// trace（server span，注入 ctx）→ ginlog（access 事件）→ recover（panic 收口）
 	// → metrics（http.server.request.duration）→ errresp（显式错误收口）。
@@ -79,21 +87,11 @@ func main() {
 	})
 	r.POST("/api/v1/orders", func(c *gin.Context) {
 		// 业务拒绝：errresp.Abort 挂载错误，收口中间件决定状态码/响应体并写错误事件。
-		ginmw.Abort(c, mustBusinessError(errs.BusinessErrorConfig{
-			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "FAILED_PRECONDITION", Message: "库存不足",
-		}))
+		ginmw.Abort(c, stockInsufficientErr)
 	})
 	if err := r.Run(":8080"); err != nil {
 		slog.Error("server exit", "err", err)
 	}
-}
-
-func mustBusinessError(cfg errs.BusinessErrorConfig) errs.BizError {
-	err, buildErr := errs.NewBusinessError(cfg)
-	if buildErr != nil {
-		panic(buildErr)
-	}
-	return err
 }
 
 func closeWriter(ctx context.Context, w log.ManagedWriter) {

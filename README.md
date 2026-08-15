@@ -19,6 +19,8 @@
   <a href="#user-content-registry">🗂️ 语义注册表</a> ·
   <a href="#user-content-data-flow">🗺️ 数据流</a> ·
   <a href="#user-content-packages">📦 包导航</a> ·
+  <a href="example/README.md">🧪 示例课程</a> ·
+  <a href="docs/blog/README.md">📝 博客系列</a> ·
   <a href="#user-content-security">🛡️ 安全边界</a>
 </p>
 
@@ -389,7 +391,7 @@ go-observability/
 └── 📚 docs/                    # 接入、配置、架构、安全与发布文档
 ```
 
-常用入口：[`example/`](example/) · [`telemetry/`](telemetry/) · [`observability/`](observability/) · [`docs/`](docs/)
+常用入口：[`示例课程`](example/README.md) · [`博客系列`](docs/blog/README.md) · [`telemetry/`](telemetry/) · [`observability/`](observability/) · [`docs/`](docs/)
 
 ---
 
@@ -495,6 +497,8 @@ go test ./...
 | 🛡️ | [安全政策](SECURITY.md) | 查看漏洞报告与处理原则 |
 | 🤝 | [贡献指南](CONTRIBUTING.md) | 准备开发、验证和提交 PR |
 | 🧭 | [文档索引](docs/README.md) | 浏览全部用户文档 |
+| 🧪 | [示例课程](example/README.md) | 按编号学习项目用法与可运行用例 |
+| 📝 | [博客系列](docs/blog/README.md) | 面向掘金的体系化文章源稿 |
 | 💬 | [支持渠道](SUPPORT.md) | 提交 Issue 或定位求助入口 |
 
 ---

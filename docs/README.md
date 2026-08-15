@@ -24,6 +24,7 @@
 | [reports/](reports/README.md) | 查看 Issue 验收、性能和 mutation 基线证据 |
 | [go-observability-architecture.drawio](go-observability-architecture.drawio) | 可编辑架构图 |
 | [module-map.html](module-map.html) | 浏览器直接打开的 UML 模块地图 |
+| [blog/](blog/README.md) | 面向掘金的体系化文章源稿 |
 
 可复制的部署配置位于 [`example/16_config`](../example/16_config/)；本地 LGTM 栈位于 [`observability`](../observability/)；分信号模板位于 [`observability/templates`](../observability/templates/)。
 

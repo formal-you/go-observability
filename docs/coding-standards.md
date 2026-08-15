@@ -40,4 +40,12 @@
 - OTel 出口测试分别验证 LogRecord 顶层字段、Attributes、Resource、Trace Context、Flush/Shutdown 和不可用 Collector 的可观察错误。
 - Review 注释时同时核对实现：删除失真的注释，补充缺失的所有权与并发契约，不以注释掩盖过深或含混的 API。
 
+## 5. Panic 与 Recover 边界
+
+- panic 只用于启动期（开始接流量前）的配置/契约不变式：`Must*` 注册、`NewEventName`、必填 Logger 为空等；请求路径禁止用 panic 表达业务或系统错误。
+- 请求期预期内拒绝走 `errs.BizError`，非预期故障走 `errs.SystemError`，经 `ginmw.Abort` / error return 进入统一错误收口。
+- `Recover` 只兜真正的程序缺陷，并写出 `runtime.panic.occurred` + `error.type=INTERNAL` 的 `ErrorEvent`（含 `stacktrace` 与 `code.*`）；它不是容错方案。
+- panic 现场诊断以 ErrorEvent 内的 stack/code 为准，pprof 只用于持续剖析，不作为 panic 首要定位工具。
+- 决策依据见 [ADR-0021](adr/errors/0021-panic-boundary-and-recover.md)。
+
 完成标准：修改后的代码通过 `gofmt`、build、vet、全量测试和 `git diff --check`；所有新增公共标识符均有准确 Go Doc，关键并发与资源所有权可仅通过相邻注释判断。

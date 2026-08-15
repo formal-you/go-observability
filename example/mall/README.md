@@ -18,15 +18,39 @@ go test ./example/mall
 ```powershell
 go run ./example/mall/cmd
 Invoke-WebRequest http://127.0.0.1:8083/api/v1/products/42
-Invoke-WebRequest -Method Post http://127.0.0.1:8083/api/v1/orders -Headers @{ 'X-Fail' = 'stock' }
+Invoke-WebRequest -Method Post 'http://127.0.0.1:8083/api/v1/orders?product_id=42&quantity=999' -Headers @{ 'X-Fail' = 'stock' }
 Get-Content .\logs\mall.jsonl
 ```
 
 ```bash
 go run ./example/mall/cmd
 curl http://127.0.0.1:8083/api/v1/products/42
-curl -X POST -H 'X-Fail: stock' http://127.0.0.1:8083/api/v1/orders
+curl -X POST -H 'X-Fail: stock' 'http://127.0.0.1:8083/api/v1/orders?product_id=42&quantity=999'
 tail -n 1 ./logs/mall.jsonl
 ```
+
+## 触发各类事件
+
+```powershell
+# 安全事件：任意路径带 X-Risk: high 时 SecurityLog 写 auth.login.denied
+Invoke-WebRequest http://127.0.0.1:8083/healthz -Headers @{ 'X-Risk' = 'high' }
+
+# 审计事件：actor 来自认证上下文（X-User-ID / X-User-Role），记录 before/after 与来源
+Invoke-WebRequest -Method Post http://127.0.0.1:8083/api/v1/admin/users/42/role -Headers @{
+    'X-User-ID'   = 'u_admin'
+    'X-User-Role' = 'admin'
+    'X-Request-ID'= 'req-audit-1'
+}
+
+# 业务拒绝：ErrorResponse 写 business 错误事件，mallInputGuard 再补发 audit 事件；
+# audit 会携带失败输入摘要（app.input_field 等）与低敏参数值（app.product_id / app.quantity）
+Invoke-WebRequest -Method Post 'http://127.0.0.1:8083/api/v1/orders?product_id=42&quantity=999' -Headers @{ 'X-Fail' = 'stock' }
+```
+
+审计事件现在包含 `app.before` / `app.after`、`client.address`、`user_agent.original`，
+且 `app.actor_user_id` / `app.actor_role` 由 `fakeIdentity` 注入可信上下文生成。
+库存不足失败路径会同时产生 `order.create.stock_insufficient`（business）与
+`input.anomaly.recorded`（audit），后者携带 `app.input_field` / `app.input_hash` /
+`app.input_truncated` 以及低敏参数值 `app.product_id` / `app.quantity`。
 
 服务展示：`mall.EventProductViewed` / `EventOrderCreated`、业务拒绝错误、`SecurityLog` / `AuditLog`、Sampler / Masker 治理与三信号装配。
