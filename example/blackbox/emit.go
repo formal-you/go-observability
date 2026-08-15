@@ -30,12 +30,39 @@ const (
 // SCOPE 归属由失败面决定（ADR-0019）：业务拒绝用业务模块（ORDER）；系统/基础设施故障用
 // INFRA（OPERATION=组件：MYSQL/REDIS/MQ）；非基础设施系统类（如并发冲突 LOCK）保留领域 SCOPE。
 // 业务错误码使用 <DOMAIN>.<SUBJECT>.<REASON>，基础设施错误码使用 INFRA.<COMPONENT>.<REASON>。
+var (
+	orderStockErr       errs.BizError
+	roleDBTimeoutErr    errs.SystemError
+	mqPublishTimeoutErr errs.SystemError
+	redisUnavailableErr errs.SystemError
+	lockConflictErr     errs.SystemError
+)
+
 func init() {
 	errs.MustRegisterErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT", errs.TypeFailedPrecondition)
 	mustRegisterErrorContract("INFRA.MYSQL.QUERY_TIMEOUT", errs.TypeDeadlineExceeded, "user.role_update.database_timeout")
 	errs.MustRegisterErrorCode("INFRA.MQ.PUBLISH_TIMEOUT", errs.TypeDeadlineExceeded)
 	errs.MustRegisterErrorCode("LOCK.ACQUIRE.CONFLICT", errs.TypeAborted)
 	errs.MustRegisterErrorCode("INFRA.REDIS.UNAVAILABLE", errs.TypeUnavailable)
+
+	orderStockErr = mustBusinessError(errs.BusinessErrorConfig{
+		Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: errs.TypeFailedPrecondition, Message: "商品库存不足",
+	})
+	roleDBTimeoutErr = mustSystemError(errs.SystemErrorConfig{
+		Type: errs.TypeDeadlineExceeded, Code: "INFRA.MYSQL.QUERY_TIMEOUT", Message: "update user role: database timeout",
+		Upstream: "mysql",
+	})
+	mqPublishTimeoutErr = mustSystemError(errs.SystemErrorConfig{
+		Type: errs.TypeDeadlineExceeded, Code: "INFRA.MQ.PUBLISH_TIMEOUT", Message: "publish order.created: deadline exceeded",
+		Upstream: "kafka", Retryable: true, Retries: 3, RetriesExhausted: true,
+	})
+	redisUnavailableErr = mustSystemError(errs.SystemErrorConfig{
+		Type: errs.TypeUnavailable, Code: "INFRA.REDIS.UNAVAILABLE", Message: "read cache order:pay:42: redis unavailable",
+		Upstream: "redis", Retryable: true, Retries: 2,
+	})
+	lockConflictErr = mustSystemError(errs.SystemErrorConfig{
+		Type: errs.TypeAborted, Code: "LOCK.ACQUIRE.CONFLICT", Message: "acquire lock order:pay:42 conflict",
+	})
 }
 
 // mustRegisterErrorContract 一次性注册 code → type + 错误事件名（ADR-0015 补充）：
@@ -167,9 +194,7 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 
 	engine.POST("/api/v1/orders", func(c *gin.Context) {
 		pauseForLatency()
-		ginmw.Abort(c, mustBusinessError(errs.BusinessErrorConfig{
-			Code: "ORDER.CREATE.STOCK_INSUFFICIENT", Type: "FAILED_PRECONDITION", Message: "商品库存不足",
-		}))
+		ginmw.Abort(c, orderStockErr)
 	})
 
 	engine.POST("/api/v1/admin/users/:id/role", func(c *gin.Context) {
@@ -180,10 +205,7 @@ func newScenarioEngine(logger *log.Logger, tracer trace.Tracer, report *scenario
 			Truncated: `{"role":"admin"}`,
 		})
 		c.Request = c.Request.WithContext(ctx)
-		ginmw.Abort(c, mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeDeadlineExceeded, Code: "INFRA.MYSQL.QUERY_TIMEOUT", Message: "update user role: database timeout",
-			Upstream: "mysql",
-		}))
+		ginmw.Abort(c, roleDBTimeoutErr)
 	})
 
 	engine.GET("/api/v1/panic", func(*gin.Context) {
@@ -244,10 +266,7 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	report.record("background-mq", mqSpan.SpanContext())
 	logger.Emit(mqCtx, log.EventFromError(
 		log.NewEventName("messaging", "publish", "deadline_exceeded"),
-		mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeDeadlineExceeded, Code: "INFRA.MQ.PUBLISH_TIMEOUT", Message: "publish order.created: deadline exceeded",
-			Upstream: "kafka", Retryable: true, Retries: 3, RetriesExhausted: true,
-		}),
+		mqPublishTimeoutErr,
 		log.EventMetadata{},
 	))
 	mqSpan.End()
@@ -256,10 +275,7 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	report.record("background-cache", cacheSpan.SpanContext())
 	logger.Emit(cacheCtx, log.EventFromError(
 		log.NewEventName("cache", "read", "unavailable"),
-		mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeUnavailable, Code: "INFRA.REDIS.UNAVAILABLE", Message: "read cache order:pay:42: redis unavailable",
-			Upstream: "redis", Retryable: true, Retries: 2,
-		}),
+		redisUnavailableErr,
 		log.EventMetadata{},
 	))
 	cacheSpan.End()
@@ -268,14 +284,13 @@ func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.
 	report.record("background-lock", lockSpan.SpanContext())
 	logger.Emit(lockCtx, log.EventFromError(
 		log.NewEventName("lock", "acquire", "conflict"),
-		mustSystemError(errs.SystemErrorConfig{
-			Type: errs.TypeAborted, Code: "LOCK.ACQUIRE.CONFLICT", Message: "acquire lock order:pay:42 conflict",
-		}),
+		lockConflictErr,
 		log.EventMetadata{},
 	))
 	lockSpan.End()
 }
 
+// mustBusinessError 是启动期构造业务错误的 Must 变体：构建失败直接 panic（fail-fast）。
 func mustBusinessError(cfg errs.BusinessErrorConfig) errs.BizError {
 	err, buildErr := errs.NewBusinessError(cfg)
 	if buildErr != nil {
@@ -284,6 +299,7 @@ func mustBusinessError(cfg errs.BusinessErrorConfig) errs.BizError {
 	return err
 }
 
+// mustSystemError 是启动期构造系统错误的 Must 变体：构建失败直接 panic（fail-fast）。
 func mustSystemError(cfg errs.SystemErrorConfig) errs.SystemError {
 	err, buildErr := errs.NewSystemError(cfg)
 	if buildErr != nil {
