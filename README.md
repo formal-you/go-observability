@@ -205,6 +205,16 @@ order.payment.succeeded
 
 日志系统最容易退化的地方不是“怎么写”，而是“怎么命名”。这里的注册表把最容易漂移的字段变成可枚举、可校验、冲突早失败的 Go API：
 
+**为什么是 `xxx.xxx.xxx`？**
+
+- `event.name` 使用 `<domain>.<subject>.<event>`：`domain` 粗筛业务域，`subject` 定位对象，`event` 是注册的稳定事件事实，避免 payment.charge.failed / payment.charge.failure 这类近义漂移。
+- 业务 `error.code` 使用 `<DOMAIN>.<SUBJECT>.<REASON>`：前两段与 `event.name` 同源，查询时可按同一 domain.subject 同时过滤事件和错误。
+- 基础设施 `error.code` 使用 `INFRA.<COMPONENT>.<REASON>`：失败面属于组件而非业务事实，同一组件故障可跨多个业务事件聚合。
+
+**error.type 为什么这样设计？**
+
+`error.type` 只做低基数失败分类，复用 OTel/gRPC canonical code（16 个闭合枚举，如 `NOT_FOUND` / `UNAVAILABLE` / `DEADLINE_EXCEEDED`）。它不描述具体业务错误；具体错误由 `error.code` 表达，`Error Registry` 再把每个 `error.code` 固定映射到恰好一个 `error.type`。
+
 | 注册表 | 管什么 | 关键入口 |
 |:---|:---|:---|
 | `Event Registry` | `event.name` 必须是 `<domain>.<subject>.<event>`，首段不能重复六类 `type`；`<event>` 是已注册的 Event Type | `log.EventNamePattern`、`log.NewEventName`、框架级常量 / 接入方领域常量 |

@@ -11,6 +11,14 @@
 且与 OTel/gRPC 生态不直接兼容。改造方案要求：error.type 是跨模块的标准分类，复用 OTel/gRPC
 标准枚举（以通用性换取工具链兼容与低维护成本）。
 
+## 为什么 error.type 采用 gRPC canonical code
+
+- 低基数：可安全作为 metrics 维度与告警路由标签。
+- 跨服务闭合枚举：不同服务不再各自维护 domain.reason 词表，聚合规则不漂移。
+- 生态原生：OTel / gRPC / Grafana 能直接识别，无需维护自定义枚举映射。
+
+具体业务错误仍由 `error.code` 表达；`error.type` 只负责“失败属于哪一类”。
+
 ## 决策（Decision）
 
   ErrorType 映射 OTel error.type，复用 **OTel/gRPC 标准枚举（gRPC canonical code）**：跨模块、
