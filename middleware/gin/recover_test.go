@@ -11,6 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/formal-you/go-observability/errs"
+
 	"github.com/formal-you/go-observability/log"
 )
 
@@ -141,4 +143,24 @@ func TestRecoverProjectorOverride(t *testing.T) {
 	if len(w.eventTypes) != 1 || w.eventTypes[0] != "error" {
 		t.Fatalf("events = %v, want one error event", w.eventTypes)
 	}
+}
+
+func TestRecoverPanicsOnInvalidEventName(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic for invalid Recover EventName")
+		}
+	}()
+	logger := log.NewLogger(&captureWriter{})
+	Recover(RecoverConfig{Logger: logger, EventName: log.EventName("bad name")})
+}
+
+func TestRecoverPanicsOnInvalidErrorType(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic for invalid Recover ErrorType")
+		}
+	}()
+	logger := log.NewLogger(&captureWriter{})
+	Recover(RecoverConfig{Logger: logger, ErrorType: errs.ErrorType("bad.type")})
 }

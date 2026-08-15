@@ -129,6 +129,9 @@ func Recover(cfg ErrorConfig) func(http.Handler) http.Handler {
 	if eventName == "" {
 		eventName = log.EventNameRuntimePanicOccurred
 	}
+	if err := eventName.Validate(); err != nil {
+		panic("httperr: invalid Recover EventName: " + err.Error())
+	}
 	projector := cfg.ResponseProjector
 	if projector == nil {
 		projector = httperr.DefaultProjector

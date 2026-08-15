@@ -48,9 +48,15 @@ func Recover(cfg RecoverConfig) gin.HandlerFunc {
 	if eventName == "" {
 		eventName = log.EventNameRuntimePanicOccurred
 	}
+	if err := eventName.Validate(); err != nil {
+		panic("ginmw: invalid Recover EventName: " + err.Error())
+	}
 	errorType := cfg.ErrorType
 	if errorType == "" {
 		errorType = errs.TypeInternal
+	}
+	if err := errorType.Validate(); err != nil {
+		panic("ginmw: invalid Recover ErrorType: " + err.Error())
 	}
 	projector := cfg.ResponseProjector
 	if projector == nil {
