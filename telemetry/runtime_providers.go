@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 
@@ -44,31 +45,32 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 	res := resourceForConfig(cfg.Resource)
 	build := newRuntimeBuild()
 
-	traceOutput := normalizedTraceOutput(cfg.Trace.Output)
-	if traceOutput != SignalOutputNone {
+	switch traceOutput := normalizedTraceOutput(cfg.Trace.Output); traceOutput {
+	case SignalOutputNone:
+		// 不装配 Trace。
+	case SignalOutputLocal:
+		build.tracerProvider = newTracerProvider(cfg.Trace, res, nil)
+	default:
+		traceExporter := cfg.Trace.Exporter
 		var traceFile *os.File
-		var traceExporter sdktrace.SpanExporter
-		if traceOutput == SignalOutputLocal {
-			// local 模式不挂 exporter，只生成可关联 JSONL 的本地 TraceID/SpanID。
-		} else {
-			traceExporter = cfg.Trace.Exporter
-			if traceExporter == nil {
-				var err error
-				traceExporter, traceFile, err = newTraceExporter(ctx, cfg.Trace, traceOutput, endpoint)
-				if err != nil {
-					build.close(ctx)
-					return nil, fmt.Errorf("telemetry: create trace exporter: %w", err)
-				}
+		if traceExporter == nil {
+			var err error
+			traceExporter, traceFile, err = newTraceExporter(ctx, cfg.Trace, traceOutput, endpoint)
+			if err != nil {
+				build.close(ctx)
+				return nil, fmt.Errorf("telemetry: create trace exporter: %w", err)
 			}
 		}
 		build.traceFile = traceFile
 		build.tracerProvider = newTracerProvider(cfg.Trace, res, traceExporter)
 	}
 
-	metricOutput := normalizedMetricOutput(cfg.Metric.Output)
-	if metricOutput != SignalOutputNone {
-		var metricFile *os.File
+	switch metricOutput := normalizedMetricOutput(cfg.Metric.Output); metricOutput {
+	case SignalOutputNone:
+		// 不装配 Metric。
+	default:
 		metricReader := cfg.Metric.Reader
+		var metricFile *os.File
 		if metricReader == nil {
 			var err error
 			metricReader, metricFile, err = newMetricReader(ctx, cfg.Metric, metricOutput, endpoint)
@@ -84,13 +86,16 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 		)
 	}
 
-	if cfg.Log.Output == SignalOutputOTLP {
+	switch cfg.Log.Output {
+	case SignalOutputOTLP:
 		logExporter, err := otlploggrpc.New(ctx, otlploggrpc.WithEndpointURL(endpoint))
 		if err != nil {
 			build.close(ctx)
 			return nil, fmt.Errorf("telemetry: create log exporter: %w", err)
 		}
 		build.loggerProvider = newLoggerProvider(cfg.Log, logExporter, res, build.counters)
+	default:
+		// file/stdout Writer 由 Runtime.NewWriter 延迟创建；none 不创建。
 	}
 
 	return &Runtime{
@@ -135,6 +140,90 @@ func NewFileRuntime(cfg Config) (*Runtime, error) {
 	}
 	cfg.Enabled = true
 	return NewRuntime(context.Background(), cfg)
+}
+
+// NewLogRuntime 创建只装配 Log 的便捷 Runtime：Trace/Metric 不装配，Log 选择 file 或 stdout。
+//
+// serviceName 是必填服务身份；output 只接受 file 或 stdout。output=file 时 filePath 必填，
+// output=stdout 时 filePath 必须为空。构造成功后的 Runtime 与 NewRuntime 相同：不修改
+// global state，资源由 Runtime.Shutdown 释放。需要自定义 Log 轮转等参数时，请使用
+// NewRuntime 配合 Config.Log。
+func NewLogRuntime(ctx context.Context, serviceName string, output SignalOutput, filePath string) (*Runtime, error) {
+	if strings.TrimSpace(serviceName) == "" {
+		return nil, errors.New("telemetry: service name is required")
+	}
+	if output != SignalOutputFile && output != SignalOutputStdout {
+		return nil, fmt.Errorf("telemetry: log-only output must be file or stdout, got %q", output)
+	}
+	if output == SignalOutputFile && strings.TrimSpace(filePath) == "" {
+		return nil, errors.New("telemetry: log-only file output requires file path")
+	}
+	if output == SignalOutputStdout && filePath != "" {
+		return nil, errors.New("telemetry: log-only stdout output does not accept file path")
+	}
+	return NewRuntime(ctx, Config{
+		Enabled:  true,
+		Resource: ResourceConfig{ServiceName: serviceName},
+		Trace:    TraceConfig{Output: SignalOutputNone},
+		Metric:   MetricConfig{Output: SignalOutputNone},
+		Log:      LogConfig{Output: output, FilePath: filePath},
+	})
+}
+
+// NewOTLPRuntime 创建全 OTLP 的便捷 Runtime：Trace/Metric/Log 三信号都发 Collector。
+//
+// serviceName 与 endpoint 必填；endpoint 是 OTLP gRPC Collector 地址（k8s 中指向
+// Collector Service/DaemonSet）。批量导出间隔、采样比例等使用 telemetry 默认值。
+// 需要自定义采样比例、批量间隔或队列容量时，请使用 NewRuntime 配合 Config。
+func NewOTLPRuntime(ctx context.Context, serviceName, endpoint string) (*Runtime, error) {
+	if strings.TrimSpace(serviceName) == "" {
+		return nil, errors.New("telemetry: service name is required")
+	}
+	if strings.TrimSpace(endpoint) == "" {
+		return nil, errors.New("telemetry: endpoint is required")
+	}
+	return NewRuntime(ctx, Config{
+		Enabled:  true,
+		Endpoint: endpoint,
+		Resource: ResourceConfig{ServiceName: serviceName},
+		Trace:    TraceConfig{Output: SignalOutputOTLP},
+		Metric:   MetricConfig{Output: SignalOutputOTLP},
+		Log:      LogConfig{Output: SignalOutputOTLP},
+	})
+}
+
+// NewAllFileRuntime 创建全文件输出的便捷 Runtime：Trace/Metric/Log 三信号都写本地文件。
+//
+// serviceName 与 dir 必填；函数会先创建 dir（如不存在），并在其中生成
+// events.jsonl（Log）、trace.jsonl（Trace）、metric.jsonl（Metric）三个文件。
+// 与 NewFileRuntime 不同：Trace 使用 file 导出完整 span，而非 local 只生成 TraceID/SpanID。
+// 需要自定义批量间隔或轮转时，请使用 NewRuntime 配合 Config 与 LogConfig.FileOptions。
+func NewAllFileRuntime(ctx context.Context, serviceName, dir string) (*Runtime, error) {
+	if strings.TrimSpace(serviceName) == "" {
+		return nil, errors.New("telemetry: service name is required")
+	}
+	if strings.TrimSpace(dir) == "" {
+		return nil, errors.New("telemetry: file directory is required")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("telemetry: create file directory: %w", err)
+	}
+	return NewRuntime(ctx, Config{
+		Enabled:  true,
+		Resource: ResourceConfig{ServiceName: serviceName},
+		Trace: TraceConfig{
+			Output:   SignalOutputFile,
+			FilePath: filepath.Join(dir, "trace.jsonl"),
+		},
+		Metric: MetricConfig{
+			Output:   SignalOutputFile,
+			FilePath: filepath.Join(dir, "metric.jsonl"),
+		},
+		Log: LogConfig{
+			Output:   SignalOutputFile,
+			FilePath: filepath.Join(dir, "events.jsonl"),
+		},
+	})
 }
 
 // runtimeBuild 集中持有 NewRuntime 已取得的资源，并在构造失败时按逆序回滚。

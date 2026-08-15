@@ -1,4 +1,4 @@
-// Package mall 演示接入方如何自建业务事件注册表与专属键（C2 / B4）。
+// Package mall 演示接入方如何自建 Event Registry（业务事件注册表）与专属键（C2 / B4）。
 // 核心库只提供 BusinessPayload + ExtraAttrs + EventName 文法；领域名不进 types.go。
 package mall
 

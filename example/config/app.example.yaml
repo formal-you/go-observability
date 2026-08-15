@@ -1,70 +1,92 @@
 # =============================================================================
 # 应用侧可观测配置结构示意（非库内置加载器）
-# 用途：给接入方 YAML/配置中心对照字段；自行用 viper/koanf/envconfig 解析后
-#       填入 telemetry.ResourceConfig / TraceConfig / MetricConfig / LogConfig
-#       与 log.NewLogger 选项。
+#
+# 本文件只用于展示「应用自己的配置中心 / YAML 文件」应保留哪些字段；
+# 库不会读取 YAML，接入方需自行用 viper / koanf / envconfig 等解析后，
+# 再映射到：
+#   - telemetry.Config
+#   - telemetry.ResourceConfig / TraceConfig / MetricConfig / LogConfig
+#   - log.NewLogger 选项
+#   - middleware 各 Config
 # =============================================================================
 
 observability:
-  # --- 服务身份（OTel Resource）---
-  service:
-    # name: OTel service.name，Grafana/Tempo 筛选主键；必填，稳定短名
-    name: order-api
-    # version: service.version，区分发布版本
-    version: "0.1.0"
-    # environment: deployment.environment.name（development/staging/production）
+  # --- 顶层开关与 OTLP 地址，映射到 telemetry.Config ---
+  enabled: true
+  # endpoint 只在 trace.output / metric.output / log.output 中某个值为 otlp 时才解析；
+  # file / stdout / none / local 组合不受该地址影响。
+  endpoint: "127.0.0.1:4317"
+
+  # --- 服务身份，映射到 telemetry.ResourceConfig ---
+  resource:
+    service_name: order-api
+    service_version: "0.1.0"
     environment: development
-    # region: 低基数自定义标签，可空
     region: ""
-    # instance: service.instance.id，低基数实例标识，可空
     instance: ""
 
-  # --- OTLP 出口 ---
-  otlp:
-    # disabled: 对应 OTEL_SDK_DISABLED；true = Config.Enabled=false，不创建 Provider
-    disabled: false
-    # endpoint: telemetry.Config 的 Provider OTLP 地址，支持 host:port 或 URL
-    # 注意: 显式 endpoint 或 SetupFromEnvironment 启动时读到环境变量，都会固化为 OTLP 出口
-    endpoint: "127.0.0.1:4317"
-    # jsonl_path: telemetry.LogConfig.FilePath，对应 Output=file 时的 JSONL 路径
-    jsonl_path: "logs/events.jsonl"
+  # --- Trace，映射到 telemetry.TraceConfig ---
+  trace:
+    # output: otlp | file | stdout | none | local
+    # local 仅 Trace 可用：只生成合法 TraceID/SpanID，不导出完整 Span。
+    output: otlp
+    # file_path 仅在 output=file 时填写
+    file_path: ""
+    sample_ratio: 0.1
+    batch_timeout: 5s
+    # 自定义 sdktrace.SpanExporter 只能由代码注入，不放 YAML
 
-  # --- 采样率与导出间隔（库默认见 telemetry）---
-  sampling:
-    # trace_ratio: 头部采样率 (0,1]；演示 0.1，生产按 QPS 调
-    trace_ratio: 0.1
-  export:
-    # trace_batch_timeout: BatchSpanProcessor 导出间隔
-    trace_batch_timeout: 5s
-    # metric_interval: PeriodicReader 周期
-    metric_interval: 15s
-    # log_batch_timeout: BatchLogRecordProcessor 间隔
-    log_batch_timeout: 1s
+  # --- Metric，映射到 telemetry.MetricConfig ---
+  metric:
+    # output: otlp | file | stdout | none
+    output: otlp
+    # file_path 仅在 output=file 时填写
+    file_path: ""
+    export_interval: 15s
+    # 自定义 sdkmetric.Reader 只能由代码注入，不放 YAML
 
-  # --- 日志治理（NewLogger 选项，默认不自动挂载）---
+  # --- Log，映射到 telemetry.LogConfig ---
   log:
+    # output: otlp | file | stdout | none
+    output: otlp
+    # file_path 仅在 output=file 时填写
+    file_path: logs/events.jsonl
+    batch_timeout: 1s
+    queue_size: 2048
+
+    # rotation 是应用层字段，解析后应转为 file.WithRotation；
+    # 它最终进入 LogConfig.FileOptions，不是 LogConfig 的独立 YAML 字段。
+    rotation:
+      max_size_mb: 100
+      max_backups: 10
+      max_age_days: 30
+      compress: true
+      local_time: true
+
+  # --- Logger 治理选项，映射到 log.NewLogger options ---
+  log_options:
     sampler:
       # type: none | result_keep | event_keep
       # none（推荐默认）：全量保留，确保 HTTP 语义事件都有对应 AccessEvent
       type: none
-      # 高流量可选 event_keep：仅在已有网关全量 access 或接受关联不完整时启用
-      # keep_prefixes: ["business.", "error.", "security.", "audit.", "probe."]
-      # fallback_ratio: 0.1  # access 失败高优先级保留，成功按比例保留
-      # 备选 result_keep：只按 app.result 采样，不区分事件类型
+      # event_keep 高流量可选：business/error/security/audit/probe 全量，
+      # access 成功按比例保留。仅在已有网关全量 access 或接受关联不完整时启用。
+      # keep_types: [business, error, security, audit, probe]
+      # fallback_ratio: 0.1
+      # result_keep 只按 app.result 采样，不区分事件类型
       # type: result_keep
-      # ratio: 1.0   # 非高价值保留概率；1=全量
+      # ratio: 1.0
     masker:
-      # enabled: 是否 WithMasker(FieldMasker)
       enabled: true
-      # extra_keys: 追加敏感键（完整属性名，如 app.phone）
-      # 默认已含 password/token/authorization 等，见 log.DefaultSensitiveKeys()
+      # extra_keys 追加敏感键；内置已覆盖 password/token/authorization 等
       extra_keys: []
-      # redact: 替换文本
       redact: "***"
 
-  # --- 中间件（官方提供 Gin 集成）---
+  # --- Gin 中间件开关，映射到 middleware/gin 的 Trace/AccessLog/Recover/Metrics/ErrorResponse ---
   middleware:
-    # ginlog: access 事件；需配合 otelgin 才能自动填 trace_id/span_id
-    ginlog: true
-    # recover: panic → runtime.panic.occurred + 500
-    recover: true
+    gin:
+      trace: true
+      access_log: true
+      recover: true
+      metrics: true
+      error_response: true

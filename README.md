@@ -15,6 +15,8 @@
 <p align="center">
   <a href="#user-content-quick-start">🚀 快速开始</a> ·
   <a href="#user-content-event-model">🧩 事件模型</a> ·
+  <a href="#user-content-exports">🚦 出口组合</a> ·
+  <a href="#user-content-registry">🗂️ 语义注册表</a> ·
   <a href="#user-content-data-flow">🗺️ 数据流</a> ·
   <a href="#user-content-packages">📦 包导航</a> ·
   <a href="#user-content-security">🛡️ 安全边界</a>
@@ -46,11 +48,18 @@
 | 🪞 | **双投影** | JSONL/stdout 保留运营友好扁平列，OTLP 映射正确的 LogRecord 顶层字段 |
 | 🔗 | **链路关联** | 从 context 关联 trace/span，不重复制造伪属性 |
 | 🧨 | **错误投影** | 普通 error、值/指针错误和 `%w` 链都能稳定提取 |
+| 🗂️ | **语义注册表** | error.code、error.type、event.name 的固定映射与校验，漂移早暴露 |
 | 🛡️ | **日志治理** | 可注入 Sampler、递归 Masker、写入错误回调 |
 | 🚚 | **三种 Writer** | file、stdout、OTLP gRPC 共享同一套事件模型 |
 | 🛡️ | **Security / Audit 中间件** | `SecurityLog` / `AuditLog`（gin + net/http）把认证/授权判定与审计留痕自动写成事件 |
 | 📡 | **统一 telemetry** | Trace、Metric、Log Provider、Resource 与 Shutdown 集中装配 |
 | 🧰 | **可运行参考栈** | Gin、net/http、Metric 示例与本地 LGTM 环境 |
+
+> [!TIP]
+> **30 秒抓住重点**
+> 1. 用类型化 Event，不再写自由日志字符串
+> 2. event.name / error.code / error.type 都有注册表，不靠人肉约定
+> 3. 同一事件可以同时输出 JSONL、stdout、OTLP
 
 ---
 
@@ -158,13 +167,118 @@ if err := w.Close(ctx); err != nil {
 ```text
 事件名结构：event.name MUST use the form <domain>.<subject>.<event>（`type` 已承载粗分类）
 
-http.request.completed
+order.payment.succeeded
    │      │      └── <event> 注册的 Event Type
    │      └───────── <subject> 对象
    └──────────────── <domain> 领域
 ```
 
 `event.name` MUST use the form `<domain>.<subject>.<event>`（正则 `EventNamePattern` 校验）；`<event>` MUST 是注册的 Event Type（稳定语义发生，唯一标识 Event Structure），不是自由文本，也不是 Operation Lifecycle Stage（生命周期经 Span 建模）；首段不得是 `access` / `business` / `error` / `security` / `audit` / `probe`，这些粗分类只由 `type` 表达。框架级事件名由核心包维护，领域事件由接入方自建注册表。
+
+---
+
+<a name="exports"></a>
+
+## 🚦 出口组合速查
+
+`Enabled` 是总开关；`Trace` / `Metric` / `Log` 各自选择出口，常见组合如下：
+
+| 场景 | Enabled | Trace | Metric | Log | 说明 |
+| --- | --- | --- | --- | --- | --- |
+| 生产全链路 | true | otlp | otlp | otlp | 三信号发 Collector，需 `Endpoint` |
+| 本地开发 | true | stdout | stdout | stdout | 三信号全打 stdout |
+| 混合出口 | true | otlp | file | file | Trace 进 Collector，Metric/Log 落本地 |
+| file-only 小单体 | true | local | none | file | 用 `NewFileRuntime` |
+| 只写本地日志 | false | 忽略 | 忽略 | file/stdout/none | 不创建 Provider，只保留 Log Writer |
+| 完全关闭 | false | 忽略 | 忽略 | none | 不采集、不写日志 |
+
+三个常见档位已有快捷函数：
+
+```go
+// 只开日志
+runtime, _ := telemetry.NewLogRuntime(ctx, "order-api", telemetry.SignalOutputFile, "logs/events.jsonl")
+
+// 全 OTLP
+runtime, _ = telemetry.NewOTLPRuntime(ctx, "order-api", "otel-collector:4317")
+
+// 全文件
+runtime, _ = telemetry.NewAllFileRuntime(ctx, "order-api", "logs")
+```
+
+完整字段与配置模板见 [配置指南](docs/configuration.md)。
+
+
+<a name="registry"></a>
+
+## 🗂️ 语义注册表：error.code、error.type、event.name 不再自由漂移
+
+日志系统最容易退化的地方不是“怎么写”，而是“怎么命名”。这里的注册表把最容易漂移的字段变成可枚举、可校验、冲突早失败的 Go API：
+
+**为什么是 `xxx.xxx.xxx`？**
+
+- `event.name` 使用 `<domain>.<subject>.<event>`：`domain` 粗筛业务域，`subject` 定位对象，`event` 是注册的稳定事件事实，避免 payment.charge.failed / payment.charge.failure 这类近义漂移。
+- 业务 `error.code` 使用 `<DOMAIN>.<SUBJECT>.<REASON>`：前两段与 `event.name` 同源，查询时可按同一 domain.subject 同时过滤事件和错误。
+- 基础设施 `error.code` 使用 `INFRA.<COMPONENT>.<REASON>`：失败面属于组件而非业务事实，同一组件故障可跨多个业务事件聚合。
+
+**error.type 为什么这样设计？**
+
+`error.type` 只做低基数失败分类，复用 OTel/gRPC canonical code（16 个闭合枚举，如 `NOT_FOUND` / `UNAVAILABLE` / `DEADLINE_EXCEEDED`）。它不描述具体业务错误；具体错误由 `error.code` 表达，`Error Registry` 再把每个 `error.code` 固定映射到恰好一个 `error.type`。
+
+| 注册表 | 管什么 | 关键入口 |
+|:---|:---|:---|
+| `Event Registry` | `event.name` 必须是 `<domain>.<subject>.<event>`，首段不能重复六类 `type`；`<event>` 是已注册的 Event Type | `log.EventNamePattern`、`log.NewEventName`、框架级常量 / 接入方领域常量 |
+| `Error Registry` | `error.code` 使用 `SCOPE.OPERATION.REASON`，每个 `error.code` 恰好映射到一个 `error.type`（OTel/gRPC canonical code），并可选绑定错误事件名 | `errs.ErrorCodePattern`、`errs.ParseErrorCode`、`errs.ParseErrorType`、`RegisterErrorCode` / `RegisterErrorContract` / `MustRegister...` / `RegisteredErrorType` / `RegisteredEventName` |
+
+框架级事件名登记在 `log/types.go`；接入方领域事件名以常量维护自己的注册表（见 [`example/mall`](example/mall/README.md)），禁止在业务代码里散落手写字符串。
+
+错误注册表在启动期一次性写入，并在严格构造器中校验：同一个 `error.code` 只能映射到唯一的 `error.type`（以及可选的唯一错误事件名）。
+
+```text
+业务错误：
+  event.name = <domain>.<subject>.<event>
+  error.code = <DOMAIN>.<SUBJECT>.<REASON>
+
+基础设施错误：
+  event.name = <domain>.<subject>.<event>
+  error.code = INFRA.<COMPONENT>.<REASON>
+```
+
+```go
+func init() {
+    // 业务/校验错误：只注册 code → type；领域事件由 Application 另行发布
+    errs.MustRegisterErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT", errs.TypeFailedPrecondition)
+
+    // 系统/基础设施错误：注册 code → type + 错误事件名
+    // errs 不依赖 log，所以事件名文法先由接入方按 log.EventNamePattern 校验
+    if err := log.EventName("db.query.deadline_exceeded").Validate(); err != nil {
+        panic(err)
+    }
+    errs.MustRegisterErrorContract(
+        "INFRA.MYSQL.QUERY_TIMEOUT",
+        errs.TypeDeadlineExceeded,
+        "db.query.deadline_exceeded",
+    )
+}
+```
+
+注册表可以反查，严格构造器会拒绝漂移：
+
+```go
+typ, ok := errs.ErrorCode("INFRA.MYSQL.QUERY_TIMEOUT").RegisteredErrorType()
+name, hasName := errs.ErrorCode("INFRA.MYSQL.QUERY_TIMEOUT").RegisteredEventName()
+
+// 注册表要求 DEADLINE_EXCEEDED，下面的构造会在启动期直接失败
+_, err := errs.NewSystemError(errs.SystemErrorConfig{
+    Type:    errs.TypeUnavailable,
+    Code:    "INFRA.MYSQL.QUERY_TIMEOUT",
+    Message: "database timeout",
+})
+// err != nil：error.code 已注册为 DEADLINE_EXCEEDED
+_ = typ
+_ = ok
+_ = name
+_ = hasName
+```
 
 ---
 

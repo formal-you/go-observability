@@ -29,6 +29,7 @@ const (
 // init 注册黑盒用到的 error.code → error.type 映射（Error Registry，启动期一次性写入）。
 // SCOPE 归属由失败面决定（ADR-0019）：业务拒绝用业务模块（ORDER）；系统/基础设施故障用
 // INFRA（OPERATION=组件：MYSQL/REDIS/MQ）；非基础设施系统类（如并发冲突 LOCK）保留领域 SCOPE。
+// 业务错误码使用 <DOMAIN>.<SUBJECT>.<REASON>，基础设施错误码使用 INFRA.<COMPONENT>.<REASON>。
 func init() {
 	errs.MustRegisterErrorCode("ORDER.CREATE.STOCK_INSUFFICIENT", errs.TypeFailedPrecondition)
 	mustRegisterErrorContract("INFRA.MYSQL.QUERY_TIMEOUT", errs.TypeDeadlineExceeded, "user.role_update.database_timeout")

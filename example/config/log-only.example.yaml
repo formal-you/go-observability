@@ -1,0 +1,20 @@
+# Log-only 配置结构示意。应用自行解析后映射到 telemetry.Config；
+# 只使用默认轮转参数时，可直接调用 telemetry.NewLogRuntime。
+# Trace/Metric 不装配。
+service:
+  name: order-api
+  version: "0.1.0"
+  environment: development
+
+logs:
+  # output: file | stdout
+  output: file
+  # output=file 时必填；output=stdout 时留空
+  file_path: logs/events.jsonl
+  # 以下仅 output=file 生效，解析后映射到 LogConfig.FileOptions（file.WithRotation）
+  rotation:
+    max_size_mb: 100
+    max_backups: 10
+    max_age_days: 30
+    compress: true
+    local_time: true

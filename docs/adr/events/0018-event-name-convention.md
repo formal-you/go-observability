@@ -12,6 +12,12 @@ payment.charge.auth_failed 等近似命名，Grafana 无法判断是否同一事
 Event Type 退化成 Operation Lifecycle Stage（INITIATED/COMPLETED/CANCELLED），
 那会偏离 OTel Event 的核心模型——event.name 标识的是 Event Structure。
 
+## 为什么是 domain.subject.event
+
+- `domain`：粗分组，先锁定业务域，避免所有事件名在全局扁平空间中难检索。
+- `subject`：对象或操作，在业务域内进一步定位。
+- `event`：注册的 Event Type，保证同一语义只有一种写法，禁止把动态值、错误分类或生命周期阶段塞进来。
+
 ## 决策（Decision）
 
 - event.name MUST use the form `<domain>.<subject>.<event>`；正则 `log.EventNamePattern`
