@@ -24,6 +24,7 @@
 
 ### Added
 - `example/` 新增教学示例：六类事件、错误建模与投影、Sampler/Masker 治理、MultiWriter、四种 Runtime 预设、gRPC/kratos 适配、Security/Audit 中间件与 OTel Logs 双投影；`example/mall/cmd` 提供可运行的端到端小商城，`example/04_sampler_masker` 增加行为验证测试。
+- docs/blog/ 新增面向掘金的体系化文章源稿：从语义层、六类事件、错误建模、治理、三信号装配、框架中间件、Security/Audit、OTLP 双投影到 mall 端到端诊断故事，共 9 篇。
 
 - 新增 Error Registry：`errs.RegisterErrorCode` 注册 ErrorCode→ErrorType 固定映射（多对一），`ErrorCode.RegisteredErrorType` 反查；严格构造器对已注册码强制类型一致，未注册码保持既有行为。
 - Error Registry 扩展为 ErrorCode → {ErrorType, EventName?}：新增 rrs.RegisterErrorContract(code, typ, eventName) 一次性注册错误码 + type + 错误事件名（系统/基础设施码路径）与 ErrorCode.RegisteredEventName() 反查；事件名以不透明字符串存储，文法由接入方校验（errs 不 import log，避免循环依赖）。
