@@ -1,6 +1,6 @@
 # 领域业务事件示例
 
-核心库不内置电商 `business.*` 常量。本包演示在使用方代码中维护事件名注册表、领域 `app.*` 属性，并通过 `BusinessPayload.ExtraAttrs` 输出。
+核心库不内置电商 `business.*` 常量。本包演示在使用方代码中维护 Event Registry（事件名注册表）、领域 `app.*` 属性，并通过 `BusinessPayload.ExtraAttrs` 输出。
 
 ```go
 logger.Emit(ctx, log.BusinessEvent{
