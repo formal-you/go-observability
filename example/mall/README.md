@@ -29,4 +29,21 @@ curl -X POST -H 'X-Fail: stock' http://127.0.0.1:8083/api/v1/orders
 tail -n 1 ./logs/mall.jsonl
 ```
 
+## 触发各类事件
+
+```powershell
+# 安全事件：任意路径带 X-Risk: high 时 SecurityLog 写 auth.login.denied
+Invoke-WebRequest http://127.0.0.1:8083/healthz -Headers @{ 'X-Risk' = 'high' }
+
+# 审计事件：actor 来自认证上下文（X-User-ID / X-User-Role），记录 before/after 与来源
+Invoke-WebRequest -Method Post http://127.0.0.1:8083/api/v1/admin/users/42/role -Headers @{
+    'X-User-ID'   = 'u_admin'
+    'X-User-Role' = 'admin'
+    'X-Request-ID'= 'req-audit-1'
+}
+```
+
+审计事件现在包含 `app.before` / `app.after`、`client.address`、`user_agent.original`，
+且 `app.actor_user_id` / `app.actor_role` 由 `fakeIdentity` 注入可信上下文生成。
+
 服务展示：`mall.EventProductViewed` / `EventOrderCreated`、业务拒绝错误、`SecurityLog` / `AuditLog`、Sampler / Masker 治理与三信号装配。

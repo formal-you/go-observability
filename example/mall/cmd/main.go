@@ -44,6 +44,24 @@ func mustRegisterErrorContract(code errs.ErrorCode, typ errs.ErrorType, eventNam
 	errs.MustRegisterErrorContract(code, typ, eventName)
 }
 
+// fakeIdentity 模拟认证中间件：从请求头读取已认证身份并写入 ctx。
+// 真实系统由认证/授权边界实现；这里演示可信 Subject / Actor 注入，
+// Logger 经 ContextIdentityExtractor 覆盖事件里的同名字段，防止业务代码伪造身份。
+func fakeIdentity() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.GetHeader("X-User-ID")
+		role := c.GetHeader("X-User-Role")
+		if userID == "" {
+			userID = "anonymous"
+		}
+		c.Request = c.Request.WithContext(log.WithIdentityContext(c.Request.Context(), log.IdentityContext{
+			Subject: log.Subject{UserID: userID},
+			Actor:   log.Actor{UserID: userID, Role: role},
+		}))
+		c.Next()
+	}
+}
+
 func main() {
 	if err := run(context.Background()); err != nil {
 		fmt.Fprintln(os.Stderr, "mall:", err)
@@ -94,6 +112,7 @@ func run(ctx context.Context) error {
 	//     access/probe 交给 ResultKeepSampler（示例 ratio=1 便于本地观察）。
 	logger := log.NewLogger(w,
 		log.WithTraceExtractor(otelutil.NewTraceExtractor()),
+		log.WithIdentityExtractor(log.ContextIdentityExtractor{}),
 		log.WithMasker(log.FieldMasker{}),
 		log.WithSampler(log.EventTypeKeepSampler{
 			KeepTypes: []log.EventType{log.EventBusiness, log.EventError, log.EventSecurity, log.EventAudit},
@@ -121,6 +140,7 @@ func run(ctx context.Context) error {
 	// 被收口后记录最终 500 响应；Security/Audit 用回调式 Decide/Describe。
 	router.Use(
 		ginmw.Trace(ginmw.TraceConfig{}),
+		fakeIdentity(),
 		ginmw.AccessLog(ginmw.AccessConfig{
 			Logger:    logger,
 			SkipPaths: map[string]bool{"/healthz": true},
@@ -155,14 +175,18 @@ func run(ctx context.Context) error {
 				return &log.AuditPayload{
 					EventName:      log.NewEventName("admin", "role_update", "recorded"),
 					Action:         "admin.role_update",
-					Actor:          log.Actor{UserID: "u_admin", Role: "admin"},
 					Resource:       log.Resource{Type: "user", ID: c.Param("id")},
 					AuditEventType: "admin.operation",
 					TargetUserID:   c.Param("id"),
 					ChangedFields:  []string{"role"},
+					Before:         log.Fields{"role": "viewer"},
 					After:          log.Fields{"role": "operator"},
 					Reason:         "授权变更",
 					Result:         log.ResultSuccess,
+					ExtraAttrs: []slog.Attr{
+						slog.String("client.address", c.ClientIP()),
+						slog.String("user_agent.original", c.Request.UserAgent()),
+					},
 				}
 			},
 		}),
