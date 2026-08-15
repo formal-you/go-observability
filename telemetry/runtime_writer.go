@@ -60,6 +60,7 @@ func (r *Runtime) NewWriter(ctx context.Context) (log.ManagedWriter, error) {
 	}
 }
 
+// noopWriter 是 Log.Output=none 时的无操作 Writer。
 type noopWriter struct{}
 
 // Write 实现显式禁用日志出口的无操作 Writer。
