@@ -21,14 +21,20 @@ var _ trace.SpanExporter = retainingTraceExporter{}
 func TestRuntimeTraceTreeBlackBox(t *testing.T) {
 	exporter := retainingTraceExporter{InMemoryExporter: tracetest.NewInMemoryExporter()}
 	runtime, err := telemetry.NewRuntime(context.Background(), telemetry.Config{
-		Enabled:              true,
-		ServiceName:          "trace-contract",
-		LogOutput:            telemetry.LogOutputNone,
-		TraceSampleRatio:     1,
-		TraceExporter:        exporter,
-		MetricReader:         sdkmetric.NewManualReader(),
-		TraceBatchTimeout:    time.Hour,
-		MetricExportInterval: time.Hour,
+		Enabled:  true,
+		Resource: telemetry.ResourceConfig{ServiceName: "trace-contract"},
+		Trace: telemetry.TraceConfig{
+			Output:       telemetry.SignalOutputOTLP,
+			SampleRatio:  1,
+			Exporter:     exporter,
+			BatchTimeout: time.Hour,
+		},
+		Metric: telemetry.MetricConfig{
+			Output:         telemetry.SignalOutputOTLP,
+			Reader:         sdkmetric.NewManualReader(),
+			ExportInterval: time.Hour,
+		},
+		Log: telemetry.LogConfig{Output: telemetry.SignalOutputNone},
 	})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)

@@ -4,6 +4,7 @@
 `trace`（server span）/ `metrics`（http.server.request.duration）/ `nethttp`
 （显式错误收口 `ErrorResponse` + panic 恢复 `Recover`）；access 事件由接入方
 10 行包装（库暂无 net/http access 中间件，Gin 版见 `ginlog`；模板见 `accessLog`）。
+未设置 OTLP endpoint 时使用 `Trace=local、Metric=none、Log=file`；设置后统一改走 OTLP。
 
 从仓库根目录运行：
 

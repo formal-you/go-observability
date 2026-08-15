@@ -83,7 +83,7 @@ func newTestTracer(t *testing.T) (trace.Tracer, *captureProcessor) {
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(p), sdktrace.WithSampler(sdktrace.AlwaysSample()))
 	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
 
-	// 全局 TextMapPropagator 默认 no-op；模拟生产（telemetry.Setup 安装 W3C TraceContext）。
+	// 全局 TextMapPropagator 默认 no-op；模拟生产（telemetry.Runtime.InstallGlobal 安装 W3C TraceContext）。
 	prevProp := otel.GetTextMapPropagator()
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	t.Cleanup(func() { otel.SetTextMapPropagator(prevProp) })

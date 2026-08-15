@@ -22,14 +22,21 @@ import (
 func main() {
 	ctx := context.Background()
 
-	endpoint := telemetry.EndpointFromEnvironment()
-	output := telemetry.LogOutputFile
+	logOutput := telemetry.SignalOutputFile
+	traceOutput := telemetry.SignalOutputLocal
+	metricOutput := telemetry.SignalOutputNone
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" {
-		output = telemetry.LogOutputOTLP
+		logOutput = telemetry.SignalOutputOTLP
+		traceOutput = telemetry.SignalOutputOTLP
+		metricOutput = telemetry.SignalOutputOTLP
 	}
 	providers, err := telemetry.NewRuntime(ctx, telemetry.Config{
-		Enabled: telemetry.EnabledFromEnvironment(), ServiceName: "nethttp-demo", ServiceVersion: "0.1.0", Environment: "dev",
-		Endpoint: endpoint, LogOutput: output,
+		Enabled:  telemetry.EnabledFromEnvironment(),
+		Endpoint: telemetry.EndpointFromEnvironment(),
+		Resource: telemetry.ResourceConfig{ServiceName: "nethttp-demo", ServiceVersion: "0.1.0", Environment: "dev"},
+		Trace:    telemetry.TraceConfig{Output: traceOutput},
+		Metric:   telemetry.MetricConfig{Output: metricOutput},
+		Log:      telemetry.LogConfig{Output: logOutput, FilePath: "logs/nethttp-events.jsonl"},
 	})
 	if err != nil {
 		slog.Error("init telemetry", "err", err)
@@ -39,11 +46,7 @@ func main() {
 	defer restore()
 	defer func() { _ = providers.Shutdown(ctx) }()
 
-	writerCfg := telemetry.WriterConfig{FilePath: "logs/nethttp-events.jsonl"}
-	if output == telemetry.LogOutputOTLP {
-		writerCfg = telemetry.WriterConfig{}
-	}
-	w, err := providers.NewWriter(ctx, writerCfg)
+	w, err := providers.NewWriter(ctx)
 	if err != nil {
 		slog.Error("init log writer", "err", err)
 		os.Exit(1)

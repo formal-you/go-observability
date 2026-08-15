@@ -15,12 +15,16 @@ import (
 
 func TestRuntimeWriterLifecycleIsPublicAndIdempotent(t *testing.T) {
 	ctx := context.Background()
-	runtime, err := telemetry.NewFileRuntime(telemetry.Config{ServiceName: "lifecycle-test"})
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	runtime, err := telemetry.NewFileRuntime(telemetry.Config{
+		Resource: telemetry.ResourceConfig{ServiceName: "lifecycle-test"},
+		Log:      telemetry.LogConfig{Output: telemetry.SignalOutputFile, FilePath: path},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(t.TempDir(), "events.jsonl")
-	writer, err := runtime.NewWriter(ctx, telemetry.WriterConfig{FilePath: path})
+	defer runtime.Shutdown(ctx)
+	writer, err := runtime.NewWriter(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,16 +52,17 @@ func TestRuntimeWriterLifecycleIsPublicAndIdempotent(t *testing.T) {
 
 func TestRuntimeNoneWriterHasManagedLifecycle(t *testing.T) {
 	runtime, err := telemetry.NewRuntime(context.Background(), telemetry.Config{
-		Enabled:          true,
-		ServiceName:      "none-lifecycle-test",
-		LogOutput:        telemetry.LogOutputNone,
-		TraceSampleRatio: 1,
+		Enabled:  true,
+		Resource: telemetry.ResourceConfig{ServiceName: "none-lifecycle-test"},
+		Trace:    telemetry.TraceConfig{Output: telemetry.SignalOutputNone},
+		Metric:   telemetry.MetricConfig{Output: telemetry.SignalOutputNone},
+		Log:      telemetry.LogConfig{Output: telemetry.SignalOutputNone},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = runtime.Shutdown(context.Background()) }()
-	writer, err := runtime.NewWriter(context.Background(), telemetry.WriterConfig{})
+	writer, err := runtime.NewWriter(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

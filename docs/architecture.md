@@ -89,7 +89,7 @@ go-observability/
 │   ├── runtime_providers.go     # Trace / Metric / Log Provider 构造
 │   ├── runtime_global.go        # 全局 Provider 安装、恢复与 Shutdown
 │   ├── runtime_writer.go        # file / OTLP / stdout / none 出口选择
-│   └── runtime_compat.go        # Deprecated Setup* / NewLogWriter 兼容层
+│   └── runtime_writer.go        # Runtime.NewWriter：file / stdout / otlp / none
 │
 ├── observability/               # 本地 LGTM 参考栈（docker compose，非生产方案）
 │   ├── docker-compose.yml       # Collector + Tempo + Loki + Mimir + Grafana
@@ -200,12 +200,11 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 
 ## 7. 三信号装配（`telemetry`）
 
-- `Setup`（Deprecated）：兼容旧代码，内部委托 Runtime、自动安装全局 Provider，并保留 endpoint 推断行为。
-- `NewRuntime`：创建独立 Provider，不安装全局状态；`InstallGlobal` 显式安装并返回幂等恢复函数。
-- `NewFileRuntime`：不创建 exporter，仅提供 `ParentBased(NeverSample())` 的本地 TraceProvider；生成有效 trace/span 供 JSONL 关联，但不保存完整 Trace 树。
-- `SetupFromEnvironment`（Deprecated）：从 `OTEL_SDK_DISABLED` 读启用状态、`OTEL_EXPORTER_OTLP_ENDPOINT` 读 endpoint（缺省 `127.0.0.1:4317`）。
-- `Runtime.NewWriter`：按 `LogOutput` 显式选择 file、OTLP、stdout 或 no-op，返回具备幂等 `Close` 的 `log.ManagedWriter`；file/stdout 注入同一份 Resource，OTLP 复用 Runtime LoggerProvider。
-- `Providers.Shutdown`：进程退出前调用；顺序刻意先 log 再 metric 后 trace，保证日志携带的 span 上下文关联完整。
+- `NewRuntime`：按 `Resource / Trace / Metric / Log` 四组 Config 创建独立 Provider，不安装全局状态；`InstallGlobal` 显式安装并返回幂等恢复函数。
+- `NewFileRuntime`：file-only 便捷预设（Trace=local、Metric=none、Log=file），不创建 exporter，仅提供 `ParentBased(NeverSample())` 的本地 TraceProvider；生成有效 trace/span 供 JSONL 关联，但不保存完整 Trace 树。
+- `Runtime.NewWriter(ctx)`：根据已固化的 `LogConfig.Output` 选择 file、OTLP、stdout 或 no-op，返回具备幂等 `Close` 的 `log.ManagedWriter`；file/stdout 注入同一份 Resource，OTLP 复用 Runtime LoggerProvider。
+- `Runtime.Shutdown`：进程退出前调用；顺序刻意先 log 再 metric 后 trace，保证日志携带的 span 上下文关联完整。
+- `EnabledFromEnvironment` / `EndpointFromEnvironment`：应用侧显式环境变量映射 helper，不隐式推断任何信号出口。
 
 ## 8. 扩展边界（接入方）
 

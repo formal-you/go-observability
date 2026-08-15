@@ -1,4 +1,5 @@
-# 小单体 file-only 配置结构示意。应用自行解析后映射到 telemetry.Config。
+# 小单体 file-only 配置结构示意。应用自行解析后映射到
+# telemetry.ResourceConfig 与 telemetry.LogConfig；Log.Output 使用 file。
 service:
   name: mall-monolith
   version: "1.0.0"

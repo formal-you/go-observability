@@ -19,7 +19,6 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
-	"github.com/formal-you/go-observability/writer/file"
 	stdoutwriter "github.com/formal-you/go-observability/writer/stdout"
 )
 
@@ -29,7 +28,11 @@ func TestNewRuntimeDoesNotInstallGlobals(t *testing.T) {
 	oldLogger := global.GetLoggerProvider()
 	oldPropagator := otel.GetTextMapPropagator()
 	r, err := NewRuntime(context.Background(), Config{
-		Enabled: true, ServiceName: "svc", LogOutput: LogOutputNone,
+		Enabled:  true,
+		Resource: ResourceConfig{ServiceName: "svc"},
+		Trace:    TraceConfig{Output: SignalOutputNone},
+		Metric:   MetricConfig{Output: SignalOutputNone},
+		Log:      LogConfig{Output: SignalOutputNone},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -41,19 +44,21 @@ func TestNewRuntimeDoesNotInstallGlobals(t *testing.T) {
 }
 
 func TestNewRuntimeValidation(t *testing.T) {
-	customResource := resourceForConfig(Config{ServiceName: "resource-only"})
 	tests := []Config{
-		{Enabled: true, LogOutput: LogOutputFile},
-		{Enabled: true, LogOutput: LogOutputFile, Resource: customResource},
-		{Enabled: true, ServiceName: "svc"},
-		{Enabled: true, ServiceName: "svc", LogOutput: "invalid"},
+		{Enabled: true, Log: LogConfig{Output: SignalOutputFile}},
+		{Enabled: true, Resource: ResourceConfig{ServiceName: "svc"}, Log: LogConfig{Output: SignalOutputFile}},
+		{Enabled: true, Resource: ResourceConfig{ServiceName: "svc"}},
+		{Enabled: true, Resource: ResourceConfig{ServiceName: "svc"}, Log: LogConfig{Output: SignalOutput("invalid")}},
+		{Enabled: true, Resource: ResourceConfig{ServiceName: "svc"}, Log: LogConfig{Output: SignalOutputNone}, Trace: TraceConfig{Output: SignalOutput("invalid")}},
+		{Enabled: true, Resource: ResourceConfig{ServiceName: "svc"}, Log: LogConfig{Output: SignalOutputNone}, Metric: MetricConfig{Output: SignalOutputLocal}},
 	}
 	for _, cfg := range tests {
 		if _, err := NewRuntime(context.Background(), cfg); err == nil {
 			t.Errorf("NewRuntime(%+v) error = nil", cfg)
 		}
 	}
-	r, err := NewRuntime(context.Background(), Config{})
+	path := filepath.Join(t.TempDir(), "disabled.jsonl")
+	r, err := NewRuntime(context.Background(), Config{Enabled: false, Log: LogConfig{Output: SignalOutputFile, FilePath: path}})
 	if err != nil || r == nil || r.resource != nil {
 		t.Fatalf("disabled runtime = %#v, %v", r, err)
 	}
@@ -82,11 +87,20 @@ func TestInstallGlobalRestoresInLIFOOrder(t *testing.T) {
 		_ = baseTrace.Shutdown(context.Background())
 	})
 
-	r1, err := NewRuntime(context.Background(), Config{Enabled: true, ServiceName: "one", LogOutput: LogOutputNone, TraceBatchTimeout: time.Hour, MetricExportInterval: time.Hour})
+	newRuntime := func(name string) (*Runtime, error) {
+		return NewRuntime(context.Background(), Config{
+			Enabled:  true,
+			Resource: ResourceConfig{ServiceName: name},
+			Trace:    TraceConfig{Output: SignalOutputOTLP, BatchTimeout: time.Hour},
+			Metric:   MetricConfig{Output: SignalOutputOTLP, ExportInterval: time.Hour},
+			Log:      LogConfig{Output: SignalOutputNone},
+		})
+	}
+	r1, err := newRuntime("one")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r2, err := NewRuntime(context.Background(), Config{Enabled: true, ServiceName: "two", LogOutput: LogOutputNone, TraceBatchTimeout: time.Hour, MetricExportInterval: time.Hour})
+	r2, err := newRuntime("two")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,13 +123,16 @@ func TestInstallGlobalRestoresInLIFOOrder(t *testing.T) {
 }
 
 func TestNewWriterFileInjectsResourceMetadata(t *testing.T) {
-	r, err := NewFileRuntime(Config{ServiceName: "mall", ServiceVersion: "1.2.3"})
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	r, err := NewFileRuntime(Config{
+		Resource: ResourceConfig{ServiceName: "mall", ServiceVersion: "1.2.3"},
+		Log:      LogConfig{Output: SignalOutputFile, FilePath: path},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer r.Shutdown(context.Background())
-	path := filepath.Join(t.TempDir(), "events.jsonl")
-	w, err := r.NewWriter(context.Background(), WriterConfig{FilePath: path})
+	w, err := r.NewWriter(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,9 +156,13 @@ func TestNewWriterFileInjectsResourceMetadata(t *testing.T) {
 }
 
 func TestNewWriterStdoutUsesResourceAndOutput(t *testing.T) {
-	r := &Runtime{resource: resourceForConfig(Config{ServiceName: "stdout-svc", Environment: "test"}), logOutput: LogOutputStdout}
+	r := &Runtime{
+		resource:  resourceForConfig(ResourceConfig{ServiceName: "stdout-svc", Environment: "test"}),
+		logConfig: LogConfig{Output: SignalOutputStdout, StdoutOptions: []stdoutwriter.Option{stdoutwriter.WithOutput(&bytes.Buffer{})}},
+	}
 	var buf bytes.Buffer
-	w, err := r.NewWriter(context.Background(), WriterConfig{StdoutOptions: []stdoutwriter.Option{stdoutwriter.WithOutput(&buf)}})
+	r.logConfig.StdoutOptions = []stdoutwriter.Option{stdoutwriter.WithOutput(&buf)}
+	w, err := r.NewWriter(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,27 +177,8 @@ func TestNewWriterStdoutUsesResourceAndOutput(t *testing.T) {
 	}
 }
 
-func TestNewWriterRejectsMismatchedConfiguration(t *testing.T) {
-	dummyFileOption := file.WithResourceMetadata(file.ResourceMetadata{})
-	tests := []struct {
-		runtime *Runtime
-		cfg     WriterConfig
-	}{
-		{&Runtime{logOutput: LogOutputFile}, WriterConfig{}},
-		{&Runtime{logOutput: LogOutputFile}, WriterConfig{FilePath: "x", StdoutOptions: []stdoutwriter.Option{stdoutwriter.WithOutput(&bytes.Buffer{})}}},
-		{&Runtime{logOutput: LogOutputOTLP, loggerProvider: sdklog.NewLoggerProvider()}, WriterConfig{FilePath: "x"}},
-		{&Runtime{logOutput: LogOutputStdout}, WriterConfig{FileOptions: []file.Option{dummyFileOption}}},
-		{&Runtime{logOutput: LogOutputNone}, WriterConfig{FilePath: "x"}},
-	}
-	for _, tt := range tests {
-		if _, err := tt.runtime.NewWriter(context.Background(), tt.cfg); err == nil {
-			t.Errorf("NewWriter(%q, %+v) error = nil", tt.runtime.logOutput, tt.cfg)
-		}
-	}
-}
-
 func TestNewWriterNoneIsNoop(t *testing.T) {
-	w, err := (&Runtime{logOutput: LogOutputNone}).NewWriter(context.Background(), WriterConfig{})
+	w, err := (&Runtime{logConfig: LogConfig{Output: SignalOutputNone}}).NewWriter(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,76 +187,79 @@ func TestNewWriterNoneIsNoop(t *testing.T) {
 	}
 }
 
-func TestSetupDisabled(t *testing.T) {
+func TestNewRuntimeDisabledKeepsFileWriter(t *testing.T) {
 	ctx := context.Background()
-	p, err := Setup(ctx, Config{Enabled: false})
+	path := filepath.Join(t.TempDir(), "disabled.jsonl")
+	p, err := NewRuntime(ctx, Config{Enabled: false, Log: LogConfig{Output: SignalOutputFile, FilePath: path}})
 	if err != nil {
-		t.Fatalf("disabled setup 不应报错: %v", err)
+		t.Fatalf("disabled runtime: %v", err)
 	}
 	if p == nil || p.resource != nil || p.loggerProvider != nil {
-		t.Fatalf("disabled setup 应返回空 Providers，got %+v", p)
+		t.Fatalf("disabled runtime should have no providers, got %+v", p)
 	}
-	if p.Tracer("x") == nil {
-		t.Error("disabled setup 的 Tracer 应回退全局（非 nil）")
+	if p.Tracer("x") == nil || p.Meter("x") == nil {
+		t.Error("disabled runtime Tracer/Meter should fall back to global no-op")
 	}
-	if p.Meter("x") == nil {
-		t.Error("disabled setup 的 Meter 应回退全局（非 nil）")
+	w, err := p.NewWriter(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write(ctx, "business"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(ctx); err != nil {
+		t.Fatal(err)
 	}
 	if err := p.Shutdown(ctx); err != nil {
-		t.Errorf("disabled setup 的 Shutdown 应返回 nil, got %v", err)
+		t.Errorf("disabled Shutdown should return nil, got %v", err)
 	}
 }
 
-func TestSetupDisabledRetainsLegacyFileWriter(t *testing.T) {
-	ctx := context.Background()
-	r, err := Setup(ctx, Config{Enabled: false})
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(t.TempDir(), "disabled.jsonl")
-	w, err := r.NewLogWriter(ctx, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if closer, ok := w.(interface{ Close(context.Context) error }); ok {
-		if err := closer.Close(ctx); err != nil {
-			t.Fatal(err)
-		}
+func TestNewRuntimeDisabledRequiresFilePath(t *testing.T) {
+	if _, err := NewRuntime(context.Background(), Config{Enabled: false}); err == nil {
+		t.Fatal("disabled runtime with file fallback must require file path")
 	}
 }
 
-func TestSetupRequiresServiceName(t *testing.T) {
-	_, err := Setup(context.Background(), Config{Enabled: true})
+func TestNewRuntimeRequiresServiceName(t *testing.T) {
+	_, err := NewRuntime(context.Background(), Config{Enabled: true, Log: LogConfig{Output: SignalOutputNone}})
 	if err == nil {
-		t.Fatal("缺少 service.name 应报错")
+		t.Fatal("missing service.name should error")
 	}
 }
 
-func TestSetupInvalidSampleRatio(t *testing.T) {
+func TestNewRuntimeInvalidSampleRatio(t *testing.T) {
 	for _, ratio := range []float64{-0.1, 1.5} {
-		if _, err := Setup(context.Background(), Config{Enabled: true, ServiceName: "svc", TraceSampleRatio: ratio}); err == nil {
-			t.Errorf("ratio=%v 应报错", ratio)
+		_, err := NewRuntime(context.Background(), Config{
+			Enabled:  true,
+			Resource: ResourceConfig{ServiceName: "svc"},
+			Trace:    TraceConfig{Output: SignalOutputOTLP, SampleRatio: ratio},
+			Log:      LogConfig{Output: SignalOutputNone},
+		})
+		if err == nil {
+			t.Errorf("ratio=%v should error", ratio)
 		}
 	}
 }
 
-func TestSetupResourceAttributes(t *testing.T) {
+func TestNewRuntimeResourceAttributes(t *testing.T) {
 	ctx := context.Background()
-	p, err := Setup(ctx, Config{
-		Enabled:        true,
-		ServiceName:    "svc",
-		ServiceVersion: "1.2.3",
-		Environment:    "test",
-		Region:         "cn",
-		Instance:       "i-1",
-		Endpoint:       "127.0.0.1:4317",
+	p, err := NewRuntime(ctx, Config{
+		Enabled:  true,
+		Endpoint: "127.0.0.1:4317",
+		Resource: ResourceConfig{
+			ServiceName: "svc", ServiceVersion: "1.2.3", Environment: "test", Region: "cn", Instance: "i-1",
+		},
+		Trace:  TraceConfig{Output: SignalOutputOTLP},
+		Metric: MetricConfig{Output: SignalOutputOTLP},
+		Log:    LogConfig{Output: SignalOutputNone},
 	})
 	if err != nil {
-		t.Fatalf("setup 失败: %v", err)
+		t.Fatalf("NewRuntime: %v", err)
 	}
 	defer func() { _ = p.Shutdown(ctx) }()
-	if p.resource == nil || p.loggerProvider == nil {
-		t.Fatal("enabled setup 应返回非 nil 的 Resource 与 LoggerProvider")
+	if p.resource == nil || p.loggerProvider != nil {
+		t.Fatal("enabled runtime should build resource without log provider")
 	}
 
 	want := map[string]string{
@@ -266,7 +271,7 @@ func TestSetupResourceAttributes(t *testing.T) {
 	}
 	got := map[string]string{}
 	for _, kv := range p.resource.Attributes() {
-		got[string(kv.Key)] = kv.Value.Emit()
+		got[string(kv.Key)] = kv.Value.AsString()
 	}
 	for k, v := range want {
 		if got[k] != v {
@@ -275,52 +280,70 @@ func TestSetupResourceAttributes(t *testing.T) {
 	}
 }
 
-func TestSetupFileCreatesLocalTracesAndMetadata(t *testing.T) {
+func TestNewFileRuntimeCreatesLocalTracesAndMetadata(t *testing.T) {
 	ctx := context.Background()
-	p, err := SetupFile(Config{ServiceName: "mall-monolith", ServiceVersion: "1.0.0", Instance: "shop-01"})
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	p, err := NewFileRuntime(Config{
+		Resource: ResourceConfig{ServiceName: "mall-monolith", ServiceVersion: "1.0.0", Instance: "shop-01"},
+		Log:      LogConfig{Output: SignalOutputFile, FilePath: path},
+	})
 	if err != nil {
-		t.Fatalf("SetupFile 失败: %v", err)
+		t.Fatalf("NewFileRuntime: %v", err)
 	}
 	defer func() { _ = p.Shutdown(ctx) }()
 	if p.loggerProvider != nil {
-		t.Fatal("SetupFile 不应创建 OTLP LoggerProvider")
+		t.Fatal("NewFileRuntime should not create OTLP LoggerProvider")
 	}
 	attrs := map[string]string{}
 	for _, kv := range p.resource.Attributes() {
 		attrs[string(kv.Key)] = kv.Value.AsString()
 	}
 	if attrs["service.name"] != "mall-monolith" || attrs["service.version"] != "1.0.0" || attrs["service.instance.id"] != "shop-01" || attrs["deployment.environment.name"] != "development" {
-		t.Fatalf("SetupFile Resource = %v", attrs)
+		t.Fatalf("NewFileRuntime Resource = %v", attrs)
 	}
 	tracer := p.Tracer("test")
 	_, span1 := tracer.Start(ctx, "one")
 	_, span2 := tracer.Start(ctx, "two")
 	if !span1.SpanContext().TraceID().IsValid() || !span1.SpanContext().SpanID().IsValid() {
-		t.Fatal("本地 span1 ID 无效")
+		t.Fatal("local span1 ID invalid")
 	}
 	if span1.SpanContext().IsSampled() {
-		t.Fatal("file-only root span 不应设置 sampled 标记")
+		t.Fatal("file-only root span should not set sampled flag")
 	}
 	if !span2.SpanContext().TraceID().IsValid() || span1.SpanContext().TraceID() == span2.SpanContext().TraceID() {
-		t.Fatal("独立本地 root span 应有不同有效 TraceID")
+		t.Fatal("independent local root spans should have distinct valid TraceID")
 	}
 	span1.End()
 	span2.End()
 }
 
-func TestSetupFileRequiresServiceName(t *testing.T) {
-	if _, err := SetupFile(Config{}); err == nil {
-		t.Fatal("SetupFile 缺少 service.name 应报错")
+func TestNewFileRuntimeRequiresServiceName(t *testing.T) {
+	if _, err := NewFileRuntime(Config{}); err == nil {
+		t.Fatal("NewFileRuntime missing service.name should error")
+	}
+}
+
+func TestNewFileRuntimeRejectsConflictingOutputs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	tests := []Config{
+		{Resource: ResourceConfig{ServiceName: "svc"}, Log: LogConfig{Output: SignalOutputFile, FilePath: path}, Trace: TraceConfig{Output: SignalOutputOTLP}},
+		{Resource: ResourceConfig{ServiceName: "svc"}, Log: LogConfig{Output: SignalOutputFile, FilePath: path}, Metric: MetricConfig{Output: SignalOutputOTLP}},
+		{Resource: ResourceConfig{ServiceName: "svc"}, Log: LogConfig{Output: SignalOutputStdout}},
+	}
+	for _, cfg := range tests {
+		if _, err := NewFileRuntime(cfg); err == nil {
+			t.Errorf("NewFileRuntime(%+v) should reject conflicting output", cfg)
+		}
 	}
 }
 
 func TestShutdownNilAndDisabled(t *testing.T) {
 	ctx := context.Background()
-	if err := (*Providers)(nil).Shutdown(ctx); err != nil {
-		t.Errorf("nil Shutdown 应返回 nil, got %v", err)
+	if err := (*Runtime)(nil).Shutdown(ctx); err != nil {
+		t.Errorf("nil Shutdown should return nil, got %v", err)
 	}
-	if err := (&Providers{}).Shutdown(ctx); err != nil {
-		t.Errorf("空 Providers Shutdown 应返回 nil, got %v", err)
+	if err := (&Runtime{}).Shutdown(ctx); err != nil {
+		t.Errorf("empty Runtime Shutdown should return nil, got %v", err)
 	}
 }
 
@@ -360,11 +383,11 @@ func TestShutdownRecordsLoggerProviderFailure(t *testing.T) {
 func TestEnabledFromEnvironment(t *testing.T) {
 	t.Setenv("OTEL_SDK_DISABLED", "true")
 	if EnabledFromEnvironment() {
-		t.Error("OTEL_SDK_DISABLED=true 时应禁用")
+		t.Error("OTEL_SDK_DISABLED=true should disable")
 	}
 	t.Setenv("OTEL_SDK_DISABLED", "")
 	if !EnabledFromEnvironment() {
-		t.Error("未设置时应默认启用")
+		t.Error("unset should enable")
 	}
 }
 
@@ -375,18 +398,18 @@ func TestEndpointFromEnvironment(t *testing.T) {
 	}
 	_ = os.Unsetenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	if got := EndpointFromEnvironment(); got != defaultEndpoint {
-		t.Errorf("缺省 endpoint = %q, want %q", got, defaultEndpoint)
+		t.Errorf("default endpoint = %q, want %q", got, defaultEndpoint)
 	}
 }
 
 func TestEndpointURL(t *testing.T) {
 	got, err := endpointURL("127.0.0.1:4317")
 	if err != nil || got != "http://127.0.0.1:4317" {
-		t.Errorf("host:port 规范化 = %q", got)
+		t.Errorf("host:port normalization = %q", got)
 	}
 	got, err = endpointURL("https://collector:4317")
 	if err != nil || got != "https://collector:4317" {
-		t.Errorf("完整 URL 不应改写 = %q", got)
+		t.Errorf("complete URL should not be rewritten = %q", got)
 	}
 	for _, invalid := range []string{
 		"collector",
@@ -401,33 +424,51 @@ func TestEndpointURL(t *testing.T) {
 		"https://collector:4317/v1/logs",
 	} {
 		if _, err := endpointURL(invalid); err == nil {
-			t.Errorf("endpointURL(%q) 应返回错误", invalid)
+			t.Errorf("endpointURL(%q) should return error", invalid)
 		}
 	}
 }
 
-func TestSetupRejectsNegativeDurations(t *testing.T) {
+func TestNewRuntimeRejectsNegativeDurations(t *testing.T) {
 	tests := []Config{
-		{Enabled: true, ServiceName: "svc", TraceBatchTimeout: -1},
-		{Enabled: true, ServiceName: "svc", MetricExportInterval: -1},
-		{Enabled: true, ServiceName: "svc", LogBatchTimeout: -1},
+		{Enabled: true, Resource: ResourceConfig{ServiceName: "svc"}, Log: LogConfig{Output: SignalOutputNone}, Trace: TraceConfig{Output: SignalOutputOTLP, BatchTimeout: -1}},
+		{Enabled: true, Resource: ResourceConfig{ServiceName: "svc"}, Log: LogConfig{Output: SignalOutputNone}, Metric: MetricConfig{Output: SignalOutputOTLP, ExportInterval: -1}},
+		{Enabled: true, Resource: ResourceConfig{ServiceName: "svc"}, Log: LogConfig{Output: SignalOutputOTLP, BatchTimeout: -1}},
 	}
 	for _, cfg := range tests {
-		if _, err := Setup(context.Background(), cfg); err == nil {
-			t.Errorf("Setup(%+v) 应拒绝负数周期", cfg)
+		if _, err := NewRuntime(context.Background(), cfg); err == nil {
+			t.Errorf("NewRuntime(%+v) should reject negative duration", cfg)
 		}
 	}
 }
 
-func TestSetupRejectsInvalidEndpoint(t *testing.T) {
+func TestNewRuntimeRejectsInvalidEndpointWhenOTLPRequired(t *testing.T) {
 	for _, endpoint := range []string{"collector", ":4317", "collector:not-a-port", "grpc://collector:4317"} {
-		_, err := Setup(context.Background(), Config{
-			Enabled:     true,
-			ServiceName: "svc",
-			Endpoint:    endpoint,
+		_, err := NewRuntime(context.Background(), Config{
+			Enabled:  true,
+			Resource: ResourceConfig{ServiceName: "svc"},
+			Endpoint: endpoint,
+			Trace:    TraceConfig{Output: SignalOutputNone},
+			Metric:   MetricConfig{Output: SignalOutputNone},
+			Log:      LogConfig{Output: SignalOutputOTLP},
 		})
 		if err == nil {
-			t.Errorf("Setup Endpoint=%q error = nil, want non-nil", endpoint)
+			t.Errorf("NewRuntime Endpoint=%q error = nil, want non-nil", endpoint)
 		}
+	}
+}
+
+func TestNewRuntimeSkipsEndpointValidationWithoutOTLP(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	_, err := NewRuntime(context.Background(), Config{
+		Enabled:  true,
+		Resource: ResourceConfig{ServiceName: "svc"},
+		Endpoint: "collector",
+		Trace:    TraceConfig{Output: SignalOutputLocal},
+		Metric:   MetricConfig{Output: SignalOutputNone},
+		Log:      LogConfig{Output: SignalOutputFile, FilePath: path},
+	})
+	if err != nil {
+		t.Fatalf("non-OTLP runtime should ignore invalid endpoint, got %v", err)
 	}
 }

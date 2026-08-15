@@ -5,8 +5,8 @@
 // OpenTelemetry global state；需要让依赖全局 API 的组件使用这些 Provider 时，调用
 // Runtime.InstallGlobal，并在退出时调用其 restore 函数。
 //
-// 日志出口由 Config.LogOutput 显式选择。OTLP 出口把并发入队、批量导出和 gRPC 连接
-// 交给 OTel SDK；file 出口则由文件 Writer 自行同步并发写入和轮转。
+// 每个信号通过独立 Config 分组显式选择出口。OTLP 出口把并发入队、批量导出和 gRPC
+// 连接交给 OTel SDK；file 出口则由文件 Writer 自行同步并发写入和轮转。
 package telemetry
 
 import (
@@ -27,26 +27,28 @@ import (
 	stdoutwriter "github.com/formal-you/go-observability/writer/stdout"
 )
 
-// LogOutput 表示 Runtime.NewWriter 创建的日志出口类型。
-type LogOutput string
+// SignalOutput 表示某个 OpenTelemetry 信号的出口类型。
+type SignalOutput string
 
 const (
-	// LogOutputFile 把日志写为本地 JSONL 文件。
-	LogOutputFile LogOutput = "file"
-	// LogOutputOTLP 通过 OTel SDK 的 OTLP/gRPC Exporter 把日志发送到 Collector。
-	LogOutputOTLP LogOutput = "otlp"
-	// LogOutputStdout 使用 OTel stdout Exporter 输出日志，适合本地开发和诊断。
-	LogOutputStdout LogOutput = "stdout"
-	// LogOutputNone 丢弃日志，但仍可使用 Runtime 中已配置的 Trace 和 Metric Provider。
-	LogOutputNone LogOutput = "none"
+	// SignalOutputFile 把信号写为本地文件。
+	SignalOutputFile SignalOutput = "file"
+	// SignalOutputOTLP 通过 OTel SDK 的 OTLP/gRPC Exporter 把信号发送到 Collector。
+	SignalOutputOTLP SignalOutput = "otlp"
+	// SignalOutputStdout 使用 OTel stdout Exporter 输出信号，适合本地开发和诊断。
+	SignalOutputStdout SignalOutput = "stdout"
+	// SignalOutputNone 不装配对应 Provider；获取 Tracer/Meter 时回退进程级 no-op。
+	SignalOutputNone SignalOutput = "none"
+	// SignalOutputLocal 仅用于 Trace：创建只生成合法 TraceID/SpanID 但不导出完整
+	// Span 的本地 TracerProvider，供 file-only 日志链路关联使用。
+	SignalOutputLocal SignalOutput = "local"
 )
 
-// Config 定义当前进程 Telemetry Runtime 的装配参数。
+// ResourceConfig 描述写入 OTel Resource 的进程级服务身份。
 //
-// Config 只在构造 Runtime 时读取；构造完成后修改 Config 不会动态更新 Provider。
-// Enabled=true 时 ServiceName 和 LogOutput 必填。时间字段表示 SDK 侧的批量导出周期，
-// 不是 sampling，也不是 Collector 的 batch processor 配置。
-type Config struct {
+// Override 不为 nil 时直接使用调用方提供的 Resource，调用方负责其属性完整性；
+// 其余字段按 OTel semconv 1.41.0 构建低基数服务身份。
+type ResourceConfig struct {
 	// ServiceName 写入 service.name；Enabled=true 时必填。
 	ServiceName string
 	// ServiceVersion 写入 service.version。
@@ -57,56 +59,73 @@ type Config struct {
 	Region string
 	// Instance 写入 service.instance.id。
 	Instance string
-	// Endpoint 配置 OTLP/gRPC Collector 地址；为空时使用 127.0.0.1:4317。
-	// 它不用于推断 LogOutput，新代码必须显式选择出口。
-	Endpoint string
-	// Enabled 控制是否装配 Telemetry Provider；false 返回不含 Provider 的空 Runtime。
-	Enabled bool
-	// LogOutput 显式选择 file、otlp、stdout 或 none。
-	LogOutput LogOutput
-	// TraceSampleRatio 是 SDK head sampling 比例；零值使用 0.1。
-	// 未被采样的 Trace 不会发送到 Collector，Collector tail sampling 无法恢复。
-	TraceSampleRatio float64
-	// TraceBatchTimeout 是 SpanProcessor 的 SDK 批量导出间隔；零值使用 5s。
-	TraceBatchTimeout time.Duration
-	// MetricExportInterval 是 Metric Reader 的 SDK 周期导出间隔；零值使用 15s。
-	MetricExportInterval time.Duration
-	// LogBatchTimeout 是 Log BatchProcessor 的 SDK 批量导出间隔；零值使用 1s。
-	LogBatchTimeout time.Duration
-	// LogQueueSize 是 OTLP Log BatchProcessor 的有界队列容量；零值使用 2048。
-	// 队列满时的丢弃由 OTel SDK 诊断机制报告，不由 Logger.Emit 返回给调用方。
-	LogQueueSize int
-	// TraceOutput 选择 Trace 导出目标：otlp（默认）/ file / stdout / none。
-	// none 时不装配 TracerProvider（Tracer 回退进程级 no-op）；file 时须配 TraceFile。
-	TraceOutput LogOutput
-	// MetricOutput 选择 Metric 导出目标：otlp（默认）/ file / stdout / none。
-	// none 时不装配 MeterProvider；file 时须配 MetricFile。
-	MetricOutput LogOutput
-	// TraceFile 是 TraceOutput=file 时的写入路径（OTLP JSON 追加，文件句柄由 Runtime 持有并关闭）。
-	TraceFile string
-	// MetricFile 是 MetricOutput=file 时的写入路径（OTLP JSON 追加，文件句柄由 Runtime 持有并关闭）。
-	MetricFile string
-	// TraceExporter 允许测试或自定义部署注入公开 OTel SpanExporter。
-	// 为空时按 Endpoint 创建 OTLP gRPC Exporter。成功装配后，它由 TracerProvider
-	// 持有并随 Runtime.Shutdown 关闭；构造失败时，注入对象不由本函数回滚关闭。
-	TraceExporter sdktrace.SpanExporter
-	// MetricReader 允许测试或自定义部署注入公开 OTel Reader。
-	// 为空时按 Endpoint 创建 OTLP PeriodicReader。成功装配后，它由 MeterProvider
-	// 持有并随 Runtime.Shutdown 关闭；构造失败时，注入对象不由本函数回滚关闭。
-	MetricReader sdkmetric.Reader
-	// Resource 覆盖由服务身份字段构建的 OTel Resource；注入对象由调用方拥有。
-	Resource *resource.Resource
+	// Override 覆盖由服务身份字段构建的 OTel Resource；注入对象由调用方拥有。
+	Override *resource.Resource
 }
 
-// WriterConfig 包含 Runtime.NewWriter 所选日志出口的参数。
-// 与当前 LogOutput 不匹配的选项会返回错误，不会被静默忽略。
-type WriterConfig struct {
-	// FilePath 是 LogOutputFile 的 JSONL 路径，其他出口必须留空。
+// TraceConfig 定义 Trace 信号的装配参数。
+type TraceConfig struct {
+	// Output 选择 otlp（默认）/ file / stdout / none / local。
+	Output SignalOutput
+	// FilePath 是 Output=file 时的写入路径，其他输出必须留空。
 	FilePath string
-	// FileOptions 只用于 LogOutputFile；Runtime 会在其后注入自身 Resource metadata。
+	// SampleRatio 是 SDK head sampling 比例；零值使用 0.1。
+	// 未被采样的 Trace 不会发送到 Collector，Collector tail sampling 无法恢复。
+	SampleRatio float64
+	// BatchTimeout 是 SpanProcessor 的 SDK 批量导出间隔；零值使用 5s。
+	BatchTimeout time.Duration
+	// Exporter 允许测试或自定义部署注入公开 OTel SpanExporter，仅 Output=otlp 时可使用。
+	Exporter sdktrace.SpanExporter
+}
+
+// MetricConfig 定义 Metric 信号的装配参数。
+type MetricConfig struct {
+	// Output 选择 otlp（默认）/ file / stdout / none。
+	Output SignalOutput
+	// FilePath 是 Output=file 时的写入路径，其他输出必须留空。
+	FilePath string
+	// ExportInterval 是 Metric Reader 的 SDK 周期导出间隔；零值使用 15s。
+	ExportInterval time.Duration
+	// Reader 允许测试或自定义部署注入公开 OTel Reader，仅 Output=otlp 时可使用。
+	Reader sdkmetric.Reader
+}
+
+// LogConfig 定义 Log 信号与 Runtime.NewWriter 的装配参数。
+type LogConfig struct {
+	// Output 显式选择 file、otlp、stdout 或 none。
+	Output SignalOutput
+	// FilePath 是 Output=file 的 JSONL 路径，其他输出必须留空。
+	FilePath string
+	// FileOptions 只用于 Output=file；Runtime 会在其后注入自身 Resource metadata。
 	FileOptions []file.Option
-	// StdoutOptions 只用于 LogOutputStdout。
+	// StdoutOptions 只用于 Output=stdout。
 	StdoutOptions []stdoutwriter.Option
+	// BatchTimeout 是 Log BatchProcessor 的 SDK 批量导出间隔；零值使用 1s。
+	BatchTimeout time.Duration
+	// QueueSize 是 OTLP Log BatchProcessor 的有界队列容量；零值使用 2048。
+	// 队列满时的丢弃由 OTel SDK 诊断机制报告，不由 Logger.Emit 返回给调用方。
+	QueueSize int
+}
+
+// Config 定义当前进程 Telemetry Runtime 的装配参数。
+//
+// Config 只在构造 Runtime 时读取；构造完成后修改 Config 不会动态更新 Provider。
+// Enabled=true 时 Resource.ServiceName 和 Log.Output 必填。时间字段表示 SDK 侧的
+// 批量导出周期，不是 sampling，也不是 Collector 的 batch processor 配置。
+type Config struct {
+	// Enabled 控制是否装配 Telemetry Provider；false 返回不含 Provider 的空 Runtime。
+	Enabled bool
+	// Endpoint 配置 OTLP/gRPC Collector 地址；为空时使用 127.0.0.1:4317。
+	// 它不用于推断任何信号的 Output；只在确有信号选择 OTLP 时被解析。
+	Endpoint string
+	// Resource 是服务身份与 Resource 覆盖。
+	Resource ResourceConfig
+	// Trace 是 Trace 信号配置。
+	Trace TraceConfig
+	// Metric 是 Metric 信号配置。
+	Metric MetricConfig
+	// Log 是 Log 信号配置。
+	Log LogConfig
 }
 
 // Runtime 持有 Telemetry Provider 及其共享的 Resource。
@@ -120,11 +139,11 @@ type Runtime struct {
 	tracerProvider *sdktrace.TracerProvider
 	meterProvider  *sdkmetric.MeterProvider
 	loggerProvider *sdklog.LoggerProvider
-	logOutput      LogOutput
+	logConfig      LogConfig
 	fileMetadata   file.ResourceMetadata
 	counters       *runtimeCounters
-	traceFile      *os.File // TraceOutput=file 时持有，Shutdown 关闭
-	metricFile     *os.File // MetricOutput=file 时持有，Shutdown 关闭
+	traceFile      *os.File // Trace.Output=file 时持有，Shutdown 关闭
+	metricFile     *os.File // Metric.Output=file 时持有，Shutdown 关闭
 
 	restoreMu sync.Mutex // 保护 restores，协调 InstallGlobal 与 Shutdown。
 	restores  []func()   // 按安装顺序登记，Shutdown 时按 LIFO 恢复 global state。
@@ -153,10 +172,6 @@ func (r *Runtime) Stats() RuntimeStats {
 	}
 	return RuntimeStats{LogExportErrors: r.counters.logExportErrors.Load()}
 }
-
-// Providers 是为源代码兼容保留的 Runtime 类型别名。
-// Deprecated: 使用 Runtime。
-type Providers = Runtime
 
 // Tracer 返回当前 Runtime 的 Tracer；Runtime 为 nil 或未配置时回退到进程级
 // global TracerProvider。返回的 Tracer 遵循 OTel API 的并发契约。

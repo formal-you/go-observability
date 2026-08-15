@@ -25,12 +25,12 @@ import (
 func main() {
 	ctx := context.Background()
 	p, err := telemetry.NewRuntime(ctx, telemetry.Config{
-		Enabled:        telemetry.EnabledFromEnvironment(),
-		ServiceName:    "metrics-demo",
-		ServiceVersion: "0.1.0",
-		Environment:    "dev",
-		Endpoint:       telemetry.EndpointFromEnvironment(),
-		LogOutput:      telemetry.LogOutputNone,
+		Enabled:  telemetry.EnabledFromEnvironment(),
+		Endpoint: telemetry.EndpointFromEnvironment(),
+		Resource: telemetry.ResourceConfig{ServiceName: "metrics-demo", ServiceVersion: "0.1.0", Environment: "dev"},
+		Trace:    telemetry.TraceConfig{Output: telemetry.SignalOutputNone},
+		Metric:   telemetry.MetricConfig{Output: telemetry.SignalOutputOTLP},
+		Log:      telemetry.LogConfig{Output: telemetry.SignalOutputNone},
 	})
 	if err != nil {
 		slog.Error("telemetry setup", "err", err)

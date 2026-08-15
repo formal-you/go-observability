@@ -2,6 +2,7 @@ package telemetry_test
 
 import (
 	"context"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -16,14 +17,17 @@ func TestNewRuntimeOutputContractBlackBox(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	r, err := telemetry.NewRuntime(ctx, telemetry.Config{
-		Enabled: true, ServiceName: "runtime-contract", LogOutput: telemetry.LogOutputOTLP,
-		TraceBatchTimeout: time.Hour, MetricExportInterval: time.Hour,
+		Enabled:  true,
+		Resource: telemetry.ResourceConfig{ServiceName: "runtime-contract"},
+		Trace:    telemetry.TraceConfig{Output: telemetry.SignalOutputNone},
+		Metric:   telemetry.MetricConfig{Output: telemetry.SignalOutputNone},
+		Log:      telemetry.LogConfig{Output: telemetry.SignalOutputOTLP},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer r.Shutdown(ctx)
-	w, err := r.NewWriter(ctx, telemetry.WriterConfig{})
+	w, err := r.NewWriter(ctx)
 	if err != nil {
 		t.Fatalf("OTLP runtime must create its configured Writer: %v", err)
 	}
@@ -40,8 +44,11 @@ func TestRuntimeInstallGlobalRestoresBlackBox(t *testing.T) {
 	oldPropagator := otel.GetTextMapPropagator()
 
 	r, err := telemetry.NewRuntime(ctx, telemetry.Config{
-		Enabled: true, ServiceName: "runtime-contract", LogOutput: telemetry.LogOutputNone,
-		TraceBatchTimeout: time.Hour, MetricExportInterval: time.Hour,
+		Enabled:  true,
+		Resource: telemetry.ResourceConfig{ServiceName: "runtime-contract"},
+		Trace:    telemetry.TraceConfig{Output: telemetry.SignalOutputOTLP, BatchTimeout: time.Hour},
+		Metric:   telemetry.MetricConfig{Output: telemetry.SignalOutputOTLP, ExportInterval: time.Hour},
+		Log:      telemetry.LogConfig{Output: telemetry.SignalOutputNone},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +68,11 @@ func TestRuntimeInstallGlobalRestoresBlackBox(t *testing.T) {
 }
 
 func TestNewFileRuntimeCreatesUnsampledTraceIDsBlackBox(t *testing.T) {
-	r, err := telemetry.NewFileRuntime(telemetry.Config{ServiceName: "file-only"})
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	r, err := telemetry.NewFileRuntime(telemetry.Config{
+		Resource: telemetry.ResourceConfig{ServiceName: "file-only"},
+		Log:      telemetry.LogConfig{Output: telemetry.SignalOutputFile, FilePath: path},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,4 +88,20 @@ func TestNewFileRuntimeCreatesUnsampledTraceIDsBlackBox(t *testing.T) {
 	if !second.SpanContext().TraceID().IsValid() || first.SpanContext().TraceID() == second.SpanContext().TraceID() {
 		t.Fatal("independent file-only root spans must have distinct trace IDs")
 	}
+}
+
+func TestNewRuntimeSkipsEndpointValidationBlackBox(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	r, err := telemetry.NewRuntime(context.Background(), telemetry.Config{
+		Enabled:  true,
+		Resource: telemetry.ResourceConfig{ServiceName: "local"},
+		Endpoint: "collector",
+		Trace:    telemetry.TraceConfig{Output: telemetry.SignalOutputLocal},
+		Metric:   telemetry.MetricConfig{Output: telemetry.SignalOutputNone},
+		Log:      telemetry.LogConfig{Output: telemetry.SignalOutputFile, FilePath: path},
+	})
+	if err != nil {
+		t.Fatalf("non-OTLP runtime must not parse endpoint: %v", err)
+	}
+	defer r.Shutdown(context.Background())
 }
