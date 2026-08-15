@@ -2,6 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-08-11
+- 注：`event_type` 与 `event.name` 的最终分工见 ADR-0009、ADR-0018；本文档历史讨论中“event_type 是 event.name 的第一段”不再成立。
 
 ## 背景（Context）
 

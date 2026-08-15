@@ -7,8 +7,8 @@
 
 一句话定位：**go-observability 是 `slog` 与 OpenTelemetry 之间的语义层**——事件类型稳定、字段来源明确、错误可投影、日志可治理，三信号统一装配。它不替代 `slog` 或 OTel，而是把团队最容易失控的约定固化成可测试的 Go API。
 
-- **方案2「源即规范」**：属性键直接使用 OTel semconv 1.41.0 名 + `app.*` vendor 命名空间，字段名可追踪、不发明私有键。
-- **核心零依赖**：`log/` 包只依赖标准库（`log/slog`、`net`、`time`、`fmt`、`strings`）；OTel SDK 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`、`example/*`。
+- **源即规范**：属性键直接使用 OTel semconv 1.41.0 名 + `app.*` vendor 命名空间，字段名可追踪、不发明私有键。
+- **核心零依赖**：`log/` 包只依赖标准库与本仓库 `errs`（`errs` 只依赖标准库；`log/slog`、`net`、`time`、`fmt`、`strings` 为 log 包主要标准库依赖）；OTel SDK 依赖只允许出现在 `internal/attrkv`、`writer/*`、`telemetry`、`middleware/*`、`example/*`。
 - **批量导出分两层**：SDK 侧由 `telemetry.Config` 的批量导出间隔控制（trace 5s / metric 15s / log 1s），Collector 侧由 batch processor（timeout / send_batch_size）二次凑批；核心层每次 `Emit` 同步写出，不做批处理/定时器。
 - **出口可替换**：同一事件模型可投影到 JSONL / stdout / OTLP，业务埋点不因出口变化而重写。
 - **决策记录（ADR）**：错误模型（ErrorType / ErrorCode）等关键决策记录在 [docs/adr/](adr/README.md)，Review 时对照 ADR 判断实现是否漂移。
@@ -26,7 +26,7 @@
 | 三信号装配 | `telemetry` | 创建并关闭 Trace / Metric / Log Provider，选择日志出口 |
 | HTTP/gRPC 集成 | `middleware/httperr`（契约核心）、`middleware/otelutil`（OTel 工具）、`middleware/gin`、`middleware/http`、`middleware/grpc`、`middleware/kratos` | 按框架体系分组：gin（Gin）、http（net/http）、grpc（gRPC）各含错误收口/access/链路/指标；kratos v3 见 `middleware/kratos`（HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter） |
 
-依赖方向：`errs` 与 `log/` 互不依赖对方实现（log 包经 `EventFromError` 消费 `errs.AppError` 接口，`errs` 不依赖 log 包）；`middleware` 依赖 log 包与 `errs`（ginlog 只依赖 log 包，errresp/recover 还依赖 `errs`）；`writer/*`、`telemetry` 依赖 log 包与 `internal/*`。
+依赖方向：`log/` 依赖 `errs` 的 `AppError` 接口（`EventFromError` 沿错误链消费），`errs` 只依赖标准库、不依赖 `log/`；`middleware` 依赖 `log/` 与 `errs`；`writer/*`、`telemetry` 依赖 `log/` 与 `internal/*`。
 
 ## 3. 文件树（代码导航图）
 
@@ -38,7 +38,7 @@ go-observability/
 │   ├── pull_request_template.md
 │   └── workflows/ci.yml         # 双平台门禁：Ubuntu(verify/gofmt/vet/test/race/vuln) + Windows(vet/test)
 │
-├── log/                        # 核心日志包（零 OTel 依赖，只依赖标准库）
+├── log/                        # 核心日志包（零 OTel/外部依赖；除标准库外只依赖本仓库 errs）
 │   ├── doc.go                   # 包注释：核心包零外部依赖承诺
 │   ├── types.go                 # 类型化枚举：EventType / EventName(三段式+Validate) / Level / Result / EventPayload
 │   ├── keys.go                  # 属性键常量：semconv 1.41.0 + app.* vendor 命名空间
@@ -58,9 +58,12 @@ go-observability/
 │   └── blackbox_log_test.go     # 外部包黑盒测试（验证对外契约）
 │
 ├── errs/
-│   ├── errs.go                  # ErrorKind / ErrorType / ErrorCode / AppError / BizError / SystemError / StackRule
-│   └── errs_test.go
-│
+│   ├── errs.go                  # ErrorKind / ErrorType / ErrorCode / AppError / BizError / SystemError / StackRule / Error Registry
+│   ├── errs_test.go
+│   ├── error_registry_blackbox_test.go
+│   ├── stack_contract_blackbox_test.go
+│   └── strict_contract_test.go
+
 ├── internal/                    # 内部共享（不公开 API）
 │   ├── attrkv/
 │   │   ├── attrkv.go            # slog.Attr ↔ OTel KeyValue；Record() 组装 LogRecord 顶层字段
@@ -86,11 +89,9 @@ go-observability/
 ├── telemetry/
 │   ├── telemetry.go             # 公开类型、Runtime 状态与轻量访问器
 │   ├── runtime_config.go        # 默认值、配置校验、Resource 与环境变量
-│   ├── runtime_providers.go     # Trace / Metric / Log Provider 构造
-│   ├── runtime_global.go        # 全局 Provider 安装、恢复与 Shutdown
-│   ├── runtime_writer.go        # file / OTLP / stdout / none 出口选择
+│   ├── runtime_providers.go     # Trace / Metric / Log Provider 构造（含 NewFileRuntime / NewLogRuntime / NewOTLPRuntime / NewAllFileRuntime）
+│   ├── runtime_global.go        # InstallGlobal / restore / Shutdown
 │   └── runtime_writer.go        # Runtime.NewWriter：file / stdout / otlp / none
-│
 ├── observability/               # 本地 LGTM 参考栈（docker compose，非生产方案）
 │   ├── docker-compose.yml       # Collector + Tempo + Loki + Mimir + Grafana
 │   ├── otel-collector-config.yaml / loki.yaml / mimir.yaml / tempo.yaml
@@ -196,12 +197,13 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 4. **公共字段登记**：核心公共字段必须在 `keys.go` 登记；vendor 一律 `app.*`；领域专属键（`order_id` 等）由接入方自建，不进核心 `keys.go`。
 5. **零值省略**：字符串/数值零值省略；布尔不省略（`false` 对 `retryable` / `result` 语义明确）。
 6. **samber 边界**：samber 生态只允许出现在 `example/` 与 `docs/samber-comparison.md`，核心包保持零外部依赖。
-7. **采样边界**：默认 `TraceSampleRatio=0.1` 是 SDK 头部采样——未选中的 trace 不会被导出，Collector 看不到，也无法通过 `tail_sampling` 恢复。需要 Collector 按错误/延迟决定保留时，SDK 应导出完整 trace（通常 `1.0`），再在 Collector 执行尾部采样，并评估吞吐、费用与敏感数据风险。 采样保留属独立 Sampling/Retention Policy 层（高价值事件 SHOULD be retained，操作上需要时保证保留），不编码进事件/错误语义。
+7. **采样边界**：默认 `Trace.SampleRatio=0.1` 是 SDK 头部采样——未选中的 trace 不会被导出，Collector 看不到，也无法通过 `tail_sampling` 恢复。需要 Collector 按错误/延迟决定保留时，SDK 应导出完整 trace（通常 `1.0`），再在 Collector 执行尾部采样，并评估吞吐、费用与敏感数据风险。 采样保留属独立 Sampling/Retention Policy 层（高价值事件 SHOULD be retained，操作上需要时保证保留），不编码进事件/错误语义。
 
 ## 7. 三信号装配（`telemetry`）
 
 - `NewRuntime`：按 `Resource / Trace / Metric / Log` 四组 Config 创建独立 Provider，不安装全局状态；`InstallGlobal` 显式安装并返回幂等恢复函数。
 - `NewFileRuntime`：file-only 便捷预设（Trace=local、Metric=none、Log=file），不创建 exporter，仅提供 `ParentBased(NeverSample())` 的本地 TraceProvider；生成有效 trace/span 供 JSONL 关联，但不保存完整 Trace 树。
+- 预设构造器 `NewLogRuntime` / `NewOTLPRuntime` / `NewAllFileRuntime`：对只开日志、全 OTLP、全文件三种常见档位做薄封装；需要自定义采样、批量、队列或轮转时仍使用 `NewRuntime` 加 `Config`。
 - `Runtime.NewWriter(ctx)`：根据已固化的 `LogConfig.Output` 选择 file、OTLP、stdout 或 no-op，返回具备幂等 `Close` 的 `log.ManagedWriter`；file/stdout 注入同一份 Resource，OTLP 复用 Runtime LoggerProvider。
 - `Runtime.Shutdown`：进程退出前调用；顺序刻意先 log 再 metric 后 trace，保证日志携带的 span 上下文关联完整。
 - `EnabledFromEnvironment` / `EndpointFromEnvironment`：应用侧显式环境变量映射 helper，不隐式推断任何信号出口。
