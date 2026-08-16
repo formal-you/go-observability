@@ -110,8 +110,9 @@ go-observability/
 │
 ├── docs/                        # 用户文档（文档索引见 docs/README.md）
 │   ├── architecture.md          # 本文档
-│   ├── configuration.md / environment.md / onboarding.md / gitops-sop.md / dev-sop.md
-│   ├── security.md / samber-comparison.md / release-checklist.md
+│   ├── configuration.md / environment.md / onboarding.md / dev-sop.md
+│   ├── security.md / samber-comparison.md
+│   ├── gitops/                  # GitOps 治理组（分支/Issue/PR/发布，索引见 gitops/README.md）
 │   └── go-observability-architecture.drawio   # 可编辑架构图
 │
 ├── AGENTS.md                    # 仓库开发守则（真源之一；防漂移硬规则）

@@ -1,16 +1,16 @@
 # GitOps SOP（开发工作流）
 
-> 分工：开发任务从需求收敛到提交的执行剧本见 [开发任务 SOP](dev-sop.md)；本文件是 GitOps 治理、提交与合并流程的真源。
+> 分工：开发任务从需求收敛到提交的执行剧本见 [开发任务 SOP](../dev-sop.md)；本文件是 GitOps 治理、提交与合并流程的真源。
 
 ## 变更步骤
 
 1. 用 Issue 或变更说明写清用户问题、兼容性影响和验收条件。
 2. 重大变更（公共 API、事件/错误/采样/安全/审计模型、包结构、Writer/OTel 映射或治理策略）
-   先按 [ADR 约定](adr/README.md) 在对应分类目录（errors / events / middleware /
+   先按 [ADR 约定](../adr/README.md) 在对应分类目录（errors / events / middleware /
    security-audit / telemetry 等）新增或更新 ADR 决策文档并同步 `docs/adr/README.md` 索引：
    状态 Proposed → 实现后 Accepted，ADR 与实现、黑盒测试、文档进入同一提交，
    不把决策理由只留在聊天或 PR 里。
-3. 按 [正式测试契约](testing.md) 先补独立黑盒测试，再做最小实现与白盒边界测试。
+3. 按 [正式测试契约](../testing.md) 先补独立黑盒测试，再做最小实现与白盒边界测试。
 4. 更新受影响的 README、配置样例、CHANGELOG 与 ADR 索引。
 5. 运行格式化、静态检查、测试和差异检查。
 6. 按可独立说明的批次提交 Git commit；多批次工作应保留多次提交记录。
@@ -29,7 +29,7 @@ git diff --check
 
 ## Issue / PR 开放流程
 
-本节是 Codex 处理 GitHub 任务的执行真源。技术需求与进度使用 GitHub Issue；需要随代码版本管理的复杂需求与验收契约写入 [`issues/`](issues/README.md)，但远程 Issue 仍是任务状态和讨论真源。跨工具流程待办才写入 [`todo.md`](todo.md)，复杂实施规格可暂存于 [`pr/`](pr/README.md)。执行远程 Issue/PR、CI、squash merge、已合并分支重放或主分支同步时，读取 [GitHub 远程协作实操](github-remote-workflow.md)。
+本节是 Codex 处理 GitHub 任务的执行真源。技术需求与进度使用 GitHub Issue；需要随代码版本管理的复杂需求与验收契约写入 [`issues/`](issues/README.md)，但远程 Issue 仍是任务状态和讨论真源。跨工具流程待办才写入 [`todo.md`](../todo.md)，复杂实施规格可暂存于 [`pr/`](pr/README.md)。执行远程 Issue/PR、CI、squash merge、已合并分支重放或主分支同步时，读取 [GitHub 远程协作实操](github-remote-workflow.md)。
 
 ### 1. 建立 Issue
 
@@ -37,7 +37,7 @@ git diff --check
 2. 功能、缺陷、公共行为、兼容性或跨多个文件的工作必须有 Issue；单纯拼写修正可以直接在 PR 说明中记录。
 3. Issue 至少写明问题、范围与非范围、可观察验收条件、兼容性/安全影响和验证方式。不能用预设实现细节替代用户问题。
 4. 只有全部验收已实现并有证据时才关闭 Issue。多个 PR 共同完成一个 Issue 时，中间 PR 使用 `Refs #N`，最终 PR 才使用 `Closes #N`。
-5. 本地 issue 记录在 `docs/issues/NNNN-<slug>.md`（模板见 [issues/README.md](issues/README.md)），内容稳定后同步为远程 Issue 并回填编号；复杂需求在本地文件保存详细契约，简单任务可只建远程 Issue，避免为每个任务复制一份本地文档。
+5. 本地 issue 记录在 `docs/gitops/issues/NNNN-<slug>.md`（模板见 [issues/README.md](issues/README.md)），内容稳定后同步为远程 Issue 并回填编号；复杂需求在本地文件保存详细契约，简单任务可只建远程 Issue，避免为每个任务复制一份本地文档。
 6. 创建或更新 Issue 时设置一个 `type:*` 分类标签；本个人账号仓库用 Labels 模拟 Organization Issue Types，具体分类表和回退步骤见 [GitHub 远程协作实操](github-remote-workflow.md#issue-分类)。
 
 ### 2. 实施与创建 PR
@@ -53,7 +53,7 @@ git diff --check
 1. 合并前确认 PR 为 Ready、目标分支正确、required checks 全绿且没有未解决的 requested changes。本仓库默认使用 squash merge 保持线性历史。
 2. 合并后核对 PR 状态为 Merged、最终提交位于默认分支；包含 `Closes #N` 的 Issue 应自动变为 Closed。未自动关闭时，先核对验收证据，再补充完成评论并关闭。
 3. Issue 尚有未完成验收时保持 Open，创建后续 Issue 或保留清单；不能因为某个 PR 已合并就把部分完成写成全部完成。
-4. 重大决策已在「变更步骤」按 ADR 约定落档，本步只负责把实施文档从 `docs/pr/` 移入 [`docs/history/`](history/README.md)，记录 PR、Issue、Merged / Abandoned / Superseded 状态和日期。
+4. 重大决策已在「变更步骤」按 ADR 约定落档，本步只负责把实施文档从 `docs/gitops/pr/` 移入 [`docs/history/`](history/README.md)，记录 PR、Issue、Merged / Abandoned / Superseded 状态和日期。
 5. PR 关闭但未合并时，在 Issue 说明原因；有替代 PR 时标记 Superseded，没有替代实现时保持 Issue Open。远程/本地分支仅在用户明确要求清理后删除。
 
 ### 4. Codex 授权语义
@@ -65,7 +65,7 @@ git diff --check
 | “合并 PR”“完成并合并” | required checks 通过后 squash merge，并核对 Issue 关闭与归档状态 |
 | “关闭 Issue/PR” | 仅关闭明确完成、重复、无效或已被取代的目标，并记录原因 |
 
-完成标准：Issue 验收有可复现证据；本地门禁和 required checks 均有明确结果；请求创建的 PR 已存在并正确关联 Issue；请求合并时 PR 已进入默认分支且 Issue 状态正确；`docs/pr/` 不遗留已完成实施文档。
+完成标准：Issue 验收有可复现证据；本地门禁和 required checks 均有明确结果；请求创建的 PR 已存在并正确关联 Issue；请求合并时 PR 已进入默认分支且 Issue 状态正确；`docs/gitops/pr/` 不遗留已完成实施文档。
 
 ## SOP 自动化脚本（参考）
 

@@ -9,18 +9,12 @@
 | [architecture.md](architecture.md) | 理解包边界和事件数据流 |
 | [coding-standards.md](coding-standards.md) | 编写或 Review Go 实现、公共 API、并发代码和库级注释 |
 | [adr/](adr/README.md) | 追溯关键架构决策（ADR）：错误模型等「为什么这么做」的记录 |
-| [issues/](issues/README.md) | 本地 issue 记录（`NNNN-<slug>.md`，Markdown 模拟 GitHub Issue，稳定后同步远程）；任务状态仍以 GitHub Issue 为准 |
-| [pr/](pr/README.md) | 查看进行中的 PR 实施规格（`NNNN-<slug>.md`，与 issue 一一对应）及其归档规则 |
-| [history/](history/README.md) | 追溯已完成、放弃或被取代的实施文档；不作为当前真源 |
 | [otel-logs-data-model.md](otel-logs-data-model.md) | OTel Logs LogRecord 各顶层字段与 go-observability 的映射 |
 | [testing.md](testing.md) | 需求、缺陷或公共行为变更时，如何用独立黑盒测试固化正式验收 |
 | [security.md](security.md) | 设计脱敏、采样和日志治理策略 |
-| [gitops-sop.md](gitops-sop.md) | 实际代码/文档变更必须遵循的 GitOps 治理与提交流程 |
+| [gitops/](gitops/README.md) | GitOps 治理组：GitOps SOP、分支命名、Issue/PR 记录与归档、远程实操、发布清单 |
 | [dev-sop.md](dev-sop.md) | 开发任务 SOP（demo 草案）：需求收敛、多 Agent 编排、契约先行到提交的完整剧本 |
-| [branching.md](branching.md) | 创建或重命名分支时遵循的类型、Issue 编号与 slug 规范 |
-| [github-remote-workflow.md](github-remote-workflow.md) | Codex 创建 Issue/PR、处理 CI、squash merge 与同步主分支时选择性阅读 |
 | [samber-comparison.md](samber-comparison.md) | 评估与 samber slog 生态的取舍 |
-| [release-checklist.md](release-checklist.md) | 首次公开发布和后续发版 |
 | [todo.md](todo.md) | 非代码待办与飞书项目管理迁移准备 |
 | [reports/](reports/README.md) | 查看 Issue 验收、性能和 mutation 基线证据 |
 | [go-observability-architecture.drawio](go-observability-architecture.drawio) | 可编辑架构图 |

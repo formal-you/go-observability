@@ -484,7 +484,7 @@ go test ./...
 - 📦 在全新模块中验证带版本号的 `go get`；
 - 🔎 检查 pkg.go.dev 索引和外部文档链接。
 
-进度见 [发布检查清单](docs/release-checklist.md) 和 [CHANGELOG](CHANGELOG.md)。
+进度见 [发布检查清单](docs/gitops/release-checklist.md) 和 [CHANGELOG](CHANGELOG.md)。
 
 ---
 
