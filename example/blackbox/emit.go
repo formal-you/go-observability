@@ -17,6 +17,7 @@ import (
 	log "github.com/formal-you/go-observability/log"
 	ginmw "github.com/formal-you/go-observability/middleware/gin"
 	"github.com/formal-you/go-observability/middleware/httperr"
+	"github.com/formal-you/go-observability/middleware/otelutil"
 )
 
 const (
@@ -262,32 +263,37 @@ func blackboxInputGuard(ctx context.Context, req *http.Request, _ error, _ httpe
 }
 
 func emitBackgroundErrors(ctx context.Context, logger *log.Logger, tracer trace.Tracer, report *scenarioReport) {
-	mqCtx, mqSpan := tracer.Start(ctx, "background mq publish")
-	report.record("background-mq", mqSpan.SpanContext())
-	logger.Emit(mqCtx, log.EventFromError(
-		log.NewEventName("messaging", "publish", "deadline_exceeded"),
-		mqPublishTimeoutErr,
-		log.EventMetadata{},
-	))
-	mqSpan.End()
+	// 后台子 span 使用 otelutil.WithSpan 手动分层（ADR-0023 示例）：fn 内以 ctx
+	// 取当前 span context 记入 report；日志事件经 ctx 自动关联同一 trace/span。
+	_, _ = otelutil.WithSpan(ctx, "background mq publish", func(ctx context.Context) error {
+		report.record("background-mq", trace.SpanFromContext(ctx).SpanContext())
+		logger.Emit(ctx, log.EventFromError(
+			log.NewEventName("messaging", "publish", "deadline_exceeded"),
+			mqPublishTimeoutErr,
+			log.EventMetadata{},
+		))
+		return nil
+	}, otelutil.WithTracer(tracer))
 
-	cacheCtx, cacheSpan := tracer.Start(ctx, "background cache unavailable")
-	report.record("background-cache", cacheSpan.SpanContext())
-	logger.Emit(cacheCtx, log.EventFromError(
-		log.NewEventName("cache", "read", "unavailable"),
-		redisUnavailableErr,
-		log.EventMetadata{},
-	))
-	cacheSpan.End()
+	_, _ = otelutil.WithSpan(ctx, "background cache unavailable", func(ctx context.Context) error {
+		report.record("background-cache", trace.SpanFromContext(ctx).SpanContext())
+		logger.Emit(ctx, log.EventFromError(
+			log.NewEventName("cache", "read", "unavailable"),
+			redisUnavailableErr,
+			log.EventMetadata{},
+		))
+		return nil
+	}, otelutil.WithTracer(tracer))
 
-	lockCtx, lockSpan := tracer.Start(ctx, "background lock conflict")
-	report.record("background-lock", lockSpan.SpanContext())
-	logger.Emit(lockCtx, log.EventFromError(
-		log.NewEventName("lock", "acquire", "conflict"),
-		lockConflictErr,
-		log.EventMetadata{},
-	))
-	lockSpan.End()
+	_, _ = otelutil.WithSpan(ctx, "background lock conflict", func(ctx context.Context) error {
+		report.record("background-lock", trace.SpanFromContext(ctx).SpanContext())
+		logger.Emit(ctx, log.EventFromError(
+			log.NewEventName("lock", "acquire", "conflict"),
+			lockConflictErr,
+			log.EventMetadata{},
+		))
+		return nil
+	}, otelutil.WithTracer(tracer))
 }
 
 // mustBusinessError 是启动期构造业务错误的 Must 变体：构建失败直接 panic（fail-fast）。

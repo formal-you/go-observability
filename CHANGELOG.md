@@ -25,6 +25,7 @@
 - 新增 ADR-0018（Event Name Convention）与 ADR-0017（保留 app.result / Sampling/Retention 独立层），并把三层事件模型（Event/Error/Sampling）同步到 README、architecture、otel-logs 等文档。
 
 ### Added
+- 新增 `middleware/otelutil` 手动分层 span helper（ADR-0023）：`WithSpan` 同步包装（自动 Start/End、err→SetStatus+RecordError、panic 标记后重抛、返回新 ctx 强制下传）与 `StartSpan` 薄封装（生命周期交还调用方）；支持 `WithTracer` 注入（nil→全局 `otel.Tracer("go-observability")`）与 `WithStartOption` 转发；进程内 handler→service→store→db 分层调用链由接入方在各层调用创建。
 - `example/` 新增教学示例：六类事件、错误建模与投影、Sampler/Masker 治理、MultiWriter、四种 Runtime 预设、gRPC/kratos 适配、Security/Audit 中间件与 OTel Logs 双投影；`example/mall/cmd` 提供可运行的端到端小商城，`example/04_sampler_masker` 增加行为验证测试。
 - docs/blog/ 新增面向掘金的体系化文章源稿：从语义层、六类事件、错误建模、治理、三信号装配、框架中间件、Security/Audit、OTLP 双投影到 mall 端到端诊断故事，共 9 篇。
 

@@ -1,6 +1,6 @@
 # ADR-0023：手动分层 span 通用 helper（otelutil.WithSpan / StartSpan）
 
-- 状态：Proposed
+- 状态：Accepted
 - 日期：2026-08-16
 - 关联：ADR-0006（中间件分组，otelutil 定位）、CONTEXT.md（Span / 生命周期术语）、docs/architecture.md（采样边界）
 
@@ -32,11 +32,12 @@ Trace 中间件（gin/http/grpc）只为每个请求创建一个 server 根 span
 // （与 mwutil.FinishSpan 语义一致）；返回带新 span 的 ctx 供继续下传。
 func WithSpan(ctx context.Context, name string,
 	fn func(ctx context.Context) error,
-	opts ...trace.SpanStartOption) (context.Context, error)
+	opts ...SpanOption) (context.Context, error)
 ```
 
-- tracer 来源：默认全局 `otel.Tracer("go-observability")`，可用 `WithTracer(t)` 注入
-  （对齐 TraceConfig 的 nil→全局 约定）；
+- `SpanOption` 由本包构造函数提供：`WithTracer(t)` 注入 Tracer（nil→全局
+  `otel.Tracer("go-observability")`，对齐 TraceConfig 约定），`WithStartOption(opt)`
+  转发 `trace.SpanStartOption`（如 `trace.WithAttributes`、`trace.WithSpanKind`）；
 - span name 由调用方给定，是生命周期建模，不是 EventName（不注册，不受 ADR-0018 约束）；
 - 错误边界：`WithSpan` 只做 span 信号（SetStatus + RecordError），不代写错误日志事件；
   错误事件仍由 ErrorResponse / Recover 中间件统一收口（ADR-0005 / ADR-0021），
@@ -48,7 +49,7 @@ func WithSpan(ctx context.Context, name string,
 // StartSpan 统一 tracer 来源，返回新 ctx + span；生命周期交还调用方，
 // 供需要中途写属性/分段结束的场景使用。
 func StartSpan(ctx context.Context, name string,
-	opts ...trace.SpanStartOption) (context.Context, trace.Span)
+	opts ...SpanOption) (context.Context, trace.Span)
 ```
 
 ## 被否方案
@@ -62,7 +63,7 @@ func StartSpan(ctx context.Context, name string,
 ## 结果（Consequences）
 
 - 正面：接入方一行包一层函数即可获得正确嵌套 span；ctx 传播被强制（返回新 ctx）；
-  tracer 来源统一；`example/blackbox` 的后台子 span 改用 helper 作为可验证示例。
+  tracer 来源统一；`example/blackbox` 的后台子 span 已改用 helper 作为可验证示例。
 - 代价：新增公开 API（v0.x 破坏性变更需在 CHANGELOG 标明并给迁移说明）；
   需要黑盒测试锁定父子关系与错误/panic 收尾；文档（architecture.md / CONTEXT.md /
   README / CHANGELOG）与实现同提交（AGENTS.md 单一真源）。

@@ -24,7 +24,7 @@
 | OTel 映射 | `internal/attrkv` | `slog.Attr` ↔ OTel 值转换 + LogRecord 顶层字段映射（唯一核心映射层） |
 | endpoint 校验 | `internal/otlpendpoint` | OTLP gRPC endpoint 统一校验与规范化（host:port / http(s) URL） |
 | 三信号装配 | `telemetry` | 创建并关闭 Trace / Metric / Log Provider，选择日志出口 |
-| HTTP/gRPC 集成 | `middleware/httperr`（契约核心）、`middleware/otelutil`（OTel 工具）、`middleware/gin`、`middleware/http`、`middleware/grpc`、`middleware/kratos` | 按框架体系分组：gin（Gin）、http（net/http）、grpc（gRPC）各含错误收口/access/链路/指标；kratos v3 见 `middleware/kratos`（HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter） |
+| HTTP/gRPC 集成 | `middleware/httperr`（契约核心）、`middleware/otelutil`（OTel 工具：链路注入/提取、TraceExtractor、分层 span helper）、`middleware/gin`、`middleware/http`、`middleware/grpc`、`middleware/kratos` | 按框架体系分组：gin（Gin）、http（net/http）、grpc（gRPC）各含错误收口/access/链路/指标；kratos v3 见 `middleware/kratos`（HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter） |
 
 依赖方向：`log/` 依赖 `errs` 的 `AppError` 接口（`EventFromError` 沿错误链消费），`errs` 只依赖标准库、不依赖 `log/`；`middleware` 依赖 `log/` 与 `errs`；`logwriter/*`、`telemetry` 依赖 `log/` 与 `internal/*`。
 
@@ -79,7 +79,7 @@ go-observability/
 │
 ├── middleware/               # 按框架体系分组（gin / http / grpc / kratos），共享契约与工具独立成包
 │   ├── httperr/httperr.go       # 框架无关错误契约核心：Kind→状态码、安全 reason/message/metadata、扁平响应体、span 元数据
-│   ├── otelutil/otelutil.go     # 框架无关 OTel 工具：链路注入/提取、TraceExtractor
+│   ├── otelutil/otelutil.go     # 框架无关 OTel 工具：链路注入/提取、TraceExtractor、分层 span helper（WithSpan / StartSpan）
 │   ├── gin/                     # Gin 体系：AccessLog / ErrorResponse / Recover / SecurityLog / AuditLog / Trace / Metrics / Abort
 │   ├── http/                    # net/http 体系：ErrorResponse / Recover / SetError / SetSecurity / SetAudit / SecurityLog / AuditLog / Trace / Metrics
 │   ├── grpc/                    # gRPC 体系：Trace / Metrics unary 拦截器
