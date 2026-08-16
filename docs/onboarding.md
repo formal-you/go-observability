@@ -34,7 +34,7 @@ tail -n 1 ./logs/events.jsonl
 | --- | --- |
 | 新增领域业务事件 | 使用方自己的包；仓库示例为 `example/mall` |
 | 调整公共字段 | `keys.go`、归一化代码、测试与文档 |
-| 新增写出后端 | `writer/` 下新包，实现 `log.Writer` |
+| 新增写出后端 | `logwriter/` 下新包，实现 `log.Writer` |
 | 调整三信号装配 | 公开包 `telemetry` |
 | 接入 Gin / net/http 中间件 | `middleware/gin`（ginmw）与 `middleware/http`（httpmw）：access / error / recover / security / audit / trace / metrics |
 

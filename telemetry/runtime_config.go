@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 
 	"github.com/formal-you/go-observability/internal/otlpendpoint"
-	"github.com/formal-you/go-observability/writer/file"
+	"github.com/formal-you/go-observability/logwriter/file"
 )
 
 // 默认值属于 SDK 装配策略，不等同于 Collector 的 batch 或日志事件 sampling。

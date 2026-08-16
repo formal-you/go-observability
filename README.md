@@ -376,7 +376,7 @@ log.WithSampler(log.NewEventTypeKeepSampler(
 go-observability/
 ├── 🧩 log/ 子包                # Event、Payload、Logger、Sampler、Masker
 ├── 🧨 errs/                    # 错误分类、堆栈策略与错误投影
-├── 🚚 writer/
+├── 🚚 logwriter/
 │   ├── 📄 file/                # JSONL 文件 Writer
 │   ├── 🖥️ stdout/              # 标准输出 Writer
 │   └── 📡 otlp/                # OTLP gRPC Log Writer

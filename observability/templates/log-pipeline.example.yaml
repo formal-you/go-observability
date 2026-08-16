@@ -1,6 +1,6 @@
 # =============================================================================
 # Log 管线模板（使用者自有）— 字段注释版
-# 对齐：go-observability writer/otlp → Collector → Loki
+# 对齐：go-observability logwriter/otlp → Collector → Loki
 # 复制后改：endpoint、batch、脱敏规则
 # =============================================================================
 

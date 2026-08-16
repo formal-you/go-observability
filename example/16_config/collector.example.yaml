@@ -5,7 +5,7 @@
 # =============================================================================
 
 receivers:
-  # otlp: 应用 OTLP 入口（go-observability writer/otlp + telemetry exporters）
+  # otlp: 应用 OTLP 入口（go-observability logwriter/otlp + telemetry exporters）
   otlp:
     protocols:
       # grpc: 默认 4317；与 OTEL_EXPORTER_OTLP_ENDPOINT 对齐

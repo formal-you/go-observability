@@ -9,7 +9,7 @@ import (
 
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 
-	"github.com/formal-you/go-observability/writer/otlp"
+	"github.com/formal-you/go-observability/logwriter/otlp"
 )
 
 type recordingExporter struct {

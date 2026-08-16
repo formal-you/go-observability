@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	log "github.com/formal-you/go-observability/log"
-	"github.com/formal-you/go-observability/writer/file"
+	"github.com/formal-you/go-observability/logwriter/file"
 	"gopkg.in/yaml.v3"
 )
 

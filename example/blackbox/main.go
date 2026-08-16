@@ -13,9 +13,9 @@ import (
 	"time"
 
 	log "github.com/formal-you/go-observability/log"
+	"github.com/formal-you/go-observability/logwriter/file"
 	"github.com/formal-you/go-observability/middleware/otelutil"
 	"github.com/formal-you/go-observability/telemetry"
-	"github.com/formal-you/go-observability/writer/file"
 )
 
 const blackboxServiceName = "go-observability-blackbox"
