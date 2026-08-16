@@ -1,7 +1,7 @@
 # 示例课程索引
 
 所有命令默认从仓库根目录运行，相对输出路径也相对于仓库根目录。建议按课程顺序学习：
-`01_quickstart` → `02_events` → `03_errors` → `04_sampler_masker` → `05_multiwriter` → `06_errorhandler` → `07_telemetry` → `08_http` → `09_gin` → `10_grpc` → `11_kratos` → `12_security_audit` → `13_metrics` → `14_otel_logs`；`mall` 与 `blackbox` 是端到端/验收参考，不作为第一课。
+`01_quickstart` → `02_events` → `03_errors` → `04_sampler_masker` → `05_multiwriter` → `06_errorhandler` → `07_telemetry` → `08_http` → `09_gin` → `10_grpc` → `11_kratos` → `12_security_audit` → `13_metrics` → `14_otel_logs` → `17_layered_span`；`mall` 与 `blackbox` 是端到端/验收参考，不作为第一课。
 
 ## 课程地图
 
@@ -21,6 +21,7 @@
 | [`12_security_audit`](12_security_audit/) | `go run ./example/12_security_audit` | Security / Audit 中间件 |
 | [`13_metrics`](13_metrics/) | `go run ./example/13_metrics` | 使用方自定义指标 |
 | [`14_otel_logs`](14_otel_logs/) | `go run ./example/14_otel_logs` | file 与 OTLP 双投影 |
+| [`17_layered_span`](17_layered_span/) | `go run ./example/17_layered_span` | otelutil 手动分层 span（handler→service→store→db） |
 
 ## 参考样例
 
