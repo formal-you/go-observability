@@ -35,7 +35,7 @@ git diff --check
 2. 功能、缺陷、公共行为、兼容性或跨多个文件的工作必须有 Issue；单纯拼写修正可以直接在 PR 说明中记录。
 3. Issue 至少写明问题、范围与非范围、可观察验收条件、兼容性/安全影响和验证方式。不能用预设实现细节替代用户问题。
 4. 只有全部验收已实现并有证据时才关闭 Issue。多个 PR 共同完成一个 Issue 时，中间 PR 使用 `Refs #N`，最终 PR 才使用 `Closes #N`。
-5. 复杂需求在 `docs/issues/` 保存详细契约并回链远程 Issue；简单任务只建远程 Issue，避免为每个任务复制一份本地文档。
+5. 本地 issue 记录在 `docs/issues/NNNN-<slug>.md`（模板见 [issues/README.md](issues/README.md)），内容稳定后同步为远程 Issue 并回填编号；复杂需求在本地文件保存详细契约，简单任务可只建远程 Issue，避免为每个任务复制一份本地文档。
 6. 创建或更新 Issue 时设置一个 `type:*` 分类标签；本个人账号仓库用 Labels 模拟 Organization Issue Types，具体分类表和回退步骤见 [GitHub 远程协作实操](github-remote-workflow.md#issue-分类)。
 
 ### 2. 实施与创建 PR
