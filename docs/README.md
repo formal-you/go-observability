@@ -13,7 +13,7 @@
 | [testing.md](testing.md) | 需求、缺陷或公共行为变更时，如何用独立黑盒测试固化正式验收 |
 | [security.md](security.md) | 设计脱敏、采样和日志治理策略 |
 | [gitops/](gitops/README.md) | GitOps 治理组：GitOps SOP、分支命名、Issue/PR 记录与归档、远程实操、发布清单 |
-| [dev-sop.md](dev-sop.md) | 开发任务 SOP（demo 草案）：需求收敛、多 Agent 编排、契约先行到提交的完整剧本 |
+| [dev-sop/](dev-sop/README.md) | 开发流程体系：需求收敛、角色模型、多 Agent 编排、验收模板与主剧本 |
 | [samber-comparison.md](samber-comparison.md) | 评估与 samber slog 生态的取舍 |
 | [todo.md](todo.md) | 非代码待办与飞书项目管理迁移准备 |
 | [reports/](reports/README.md) | 查看 Issue 验收、性能和 mutation 基线证据 |

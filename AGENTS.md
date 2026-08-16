@@ -18,7 +18,7 @@
 - **包边界、Writer、OTel 映射或中间件变更**：先读 [架构说明](docs/architecture.md) 与 [OTel Logs 映射](docs/otel-logs-data-model.md)。
 - **telemetry、file-only、环境变量或部署配置变更**：先读 [配置指南](docs/configuration.md) 与 [环境变量](docs/environment.md)。
 - **脱敏、PII、鉴权、安全或审计变更**：先读 [安全指南](docs/security.md)。
-- **开始一个开发任务（含多 Agent 编排）**：先读 [开发任务 SOP](docs/dev-sop.md)；masterAgent=项目经理/产品经理/架构师，subAgent=探索/开发核心；提交与 PR 环节仍以 [GitOps SOP](docs/gitops/gitops-sop.md) 为准。
+- **开始一个开发任务（含多 Agent 编排）**：先读 [开发流程体系](docs/dev-sop/README.md)；masterAgent=项目经理/产品经理/架构师，subAgent=探索/开发核心；提交与 PR 环节仍以 [GitOps SOP](docs/gitops/gitops-sop.md) 为准。
 
 完整文档路由见 [docs/README.md](docs/README.md)，项目术语冲突时以 [CONTEXT.md](CONTEXT.md) 为准。
 
