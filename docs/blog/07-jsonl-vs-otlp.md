@@ -44,7 +44,7 @@ go run ./example/14_otel_logs
 
 ## 四、为什么业务代码不用改
 
-`Runtime.NewWriter(ctx)` 会根据 `LogConfig.Output` 返回对应 Writer：
+`Runtime.NewLogWriter(ctx)` 会根据 `LogConfig.Output` 返回对应 Writer：
 
 ```go
 Log: telemetry.LogConfig{

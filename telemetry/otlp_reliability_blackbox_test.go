@@ -49,9 +49,9 @@ func TestRuntimeOTLPUnavailableIsObservableBlackBox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
-	writer, err := runtime.NewWriter(context.Background())
+	writer, err := runtime.NewLogWriter(context.Background())
 	if err != nil {
-		t.Fatalf("NewWriter: %v", err)
+		t.Fatalf("NewLogWriter: %v", err)
 	}
 	if err := writer.Write(context.Background(), "error", slog.String("level", "ERROR")); err != nil {
 		t.Fatalf("Write should enqueue without hiding exporter failure: %v", err)

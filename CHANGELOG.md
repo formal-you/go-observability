@@ -5,9 +5,11 @@
 ## [Unreleased]
 
 ### Changed
+- `middleware/httperr.ResponseBody` 校验错误（KindValidation）透出真实业务码（无码回退 `VALIDATION_ERROR`），普通 error（非 AppError）响应码由 `SYS_ERROR` 改为 `UNKNOWN_ERROR`、消息改为「发生未知错误」；system 错误仍返回固定 `SYS_ERROR`/「系统繁忙，请稍后重试」，不泄露内部细节。
+- `writer/` 目录重命名为 `logwriter/`：`writer/file`、`writer/stdout`、`writer/otlp` 的公开导入路径改为 `logwriter/file`、`logwriter/stdout`、`logwriter/otlp`。迁移：全局替换导入路径 `github.com/formal-you/go-observability/writer/` → `github.com/formal-you/go-observability/logwriter/`；包名（`file`/`stdout`/`otlp`）不变。
 - `example/` 重构为编号教学课程：原 `minimal/nethttp/metrics/samber/config/otel/errorhandler` 与根 `example/main.go` 分别迁移为 `01_quickstart` 至 `16_config` 的教学目录；新增 `02_events`、`03_errors`、`04_sampler_masker`、`05_multiwriter`、`07_telemetry`、`10_grpc`、`11_kratos`、`12_security_audit`、`14_otel_logs`，并把 `mall` 扩展为端到端参考服务；`example/otel` 改写为使用本项目 `telemetry` 的 OTel Logs 双投影示例，不再保留上游裸 OTel demo。
 
-- 配置指南补充 Trace 采样决策传播、Masker 作用域、semconv 版本差距、OTLP 队列溢出告警、传输安全边界和 MultiWriter 写入语义；`writer/file` 在轮转未设置保留上限时输出 WARN 自诊断。
+- 配置指南补充 Trace 采样决策传播、Masker 作用域、semconv 版本差距、OTLP 队列溢出告警、传输安全边界和 MultiWriter 写入语义；`logwriter/file` 在轮转未设置保留上限时输出 WARN 自诊断。
 - `telemetry` 破坏性重构为按信号拆分配置：`Config` 拆为 `Resource` / `Trace` / `Metric` / `Log`；统一 `SignalOutput`（`file`/`otlp`/`stdout`/`none`，Trace 另有 `local`）；`Runtime.NewWriter` 改为 `NewWriter(ctx)`，日志参数进入 `LogConfig`；删除 `LogOutput`、`Providers`、`WriterConfig`、`Setup*`、`NewLogWriter`、`Runtime.Resource`、`Runtime.LoggerProvider` 兼容层。迁移：`ServiceName` 等移入 `Resource`，`LogOutputX` 改为 `SignalOutputX`，`TraceOutput/MetricOutput` 移入 `Trace/Metric.Output`，`NewWriter(ctx, WriterConfig{...})` 改为 `NewWriter(ctx)`。
 
 - Gin `Abort(nil)` 的固定系统错误改为包初始化时构造并验证，请求路径只复用已验证错误，避免在请求处理中触发库内固定契约构造失败。
@@ -23,13 +25,15 @@
 - 新增 ADR-0018（Event Name Convention）与 ADR-0017（保留 app.result / Sampling/Retention 独立层），并把三层事件模型（Event/Error/Sampling）同步到 README、architecture、otel-logs 等文档。
 
 ### Added
+- 新增 `example/17_layered_span` 教学示例：演示 `otelutil.WithSpan` / `StartSpan` 的 handler→service→store→db 分层调用链（ADR-0023），含黑盒测试断言五层父子 span 树。
+- 新增 `middleware/otelutil` 手动分层 span helper（ADR-0023）：`WithSpan` 同步包装（自动 Start/End、err→SetStatus+RecordError、panic 标记后重抛、返回新 ctx 强制下传）与 `StartSpan` 薄封装（生命周期交还调用方）；支持 `WithTracer` 注入（nil→全局 `otel.Tracer("go-observability")`）与 `WithStartOption` 转发；进程内 handler→service→store→db 分层调用链由接入方在各层调用创建。
 - `example/` 新增教学示例：六类事件、错误建模与投影、Sampler/Masker 治理、MultiWriter、四种 Runtime 预设、gRPC/kratos 适配、Security/Audit 中间件与 OTel Logs 双投影；`example/mall/cmd` 提供可运行的端到端小商城，`example/04_sampler_masker` 增加行为验证测试。
 - docs/blog/ 新增面向掘金的体系化文章源稿：从语义层、六类事件、错误建模、治理、三信号装配、框架中间件、Security/Audit、OTLP 双投影到 mall 端到端诊断故事，共 9 篇。
 
 - 新增 Error Registry：`errs.RegisterErrorCode` 注册 ErrorCode→ErrorType 固定映射（多对一），`ErrorCode.RegisteredErrorType` 反查；严格构造器对已注册码强制类型一致，未注册码保持既有行为。
-- Error Registry 扩展为 ErrorCode → {ErrorType, EventName?}：新增 rrs.RegisterErrorContract(code, typ, eventName) 一次性注册错误码 + type + 错误事件名（系统/基础设施码路径）与 ErrorCode.RegisteredEventName() 反查；事件名以不透明字符串存储，文法由接入方校验（errs 不 import log，避免循环依赖）。
+- Error Registry 扩展为 ErrorCode → {ErrorType, EventName?}：新增 `errs.RegisterErrorContract(code, typ, eventName)` 一次性注册错误码 + type + 错误事件名（系统/基础设施码路径）与 ErrorCode.RegisteredEventName() 反查；事件名以不透明字符串存储，文法由接入方校验（errs 不 import log，避免循环依赖）。
 - 新增 `errs.MustRegisterErrorCode` / `errs.MustRegisterErrorContract`：注册失败（非法文法/重复冲突）直接 panic，供启动期以常量/全局预定义注册使用；error 变体保留给需要处理失败的调用方。
-- 新增 `log.ManagedWriter`、`log.ManageWriter` 与托管 `MultiWriter`；`telemetry.Runtime.NewWriter` 现在返回具备幂等关闭能力的 Writer，保留仅实现 `Write` 的旧 Adapter 兼容性。
+- 新增 `log.ManagedWriter`、`log.ManageWriter` 与托管 `MultiWriter`；`telemetry.Runtime.NewLogWriter` 现在返回具备幂等关闭能力的 Writer，保留仅实现 `Write` 的旧 Adapter 兼容性。
 - 新增 telemetry 快捷预设构造器 `NewLogRuntime` / `NewOTLPRuntime` / `NewAllFileRuntime`，并新增对应配置模板 `log-only.example.yaml` / `otlp.example.yaml` / `all-file.example.yaml`。
 - 新增严格错误值验证与配置式构造器：ErrorCode 使用 `SCOPE.OPERATION.REASON`，ErrorType 复用 OTel/gRPC 标准枚举（gRPC canonical code），并支持保留 cause 链。
 - 六类类型化事件、`Logger` / `Writer` 接口，以及 JSONL、stdout、OTLP Writer。
@@ -67,7 +71,7 @@
 
 ### Changed
 - `telemetry` 破坏性重构为按信号拆分配置：`Config` 拆为 `Resource` / `Trace` / `Metric` / `Log`；统一 `SignalOutput`（`file`/`otlp`/`stdout`/`none`，Trace 另有 `local`）；`Runtime.NewWriter` 改为 `NewWriter(ctx)`，日志参数进入 `LogConfig`；删除 `LogOutput`、`Providers`、`WriterConfig`、`Setup*`、`NewLogWriter`、`Runtime.Resource`、`Runtime.LoggerProvider` 兼容层。迁移：`ServiceName` 等移入 `Resource`，`LogOutputX` 改为 `SignalOutputX`，`TraceOutput/MetricOutput` 移入 `Trace/Metric.Output`，`NewWriter(ctx, WriterConfig{...})` 改为 `NewWriter(ctx)`。
-- 收紧 `telemetry.Runtime` 的推荐公共表面：`Resource()` / `LoggerProvider()` 标记 Deprecated 并移入兼容层；仓库内部与正式黑盒改用 `Tracer`、`Meter`、`NewWriter`、`Stats` 和生命周期方法，不再探测或持有 Runtime 内部 Provider。
+- 收紧 `telemetry.Runtime` 的推荐公共表面：`Resource()` / `LoggerProvider()` 标记 Deprecated 并移入兼容层；仓库内部与正式黑盒改用 `Tracer`、`Meter`、`NewLogWriter`、`Stats` 和生命周期方法，不再探测或持有 Runtime 内部 Provider。
 - `telemetry` 新增独立 `Runtime`、显式 `LogOutput` 与 `WriterConfig`；构造不再修改 OTel 全局状态，需显式 `InstallGlobal`，旧 `Setup*` 入口标记 Deprecated。
 - 仓库生产示例和正式黑盒迁移到严格错误构造器；旧错误构造器与 SystemOption 保留为 Deprecated 兼容入口。
 - `event.name` 从重复 `msg` 的「类别.模块.操作」调整为「领域.对象.事实」，并禁止六类 EventType 作为首段；HTTP 错误出口按错误 Kind 默认选择 `http.request.rejected` / `http.request.failed`。
@@ -101,6 +105,6 @@
 - 修复 `FieldMasker` 未递归处理 map、slice 与 `LogValuer` 导致的嵌套敏感字段泄漏。
 - 修复指针及 `%w` 包装错误丢失 retry、source、stack、upstream 信息，并为 typed-nil error 提供安全兜底。
 - 阻止 `BusinessPayload.ExtraAttrs` 覆盖身份、资源、业务、代码位置、`event.name` 与 `app.result` 等 canonical 字段。
-- `writer/file` JSONL 输出改为固定规范字段顺序（timestamp → level → msg → 链路/延迟 → event.name → 事件字段 → app.result 收尾），消除同一字段（尤其 `app.result`）在不同事件间相对位置漂移。
+- `logwriter/file` JSONL 输出改为固定规范字段顺序（timestamp → level → msg → 链路/延迟 → event.name → 事件字段 → app.result 收尾），消除同一字段（尤其 `app.result`）在不同事件间相对位置漂移。
 
 尚未创建首个版本标签，链接定义将在正式发布时补充。

@@ -23,8 +23,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/formal-you/go-observability/writer/file"
-	stdoutwriter "github.com/formal-you/go-observability/writer/stdout"
+	"github.com/formal-you/go-observability/logwriter/file"
+	stdoutwriter "github.com/formal-you/go-observability/logwriter/stdout"
 )
 
 // SignalOutput 表示某个 OpenTelemetry 信号的出口类型。
@@ -90,7 +90,7 @@ type MetricConfig struct {
 	Reader sdkmetric.Reader
 }
 
-// LogConfig 定义 Log 信号与 Runtime.NewWriter 的装配参数。
+// LogConfig 定义 Log 信号与 Runtime.NewLogWriter 的装配参数。
 type LogConfig struct {
 	// Output 显式选择 file、otlp、stdout 或 none。
 	Output SignalOutput

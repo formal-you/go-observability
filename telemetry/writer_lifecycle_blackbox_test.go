@@ -24,7 +24,7 @@ func TestRuntimeWriterLifecycleIsPublicAndIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer runtime.Shutdown(ctx)
-	writer, err := runtime.NewWriter(ctx)
+	writer, err := runtime.NewLogWriter(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestRuntimeNoneWriterHasManagedLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = runtime.Shutdown(context.Background()) }()
-	writer, err := runtime.NewWriter(context.Background())
+	writer, err := runtime.NewLogWriter(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

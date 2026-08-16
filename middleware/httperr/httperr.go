@@ -67,15 +67,19 @@ func ClassifyError(err error) (reason, message string, metadata map[string]strin
 }
 
 // ResponseBody 构造扁平错误响应体 {code, message, request_id?}：errresp / nethttp 的默认契约。
-// validation→VALIDATION_ERROR、business→业务码（空则 BIZ_ERROR）、system/普通→SYS_ERROR；
-// system 与普通错误返回固定消息，不透传内部错误细节。
+// validation→业务码（空则 VALIDATION_ERROR）、business→业务码（空则 BIZ_ERROR）、system→SYS_ERROR、
+// 普通 error→UNKNOWN_ERROR；system 与普通错误返回固定消息，不透传内部错误细节。
+// 当前处于未发布版本的开发期：校验/业务拒绝直接透出真实业务码，便于开发期直接查看结果。
 func ResponseBody(err error, requestID string) map[string]any {
 	body := map[string]any{}
 	appErr, ok := asAppError(err)
 	if ok {
 		switch appErr.Kind() {
 		case errs.KindValidation:
-			body["code"] = "VALIDATION_ERROR"
+			body["code"] = string(appErr.ErrCode())
+			if body["code"] == "" {
+				body["code"] = "VALIDATION_ERROR"
+			}
 			body["message"] = appErr.Error()
 		case errs.KindBusiness:
 			body["code"] = string(appErr.ErrCode())
@@ -88,8 +92,8 @@ func ResponseBody(err error, requestID string) map[string]any {
 			body["message"] = "系统繁忙，请稍后重试"
 		}
 	} else {
-		body["code"] = "SYS_ERROR"
-		body["message"] = "系统繁忙，请稍后重试"
+		body["code"] = "UNKNOWN_ERROR"
+		body["message"] = "发生未知错误"
 	}
 	if requestID != "" {
 		body["request_id"] = requestID

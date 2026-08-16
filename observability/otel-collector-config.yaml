@@ -24,7 +24,7 @@
 #   traces pipeline 加 tail_sampling processor（模板见 collector.example.yaml）
 
 receivers:
-  # otlp: 唯一默认接收器；应用 writer/otlp + telemetry 三 exporter 打到此
+  # otlp: 唯一默认接收器；应用 logwriter/otlp + telemetry 三 exporter 打到此
   otlp:
     protocols:
       # grpc.endpoint: 0.0.0.0 表示容器内全接口；compose 映射 127.0.0.1:4317

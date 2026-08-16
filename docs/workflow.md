@@ -3,10 +3,15 @@
 ## 变更步骤
 
 1. 用 Issue 或变更说明写清用户问题、兼容性影响和验收条件。
-2. 按 [正式测试契约](testing.md) 先补独立黑盒测试，再做最小实现与白盒边界测试。
-3. 更新受影响的 README、配置样例和 CHANGELOG。
-4. 运行格式化、静态检查、测试和差异检查。
-5. 按可独立说明的批次提交 Git commit；多批次工作应保留多次提交记录。
+2. 重大变更（公共 API、事件/错误/采样/安全/审计模型、包结构、Writer/OTel 映射或治理策略）
+   先按 [ADR 约定](adr/README.md) 在对应分类目录（errors / events / middleware /
+   security-audit / telemetry 等）新增或更新 ADR 决策文档并同步 `docs/adr/README.md` 索引：
+   状态 Proposed → 实现后 Accepted，ADR 与实现、黑盒测试、文档进入同一提交，
+   不把决策理由只留在聊天或 PR 里。
+3. 按 [正式测试契约](testing.md) 先补独立黑盒测试，再做最小实现与白盒边界测试。
+4. 更新受影响的 README、配置样例、CHANGELOG 与 ADR 索引。
+5. 运行格式化、静态检查、测试和差异检查。
+6. 按可独立说明的批次提交 Git commit；多批次工作应保留多次提交记录。
 
 ```powershell
 gofmt -w <modified-go-files>
@@ -46,7 +51,7 @@ git diff --check
 1. 合并前确认 PR 为 Ready、目标分支正确、required checks 全绿且没有未解决的 requested changes。本仓库默认使用 squash merge 保持线性历史。
 2. 合并后核对 PR 状态为 Merged、最终提交位于默认分支；包含 `Closes #N` 的 Issue 应自动变为 Closed。未自动关闭时，先核对验收证据，再补充完成评论并关闭。
 3. Issue 尚有未完成验收时保持 Open，创建后续 Issue 或保留清单；不能因为某个 PR 已合并就把部分完成写成全部完成。
-4. 复杂 PR 的长期决策提炼到 ADR 或当前指南，实施文档从 `docs/pr/` 移入 [`docs/history/`](history/README.md)，记录 PR、Issue、Merged / Abandoned / Superseded 状态和日期。
+4. 重大决策已在「变更步骤」按 ADR 约定落档，本步只负责把实施文档从 `docs/pr/` 移入 [`docs/history/`](history/README.md)，记录 PR、Issue、Merged / Abandoned / Superseded 状态和日期。
 5. PR 关闭但未合并时，在 Issue 说明原因；有替代 PR 时标记 Superseded，没有替代实现时保持 Issue Open。远程/本地分支仅在用户明确要求清理后删除。
 
 ### 4. Codex 授权语义
@@ -59,6 +64,42 @@ git diff --check
 | “关闭 Issue/PR” | 仅关闭明确完成、重复、无效或已被取代的目标，并记录原因 |
 
 完成标准：Issue 验收有可复现证据；本地门禁和 required checks 均有明确结果；请求创建的 PR 已存在并正确关联 Issue；请求合并时 PR 已进入默认分支且 Issue 状态正确；`docs/pr/` 不遗留已完成实施文档。
+
+## SOP 自动化脚本（参考）
+
+仓库根目录提供一键 GitHub 流程脚本 [`SOP-github-flow.ps1`](../SOP-github-flow.ps1)（使用说明见
+[`SOP-github-flow-README.md`](../SOP-github-flow-README.md)），把本文「Issue / PR 开放流程」的机械步骤自动化：
+
+```text
+创建 Issue -> 创建分支 -> 暂存文件 -> 本地验证 -> 提交 -> push -> 创建 PR -> 等 CI -> squash merge -> 更新本地 main
+```
+
+### 每次准备 3 样东西
+
+1. `.issue-body.md`：Issue 正文；
+2. `.pr-body.md`：PR 正文（脚本自动补 `Closes #N` 与验证结果段）；
+3. 文件清单：`-Files` 数组或 `-FileList .files.txt`（每行一个文件）。
+
+### 示例
+
+```powershell
+.\SOP-github-flow.ps1 `
+  -Type refactor `
+  -Slug newlogwriter-rename `
+  -Title "refactor: rename Runtime.NewWriter to NewLogWriter" `
+  -Files @("CHANGELOG.md", "telemetry/runtime_writer.go") `
+  -WaitSeconds 60
+```
+
+### 关键规则
+
+- 只暂存显式指定的文件（`git add -- <paths>`），绝不 `git add .`；`.issue-body.md` / `.pr-body.md` / `.files.txt` 等临时文件不会被暂存。
+- Issue / PR 编号自动解析，用于分支名、`Refs #N` / `Closes #N` 与后续 `gh pr checks` / `gh pr merge`。
+- CI 通过但 PR 为 `BEHIND` 时自动 `gh pr update-branch` 再等待；非 `CLEAN` 不强行合并。
+- 提交前默认运行 `gofmt` / `go build ./...` / `go vet ./...` / `go test ./...` / `git diff --cached --check`（`-SkipVerify` 可关闭）。
+- 脚本不删除分支；合并后仍需按「合并与完成」核对 Issue 关闭与本地 main 同步。
+
+完整参数表与详细用法见 [`SOP-github-flow-README.md`](../SOP-github-flow-README.md)。
 
 ## 兼容性规则
 

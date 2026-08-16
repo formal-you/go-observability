@@ -23,9 +23,9 @@ func TestNewLogRuntimeFileWritesServiceIdentity(t *testing.T) {
 	}
 	defer func() { _ = runtime.Shutdown(ctx) }()
 
-	writer, err := runtime.NewWriter(ctx)
+	writer, err := runtime.NewLogWriter(ctx)
 	if err != nil {
-		t.Fatalf("NewWriter: %v", err)
+		t.Fatalf("NewLogWriter: %v", err)
 	}
 	if err := writer.Write(ctx, "business", slog.String(string(obslog.KeyEventName), "order.created")); err != nil {
 		t.Fatal(err)
@@ -56,9 +56,9 @@ func TestNewLogRuntimeStdoutLifecycle(t *testing.T) {
 	}
 	defer func() { _ = runtime.Shutdown(ctx) }()
 
-	writer, err := runtime.NewWriter(ctx)
+	writer, err := runtime.NewLogWriter(ctx)
 	if err != nil {
-		t.Fatalf("NewWriter: %v", err)
+		t.Fatalf("NewLogWriter: %v", err)
 	}
 	if err := writer.Write(ctx, "probe"); err != nil {
 		t.Fatal(err)
@@ -111,7 +111,7 @@ func TestNewOTLPRuntimeValidationAndLifecycle(t *testing.T) {
 }
 
 // TestNewAllFileRuntimeCreatesThreeFiles 验证全文件快捷构造创建三个信号文件并注入服务身份。
-// Log 文件由 NewWriter 懒创建；Trace/Metric 文件在构造时创建。
+// Log 文件由 NewLogWriter 懒创建；Trace/Metric 文件在构造时创建。
 func TestNewAllFileRuntimeCreatesThreeFiles(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -127,7 +127,7 @@ func TestNewAllFileRuntimeCreatesThreeFiles(t *testing.T) {
 		}
 	}
 
-	writer, err := runtime.NewWriter(ctx)
+	writer, err := runtime.NewLogWriter(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

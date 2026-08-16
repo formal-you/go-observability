@@ -50,6 +50,7 @@ ADR 按主题分目录存放，编号仍全局递增、不重用。
 | --- | --- | --- | --- |
 | [0005](middleware/0005-error-middleware-httperr-core.md) | 错误收口中间件抽取 httperr 契约核心 + 框架薄壳 | Accepted | 2026-08-11 |
 | [0006](middleware/0006-middleware-framework-grouped.md) | 中间件按框架体系分组（gin / http / grpc / kratos） | Accepted | 2026-08-11 |
+| [0023](middleware/0023-otelutil-span-helper.md) | 手动分层 span 通用 helper（otelutil.WithSpan / StartSpan） | Accepted | 2026-08-16 |
 
 ### 遥测装配（telemetry）
 
@@ -57,6 +58,7 @@ ADR 按主题分目录存放，编号仍全局递增、不重用。
 | --- | --- | --- | --- |
 | [0014](telemetry/0014-managed-writer-lifecycle.md) | 通过 ManagedWriter 统一 Writer 生命周期 | Accepted | 2026-08-12 |
 | [0020](telemetry/0020-telemetry-per-signal-config.md) | Telemetry 按信号拆分配置并移除兼容层 | Accepted | 2026-08-15 |
+| [0022](telemetry/0022-logwriter-package-naming.md) | 日志写出实现目录命名为 logwriter/ | Accepted | 2026-08-16 |
 
 
 ## 模板

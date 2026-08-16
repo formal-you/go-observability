@@ -1,5 +1,6 @@
-// Package otelutil 提供框架无关的 OpenTelemetry 集成工具：链路上下文注入/提取与
-// log.TraceExtractor 适配。不属于任何框架的中间件，供接入方与框架适配包复用。
+// Package otelutil 提供框架无关的 OpenTelemetry 集成工具：链路上下文注入/提取、
+// log.TraceExtractor 适配与手动分层 span helper（WithSpan / StartSpan）。
+// 不属于任何框架的中间件，供接入方与框架适配包复用。
 package otelutil
 
 import (

@@ -49,6 +49,7 @@
 | 📐 | **源即规范** | OTel semconv 1.41.0 + `app.*` vendor namespace，字段名可追踪 |
 | 🪞 | **双投影** | JSONL/stdout 保留运营友好扁平列，OTLP 映射正确的 LogRecord 顶层字段 |
 | 🔗 | **链路关联** | 从 context 关联 trace/span，不重复制造伪属性 |
+| 🧩 | **分层 span helper** | `otelutil.WithSpan` / `StartSpan` 一行包一层函数，自动父子关联、错误/panic 收尾 |
 | 🧨 | **错误投影** | 普通 error、值/指针错误和 `%w` 链都能稳定提取 |
 | 🗂️ | **语义注册表** | error.code、error.type、event.name 的固定映射与校验，漂移早暴露 |
 | 🛡️ | **日志治理** | 可注入 Sampler、递归 Masker、写入错误回调 |
@@ -376,7 +377,7 @@ log.WithSampler(log.NewEventTypeKeepSampler(
 go-observability/
 ├── 🧩 log/ 子包                # Event、Payload、Logger、Sampler、Masker
 ├── 🧨 errs/                    # 错误分类、堆栈策略与错误投影
-├── 🚚 writer/
+├── 🚚 logwriter/
 │   ├── 📄 file/                # JSONL 文件 Writer
 │   ├── 🖥️ stdout/              # 标准输出 Writer
 │   └── 📡 otlp/                # OTLP gRPC Log Writer
@@ -405,7 +406,7 @@ exporter，只生成本地有效 trace/span 用于日志关联，并把 `service
 带最低级别、输出路径和文件轮转的可运行配置见
 [`example/blackbox/config.example.yaml`](example/blackbox/config.example.yaml)。
 
-需要 Collector 时，使用 `telemetry.NewRuntime`，在 `Trace` / `Metric` / `Log` 分组中显式选择 `SignalOutputOTLP`；本地文件、容器标准输出和禁用日志分别使用 `SignalOutputFile`、`SignalOutputStdout` 和 `SignalOutputNone`。日志 Writer 参数进入 `Config.Log`，通过 `Runtime.NewWriter(ctx)` 创建。Runtime 构造不会修改 OTel 全局状态，应用需显式调用 `InstallGlobal` 并在退出时调用恢复函数。
+需要 Collector 时，使用 `telemetry.NewRuntime`，在 `Trace` / `Metric` / `Log` 分组中显式选择 `SignalOutputOTLP`；本地文件、容器标准输出和禁用日志分别使用 `SignalOutputFile`、`SignalOutputStdout` 和 `SignalOutputNone`。日志 Writer 参数进入 `Config.Log`，通过 `Runtime.NewLogWriter(ctx)` 创建。Runtime 构造不会修改 OTel 全局状态，应用需显式调用 `InstallGlobal` 并在退出时调用恢复函数。
 
 主示例通过环境变量选择出口：
 
