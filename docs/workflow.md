@@ -65,6 +65,42 @@ git diff --check
 
 完成标准：Issue 验收有可复现证据；本地门禁和 required checks 均有明确结果；请求创建的 PR 已存在并正确关联 Issue；请求合并时 PR 已进入默认分支且 Issue 状态正确；`docs/pr/` 不遗留已完成实施文档。
 
+## SOP 自动化脚本（参考）
+
+仓库根目录提供一键 GitHub 流程脚本 [`SOP-github-flow.ps1`](../SOP-github-flow.ps1)（使用说明见
+[`SOP-github-flow-README.md`](../SOP-github-flow-README.md)），把本文「Issue / PR 开放流程」的机械步骤自动化：
+
+```text
+创建 Issue -> 创建分支 -> 暂存文件 -> 本地验证 -> 提交 -> push -> 创建 PR -> 等 CI -> squash merge -> 更新本地 main
+```
+
+### 每次准备 3 样东西
+
+1. `.issue-body.md`：Issue 正文；
+2. `.pr-body.md`：PR 正文（脚本自动补 `Closes #N` 与验证结果段）；
+3. 文件清单：`-Files` 数组或 `-FileList .files.txt`（每行一个文件）。
+
+### 示例
+
+```powershell
+.\SOP-github-flow.ps1 `
+  -Type refactor `
+  -Slug newlogwriter-rename `
+  -Title "refactor: rename Runtime.NewWriter to NewLogWriter" `
+  -Files @("CHANGELOG.md", "telemetry/runtime_writer.go") `
+  -WaitSeconds 60
+```
+
+### 关键规则
+
+- 只暂存显式指定的文件（`git add -- <paths>`），绝不 `git add .`；`.issue-body.md` / `.pr-body.md` / `.files.txt` 等临时文件不会被暂存。
+- Issue / PR 编号自动解析，用于分支名、`Refs #N` / `Closes #N` 与后续 `gh pr checks` / `gh pr merge`。
+- CI 通过但 PR 为 `BEHIND` 时自动 `gh pr update-branch` 再等待；非 `CLEAN` 不强行合并。
+- 提交前默认运行 `gofmt` / `go build ./...` / `go vet ./...` / `go test ./...` / `git diff --cached --check`（`-SkipVerify` 可关闭）。
+- 脚本不删除分支；合并后仍需按「合并与完成」核对 Issue 关闭与本地 main 同步。
+
+完整参数表与详细用法见 [`SOP-github-flow-README.md`](../SOP-github-flow-README.md)。
+
 ## 兼容性规则
 
 - 事件名、字段键、枚举值和公共 Go API 都属于使用方契约。
