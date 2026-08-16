@@ -96,7 +96,7 @@ func writeConfiguredFileSample(ctx context.Context, cfg blackboxConfig) (*scenar
 		return nil, fmt.Errorf("初始化 file-only telemetry: %w", err)
 	}
 	restore := providers.InstallGlobal()
-	w, err := providers.NewWriter(ctx)
+	w, err := providers.NewLogWriter(ctx)
 	if err != nil {
 		restore()
 		_ = providers.Shutdown(ctx)
@@ -145,7 +145,7 @@ func runOTLPMode(ctx context.Context, endpoint string, cfg blackboxConfig) error
 		return fmt.Errorf("初始化 telemetry: %w", err)
 	}
 	restore := providers.InstallGlobal()
-	w, err := providers.NewWriter(ctx)
+	w, err := providers.NewLogWriter(ctx)
 	if err != nil {
 		restore()
 		_ = providers.Shutdown(ctx)

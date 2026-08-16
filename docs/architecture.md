@@ -91,7 +91,7 @@ go-observability/
 │   ├── runtime_config.go        # 默认值、配置校验、Resource 与环境变量
 │   ├── runtime_providers.go     # Trace / Metric / Log Provider 构造（含 NewFileRuntime / NewLogRuntime / NewOTLPRuntime / NewAllFileRuntime）
 │   ├── runtime_global.go        # InstallGlobal / restore / Shutdown
-│   └── runtime_writer.go        # Runtime.NewWriter：file / stdout / otlp / none
+│   └── runtime_writer.go        # Runtime.NewLogWriter：file / stdout / otlp / none
 ├── observability/               # 本地 LGTM 参考栈（docker compose，非生产方案）
 │   ├── docker-compose.yml       # Collector + Tempo + Loki + Mimir + Grafana
 │   ├── otel-collector-config.yaml / loki.yaml / mimir.yaml / tempo.yaml
@@ -216,7 +216,7 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 - `NewRuntime`：按 `Resource / Trace / Metric / Log` 四组 Config 创建独立 Provider，不安装全局状态；`InstallGlobal` 显式安装并返回幂等恢复函数。
 - `NewFileRuntime`：file-only 便捷预设（Trace=local、Metric=none、Log=file），不创建 exporter，仅提供 `ParentBased(NeverSample())` 的本地 TraceProvider；生成有效 trace/span 供 JSONL 关联，但不保存完整 Trace 树。
 - 预设构造器 `NewLogRuntime` / `NewOTLPRuntime` / `NewAllFileRuntime`：对只开日志、全 OTLP、全文件三种常见档位做薄封装；需要自定义采样、批量、队列或轮转时仍使用 `NewRuntime` 加 `Config`。
-- `Runtime.NewWriter(ctx)`：根据已固化的 `LogConfig.Output` 选择 file、OTLP、stdout 或 no-op，返回具备幂等 `Close` 的 `log.ManagedWriter`；file/stdout 注入同一份 Resource，OTLP 复用 Runtime LoggerProvider。
+- `Runtime.NewLogWriter(ctx)`：根据已固化的 `LogConfig.Output` 选择 file、OTLP、stdout 或 no-op，返回具备幂等 `Close` 的 `log.ManagedWriter`；file/stdout 注入同一份 Resource，OTLP 复用 Runtime LoggerProvider。
 - `Runtime.Shutdown`：进程退出前调用；顺序刻意先 log 再 metric 后 trace，保证日志携带的 span 上下文关联完整。
 - `EnabledFromEnvironment` / `EndpointFromEnvironment`：应用侧显式环境变量映射 helper，不隐式推断任何信号出口。
 
@@ -224,7 +224,7 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 
 1. 在业务自己的 observability 包中声明 `EventName` 常量（`NewEventName` 或经 `Validate`），并写测试校验格式。
 2. 使用 `BusinessPayload.ExtraAttrs` 注入领域属性（`app.*` 键），避免把领域字段加入核心注册表；canonical 键与保留键会被过滤。
-3. 新增写出后端：在 `logwriter/` 下新建包，实现 `log.Writer`（明确并发语义）；若拥有资源则提供 `Close`，由 `Runtime.NewWriter` 或 `log.ManageWriter` 统一暴露托管生命周期。
+3. 新增写出后端：在 `logwriter/` 下新建包，实现 `log.Writer`（明确并发语义）；若拥有资源则提供 `Close`，由 `Runtime.NewLogWriter` 或 `log.ManageWriter` 统一暴露托管生命周期。
 4. 公共 schema 或 API 改动必须同步 README、docs、示例与 CHANGELOG（改代码与改文档应在同一提交内完成）。
 
 ## 9. 代码 Review 检查点

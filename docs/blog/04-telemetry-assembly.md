@@ -59,7 +59,7 @@ runtime, err := telemetry.NewRuntime(ctx, telemetry.Config{
 资源所有权是统一的：
 
 ```text
-InstallGlobal -> NewWriter -> Emit -> Close Writer -> Shutdown Runtime
+InstallGlobal -> NewLogWriter -> Emit -> Close Writer -> Shutdown Runtime
 ```
 
 

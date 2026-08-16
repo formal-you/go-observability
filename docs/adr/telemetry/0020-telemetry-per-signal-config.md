@@ -17,7 +17,7 @@
 - 用统一 `SignalOutput` 表达信号出口：`file / otlp / stdout / none`；另设仅 Trace 可用的
   `local`，表示只生成合法 TraceID/SpanID、不导出完整 Span。
 - `Config.Log` 同时持有输出目标、文件路径、file/stdout options、OTLP 批处理参数；
-  `Runtime.NewWriter(ctx)` 不再接收 `WriterConfig`。
+  `Runtime.NewLogWriter(ctx)` 不再接收 `WriterConfig`。
 - `NewFileRuntime` 保留为公开便捷构造器，内部强制 `Trace=local、Metric=none、Log=file`。
 - 删除 `LogOutput`、`Providers`、`WriterConfig`、`Setup`、`SetupFile`、
   `SetupFromEnvironment`、`Runtime.NewLogWriter`、`Runtime.Resource`、
@@ -30,6 +30,6 @@
 - Endpoint 仅在确有信号创建 OTLP exporter/reader 时解析；纯 file/local/stdout/none 组合
   不再受非法 Endpoint 影响。
 - `NewFileRuntime` 变成薄的预设构造器，示例不再需要手写三段 local/file/none 配置。
-- 公共 API 为破坏性变更：接入方必须迁移 Config 字段和 `NewWriter(ctx)` 调用方式。
+- 公共 API 为破坏性变更：接入方必须迁移 Config 字段和 `NewLogWriter(ctx)` 调用方式。
 - 旧版 Runtime 方案被本 ADR 取代；ADR-0014 的 ManagedWriter 生命周期契约继续有效，仅
-  `Runtime.NewWriter` 签名和 `NewLogWriter` 兼容层发生变化。
+  `Runtime.NewLogWriter` 签名和 `NewLogWriter` 兼容层发生变化。

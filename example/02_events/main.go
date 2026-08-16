@@ -40,7 +40,7 @@ func main() {
 	defer restore()
 	defer func() { _ = runtime.Shutdown(ctx) }()
 
-	w, err := runtime.NewWriter(ctx)
+	w, err := runtime.NewLogWriter(ctx)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "create writer:", err)
 		os.Exit(1)

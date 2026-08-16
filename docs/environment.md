@@ -9,7 +9,7 @@
 
 `OTEL_EXPORTER_OTLP_ENDPOINT` 接受 `host:port` 或完整 URL，内部会为无 scheme 的地址补 `http://`。TLS、证书、认证头等生产配置目前不由 `telemetry.Config` 暴露；需要这些能力时，应评估扩展 API 或在应用侧自建 Provider。
 
-环境变量只在应用构造 Runtime 时读取；`Runtime.NewWriter` 使用已固化的 `Log.Output`，不会因运行中修改环境变量而切换目标。
+环境变量只在应用构造 Runtime 时读取；`Runtime.NewLogWriter` 使用已固化的 `Log.Output`，不会因运行中修改环境变量而切换目标。
 
 PowerShell：
 

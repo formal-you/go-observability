@@ -131,7 +131,7 @@ func run(ctx context.Context) error {
 	defer restore()
 	defer func() { _ = runtime.Shutdown(ctx) }()
 
-	w, err := runtime.NewWriter(ctx)
+	w, err := runtime.NewLogWriter(ctx)
 	if err != nil {
 		return err
 	}

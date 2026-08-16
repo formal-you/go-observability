@@ -101,13 +101,13 @@ func run(ctx context.Context, mode, endpoint string) error {
 }
 
 // emitAndClose 演示预设共有的资源所有权模式：
-// InstallGlobal -> NewWriter -> Emit -> Close Writer -> Shutdown Runtime。
+// InstallGlobal -> NewLogWriter -> Emit -> Close Writer -> Shutdown Runtime。
 func emitAndClose(ctx context.Context, runtime *telemetry.Runtime) error {
 	restore := runtime.InstallGlobal()
 	defer restore()
 	defer func() { _ = runtime.Shutdown(ctx) }()
 
-	w, err := runtime.NewWriter(ctx)
+	w, err := runtime.NewLogWriter(ctx)
 	if err != nil {
 		return err
 	}

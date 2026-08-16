@@ -51,7 +51,7 @@ runtime, err := telemetry.NewRuntime(ctx, telemetry.Config{
 })
 restore := runtime.InstallGlobal()
 defer restore()
-writer, err := runtime.NewWriter(ctx) // 日志出口参数已进入 LogConfig
+writer, err := runtime.NewLogWriter(ctx) // 日志出口参数已进入 LogConfig
 ```
 
 无需 Collector 的小单体用 `NewFileRuntime`，等价于 `Trace=local、Metric=none、Log=file`：

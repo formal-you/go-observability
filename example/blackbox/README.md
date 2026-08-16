@@ -9,7 +9,7 @@ go run ./example/blackbox -config "example/blackbox/config.example.yaml"
 go test ./example/blackbox -v
 ```
 
-程序读取 [`config.example.yaml`](config.example.yaml)，写入配置指定的 JSONL 路径，并打印各 request_id / 后台场景对应的 trace_id。配置属于 blackbox 应用层，使用严格 YAML 解析后映射到 `telemetry.ResourceConfig` / `telemetry.LogConfig`、`log.WithMinLevel` 和 `file.WithRotation`；核心库不会自动寻找配置文件。file 模式使用 `telemetry.NewFileRuntime` 并直接由 `runtime.NewWriter(ctx)` 创建 Writer。
+程序读取 [`config.example.yaml`](config.example.yaml)，写入配置指定的 JSONL 路径，并打印各 request_id / 后台场景对应的 trace_id。配置属于 blackbox 应用层，使用严格 YAML 解析后映射到 `telemetry.ResourceConfig` / `telemetry.LogConfig`、`log.WithMinLevel` 和 `file.WithRotation`；核心库不会自动寻找配置文件。file 模式使用 `telemetry.NewFileRuntime` 并直接由 `runtime.NewLogWriter(ctx)` 创建 Writer。
 
 | 配置 | 作用 |
 | --- | --- |
