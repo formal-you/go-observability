@@ -24,4 +24,4 @@
 
 ## 未归组（仍留在 docs/ 根）
 
-`onboarding.md`（入门）、`testing.md`（验收契约）、`security.md`（安全指南）、`samber-comparison.md`（评估）——后续如需可再归组。
+`onboarding.md`（入门）、`security.md`（安全指南）、`samber-comparison.md`（评估）——后续如需可再归组。

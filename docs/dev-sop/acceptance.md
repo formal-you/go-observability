@@ -1,6 +1,6 @@
 # 契约与验收
 
-> 状态：draft，待讨论。真源：`docs/testing.md`（正式测试契约）与 `docs/gitops/issues/`（本地 issue 契约）。
+> 状态：draft，待讨论。真源：`docs/dev-sop/testing.md`（正式测试契约）与 `docs/gitops/issues/`（本地 issue 契约）。
 
 ## 原则
 

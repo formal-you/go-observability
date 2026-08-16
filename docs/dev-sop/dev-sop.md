@@ -1,7 +1,7 @@
 # 开发任务 SOP（多 Agent 编排）
 
 > 状态：**demo 草案**——供评审迭代，确认后转正式。
-> 真源分工：本文是「一个开发任务从需求下达到提交」的执行剧本；Issue/PR/合并与授权语义以 [GitOps SOP](../gitops/gitops-sop.md) 为准；术语以 [CONTEXT.md](../../CONTEXT.md) 为准；黑盒验收契约以 [testing.md](../testing.md) 为准。
+> 真源分工：本文是「一个开发任务从需求下达到提交」的执行剧本；Issue/PR/合并与授权语义以 [GitOps SOP](../gitops/gitops-sop.md) 为准；术语以 [CONTEXT.md](../../CONTEXT.md) 为准；黑盒验收契约以 [testing.md](testing.md) 为准。
 > 技能来源：引用的技能来自 mattpocock-skills 插件（mattpocock-skills:<skill>），按需触发，不要求全部加载。
 > 组索引：[开发流程体系](README.md)（角色 / 需求收敛 / 验收 / 多 Agent 编排 / 模板）。
 

@@ -10,7 +10,7 @@
    security-audit / telemetry 等）新增或更新 ADR 决策文档并同步 `docs/adr/README.md` 索引：
    状态 Proposed → 实现后 Accepted，ADR 与实现、黑盒测试、文档进入同一提交，
    不把决策理由只留在聊天或 PR 里。
-3. 按 [正式测试契约](../testing.md) 先补独立黑盒测试，再做最小实现与白盒边界测试。
+3. 按 [正式测试契约](../dev-sop/testing.md) 先补独立黑盒测试，再做最小实现与白盒边界测试。
 4. 更新受影响的 README、配置样例、CHANGELOG 与 ADR 索引。
 5. 运行格式化、静态检查、测试和差异检查。
 6. 按可独立说明的批次提交 Git commit；多批次工作应保留多次提交记录。

@@ -4,7 +4,7 @@
 
 ## 权威顺序
 
-1. 用户已确认的需求、[CONTEXT.md](../CONTEXT.md) 与已接受 ADR 定义预期。
+1. 用户已确认的需求、[CONTEXT.md](../../CONTEXT.md) 与已接受 ADR 定义预期。
 2. 独立黑盒测试把预期变成可重复执行的正式验收。
 3. 实现代码与白盒单元测试证明内部实现，但不能反向修改需求预期。
 
@@ -26,18 +26,18 @@
 1. 为行为写明验收来源和可观察结果；复杂变更在提案或 ADR 中记录决策。
 2. 先新增或调整独立黑盒测试，并确认它因缺失目标行为而失败。
 3. 完成最小实现，再补白盒单元测试覆盖边界、错误分支和内部不变量。
-4. 先运行相关测试，再执行 [GitOps SOP](gitops/gitops-sop.md) 的全量门禁。
+4. 先运行相关测试，再执行 [GitOps SOP](../gitops/gitops-sop.md) 的全量门禁。
 5. 契约、黑盒、实现、示例和迁移说明在同一逻辑提交中保持一致。
 
 黑盒测试可以在明确的契约变更中更新，但提交必须同时给出需求或 ADR 依据；纯重构不得改变黑盒期望。
 
 ## 当前核心验收
 
-- EventName 文法、ErrorType / ErrorCode 分工以 [ADR-0009](adr/events/0009-event-name-fact-and-error-code.md) 为准。
-- event.name 的 `<event>` 必须是注册 Event Type（Event Name Convention）以 [ADR-0018](adr/events/0018-event-name-convention.md) 为准。
-- ErrorCode / ErrorType 严格文法、构造失败和旧入口兼容以 [ADR-0010](adr/errors/0010-strict-error-construction.md) 为准。
-- ErrorType 复用 OTel/gRPC 标准枚举（跨模块闭合枚举）以 [ADR-0016](adr/errors/0016-errortype-otel-grpc-standard-enum.md) 为准。
-- ErrorCode → ErrorType 固定映射（Error Registry）以 [ADR-0015](adr/errors/0015-error-registry.md) 为准，严格构造器对已注册码强制类型一致。
-- file/stdout 与 OTLP 双投影以 [OTel Logs 映射](reference/otel-logs-data-model.md) 为准。
-- HTTP AccessEvent 完整性、跨事件关联和后台事件边界以 [`example/blackbox`](../example/blackbox/README.md) 的公开场景与黑盒断言为准；最初的实施计划已归档为 [PR #16 历史提案](gitops/history/pr-0016-logging-system-optimization.md)。
+- EventName 文法、ErrorType / ErrorCode 分工以 [ADR-0009](../adr/events/0009-event-name-fact-and-error-code.md) 为准。
+- event.name 的 `<event>` 必须是注册 Event Type（Event Name Convention）以 [ADR-0018](../adr/events/0018-event-name-convention.md) 为准。
+- ErrorCode / ErrorType 严格文法、构造失败和旧入口兼容以 [ADR-0010](../adr/errors/0010-strict-error-construction.md) 为准。
+- ErrorType 复用 OTel/gRPC 标准枚举（跨模块闭合枚举）以 [ADR-0016](../adr/errors/0016-errortype-otel-grpc-standard-enum.md) 为准。
+- ErrorCode → ErrorType 固定映射（Error Registry）以 [ADR-0015](../adr/errors/0015-error-registry.md) 为准，严格构造器对已注册码强制类型一致。
+- file/stdout 与 OTLP 双投影以 [OTel Logs 映射](../reference/otel-logs-data-model.md) 为准。
+- HTTP AccessEvent 完整性、跨事件关联和后台事件边界以 [`example/blackbox`](../../example/blackbox/README.md) 的公开场景与黑盒断言为准；最初的实施计划已归档为 [PR #16 历史提案](../gitops/history/pr-0016-logging-system-optimization.md)。
 - 采样只在使用方显式配置后改变保留行为；默认行为必须由黑盒覆盖。

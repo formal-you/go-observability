@@ -6,7 +6,7 @@
 | [onboarding.md](onboarding.md) | 首次克隆后快速运行与定位代码 |
 | [reference/](reference/README.md) | 实现真源与参考指南：架构、代码准则、配置、环境变量、OTel 映射 |
 | [adr/](adr/README.md) | 追溯关键架构决策（ADR）：错误模型等「为什么这么做」的记录 |
-| [testing.md](testing.md) | 需求、缺陷或公共行为变更时，如何用独立黑盒测试固化正式验收 |
+| [testing.md](dev-sop/testing.md) | 正式测试契约：需求、缺陷或公共行为变更的黑盒验收真源 |
 | [security.md](security.md) | 设计脱敏、采样和日志治理策略 |
 | [gitops/](gitops/README.md) | GitOps 治理组：GitOps SOP、分支命名、Issue/PR 记录与归档、远程实操、发布清单 |
 | [dev-sop/](dev-sop/README.md) | 开发流程体系：需求收敛、角色模型、多 Agent 编排、验收模板与主剧本 |
