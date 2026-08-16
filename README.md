@@ -49,6 +49,7 @@
 | 📐 | **源即规范** | OTel semconv 1.41.0 + `app.*` vendor namespace，字段名可追踪 |
 | 🪞 | **双投影** | JSONL/stdout 保留运营友好扁平列，OTLP 映射正确的 LogRecord 顶层字段 |
 | 🔗 | **链路关联** | 从 context 关联 trace/span，不重复制造伪属性 |
+| 🧩 | **分层 span helper** | `otelutil.WithSpan` / `StartSpan` 一行包一层函数，自动父子关联、错误/panic 收尾 |
 | 🧨 | **错误投影** | 普通 error、值/指针错误和 `%w` 链都能稳定提取 |
 | 🗂️ | **语义注册表** | error.code、error.type、event.name 的固定映射与校验，漂移早暴露 |
 | 🛡️ | **日志治理** | 可注入 Sampler、递归 Masker、写入错误回调 |

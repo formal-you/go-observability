@@ -234,7 +234,8 @@ OTel 语义约定：规范化属性名、单位与命名（如 http.response.sta
 _Avoid_: 私有键、自造键名
 
 **Instrumentation（插桩）**:
-在应用中埋点产生信号；本项目以中间件形式提供（ginlog / metrics / trace / recover 等）。
+在应用中埋点产生信号；本项目以中间件形式提供（Trace / Metrics / Recover / SecurityLog / AuditLog 等），
+分层 span 由接入方在各层用 `otelutil.WithSpan` / `StartSpan` 手动创建（ADR-0023）。
 _Avoid_: 日志打印（埋点是结构化信号产生）
 
 ### 遥测与装配
