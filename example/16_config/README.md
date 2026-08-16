@@ -62,3 +62,21 @@ runtime, err := telemetry.NewRuntime(ctx, telemetry.Config{
 ```
 
 Log-only 与 all-file 同理；其中 `rotation` 需解析后转为 `file.WithRotation` 并放入 `LogConfig.FileOptions`，不会由库自动读取 YAML。
+## 从 app.example.yaml 解析并实例化
+
+新增的 [`main.go`](main.go) 是一个应用层示例：它读取本目录的 `app.example.yaml`，
+解析到应用自己的配置结构体，再映射为 `telemetry.Config` 和 `log.NewLogger` options。
+
+运行方式：
+
+```powershell
+cd example/16_config
+go run .
+```
+
+说明：
+
+- 库不会自动读取 YAML；`main.go` 演示的是应用侧映射代码。
+- `rotation` 先转成 `file.WithRotation`，再进入 `telemetry.LogConfig.FileOptions`。
+- `sampler` 用现有 `log.NewEventTypeKeepSampler` / `log.NewResultKeepSampler` 组合，不新增 `log.Config`。
+- 自定义 `sdktrace.SpanExporter` / `sdkmetric.Reader` 仍由代码注入，不放 YAML。
