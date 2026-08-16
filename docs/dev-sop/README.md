@@ -23,7 +23,7 @@
 | [roles.md](roles.md) | 角色模型：masterAgent / subAgent 职责边界 |
 | [requirement-clarify.md](requirement-clarify.md) | 模糊需求收敛：契约草案、假设清单、改动分级 |
 | [acceptance.md](acceptance.md) | 契约与验收：黑盒先行、DoD、回归与漂移 |
-| [testing.md](testing.md) | 正式测试契约：需求/缺陷/公共行为变更的黑盒验收真源 |
+| [testing.md](testing.md) | 正式测试契约：验证分级、黑盒验收与回归基线真源 |
 | [agent-orchestration.md](agent-orchestration.md) | 多 Agent 编排：subAgent 任务卡、分工、评审闭环 |
 | [templates/](templates/) | 可复用模板：任务卡、需求契约、验收清单 |
 

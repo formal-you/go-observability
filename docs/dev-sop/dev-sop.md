@@ -26,7 +26,7 @@
 | 3 契约先行 | masterAgent + subAgent-开发核心 | `to-spec` / `to-tickets` / `tdd`（红） | spec + tracer-bullet tickets + 独立黑盒测试先红（仓库硬门禁） |
 | 4 开发核心 | subAgent-开发核心 | `implement` / `tdd`（红-绿-重构）/ `diagnosing-bugs` | 最小实现 + 白盒边界测试（绿） |
 | 5 文档同步 | subAgent-开发核心 | `writing-for-agents`（涉及 AGENTS.md 时）/ 手动同步 README/示例/CHANGELOG/ADR 索引 | 单一真源：schema/API 变化与文档、示例、测试同提交 |
-| 6 验证与评审 | masterAgent + subAgent-评审 | `code-review` / 全量门禁命令 | 两轴评审结论 + gofmt / build / vet / test / race / diff --check 全绿 |
+| 6 验证与评审 | masterAgent + subAgent-评审 | `code-review` / 分级验证命令 | 两轴评审结论 + 按 [正式测试契约](testing.md) 分级验证通过 |
 | 7 收尾提交 | masterAgent | `handoff`（跨会话时） | 更新 issue 状态；显式路径暂存；Conventional Commit；按 [GitOps SOP](../gitops/gitops-sop.md) 授权语义 push/PR/merge |
 
 ## 3. 缝合协议（每阶段开始，降幻觉）
@@ -54,7 +54,7 @@
 
 - [ ] 契约与黑盒测试先于实现且为绿
 - [ ] 文档 / 示例 / CHANGELOG / ADR 索引同步（单一真源）
-- [ ] 全量门禁通过：`gofmt` / `go build ./...` / `go vet ./...` / `go test ./...` / `git diff --check`（资源允许加 `go test -race ./...`）
+- [ ] 按 [正式测试契约](testing.md) 分级验证通过（文档类不要求 go test；模块内定向；架构/全仓全量）
 - [ ] 工作区中的用户改动未被混入本次提交
 - [ ] 显式路径暂存 + Conventional Commit；不 push（除非用户明确要求）
 
