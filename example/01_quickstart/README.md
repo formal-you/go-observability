@@ -19,7 +19,7 @@ tail -n 1 ./logs/events.jsonl
 关键 API：
 
 - `telemetry.NewFileRuntime`：小单体 file-only 预设；
-- `runtime.NewWriter`：创建统一日志 Writer；
+- `runtime.NewLogWriter`：创建统一日志 Writer；
 - `log.NewLogger` + `WithTraceExtractor` + `WithErrorHandler`：装配 Logger；
 - `Logger.Emit`：写出类型化事件。
 

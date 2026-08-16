@@ -48,7 +48,7 @@ func TestNewRuntimeDisabledBlackBox(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Shutdown(context.Background())
-	w, err := r.NewWriter(context.Background())
+	w, err := r.NewLogWriter(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestNewRuntimeOutputIsFrozenBlackBox(t *testing.T) {
 	}
 	defer r.Shutdown(ctx)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "collector:4317")
-	w, err := r.NewWriter(ctx)
+	w, err := r.NewLogWriter(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestNewRuntimeOTLPWriterBlackBox(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Shutdown(ctx)
-	w, err := r.NewWriter(ctx)
+	w, err := r.NewLogWriter(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

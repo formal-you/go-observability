@@ -46,7 +46,7 @@ func main() {
 	defer restore()
 	defer func() { _ = providers.Shutdown(ctx) }()
 
-	w, err := providers.NewWriter(ctx)
+	w, err := providers.NewLogWriter(ctx)
 	if err != nil {
 		slog.Error("init log writer", "err", err)
 		os.Exit(1)

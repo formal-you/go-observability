@@ -95,7 +95,7 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 		}
 		build.loggerProvider = newLoggerProvider(cfg.Log, logExporter, res, build.counters)
 	default:
-		// file/stdout Writer 由 Runtime.NewWriter 延迟创建；none 不创建。
+		// file/stdout Writer 由 Runtime.NewLogWriter 延迟创建；none 不创建。
 	}
 
 	return &Runtime{

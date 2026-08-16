@@ -27,7 +27,7 @@ func TestNewRuntimeOutputContractBlackBox(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Shutdown(ctx)
-	w, err := r.NewWriter(ctx)
+	w, err := r.NewLogWriter(ctx)
 	if err != nil {
 		t.Fatalf("OTLP runtime must create its configured Writer: %v", err)
 	}

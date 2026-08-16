@@ -405,7 +405,7 @@ exporter，只生成本地有效 trace/span 用于日志关联，并把 `service
 带最低级别、输出路径和文件轮转的可运行配置见
 [`example/blackbox/config.example.yaml`](example/blackbox/config.example.yaml)。
 
-需要 Collector 时，使用 `telemetry.NewRuntime`，在 `Trace` / `Metric` / `Log` 分组中显式选择 `SignalOutputOTLP`；本地文件、容器标准输出和禁用日志分别使用 `SignalOutputFile`、`SignalOutputStdout` 和 `SignalOutputNone`。日志 Writer 参数进入 `Config.Log`，通过 `Runtime.NewWriter(ctx)` 创建。Runtime 构造不会修改 OTel 全局状态，应用需显式调用 `InstallGlobal` 并在退出时调用恢复函数。
+需要 Collector 时，使用 `telemetry.NewRuntime`，在 `Trace` / `Metric` / `Log` 分组中显式选择 `SignalOutputOTLP`；本地文件、容器标准输出和禁用日志分别使用 `SignalOutputFile`、`SignalOutputStdout` 和 `SignalOutputNone`。日志 Writer 参数进入 `Config.Log`，通过 `Runtime.NewLogWriter(ctx)` 创建。Runtime 构造不会修改 OTel 全局状态，应用需显式调用 `InstallGlobal` 并在退出时调用恢复函数。
 
 主示例通过环境变量选择出口：
 

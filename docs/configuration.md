@@ -2,7 +2,7 @@
 
 配置分三层：应用代码负责事件、Logger 和 `telemetry.Config`；进程环境负责启用状态与 OTLP 地址；Collector 和存储由部署平台维护。本库不读取 YAML 配置文件，仓库中的 YAML 只作为可复制模板。
 
-`telemetry.Config` 按信号拆为 `Resource` / `Trace` / `Metric` / `Log`。应用先 `NewRuntime`，再显式调用 `InstallGlobal`；日志 Writer 通过 `Runtime.NewWriter(ctx)` 创建，参数已进入 `Config.Log`。构造 Runtime 不修改进程全局 OTel 状态；应用应保存并调用恢复函数。
+`telemetry.Config` 按信号拆为 `Resource` / `Trace` / `Metric` / `Log`。应用先 `NewRuntime`，再显式调用 `InstallGlobal`；日志 Writer 通过 `Runtime.NewLogWriter(ctx)` 创建，参数已进入 `Config.Log`。构造 Runtime 不修改进程全局 OTel 状态；应用应保存并调用恢复函数。
 
 ## OTel 版本边界
 
@@ -97,7 +97,7 @@ defer func() {
 	}
 }()
 
-writer, err := runtime.NewWriter(ctx)
+writer, err := runtime.NewLogWriter(ctx)
 if err != nil {
 	return err
 }
@@ -110,7 +110,7 @@ defer writer.Close(ctx)
 
 选择出口时，`Enabled` 是总开关；`Enabled=true` 时 `Resource.ServiceName` 和
 `Log.Output` 必填，`Trace.Output` / `Metric.Output` 为空时默认 `otlp`。构造后的统一
-使用方式为 `NewRuntime` → `InstallGlobal` → `NewWriter` → `Shutdown`，以下示例只展示
+使用方式为 `NewRuntime` → `InstallGlobal` → `NewLogWriter` → `Shutdown`，以下示例只展示
 `Config` 差异。
 
 ```text
@@ -242,7 +242,7 @@ if err != nil {
 defer runtime.Shutdown(ctx)
 restore := runtime.InstallGlobal()
 defer restore()
-writer, err := runtime.NewWriter(ctx)
+writer, err := runtime.NewLogWriter(ctx)
 ```
 
 文件中的规范服务身份键为 `service.name`、`service.version`、`service.instance.id` 和
@@ -275,7 +275,7 @@ runtime, err := telemetry.NewFileRuntime(telemetry.Config{
 
 ## 日志出口
 
-`Runtime.NewWriter(ctx)` 根据 `Config.Log.Output` 创建 Writer：
+`Runtime.NewLogWriter(ctx)` 根据 `Config.Log.Output` 创建 Writer：
 
 - `SignalOutputOTLP`：复用 Runtime 的 LoggerProvider，Writer 不拥有也不会关闭 Provider。
 - `SignalOutputFile`：要求 `Log.FilePath`，并注入 Resource 服务身份。
@@ -284,7 +284,7 @@ runtime, err := telemetry.NewFileRuntime(telemetry.Config{
 
 出口由 `Config.Log.Output` 固化；后续修改环境变量不会改变已有 Runtime，需要重新构造后再切换。
 
-应用应检查构造错误，配置 `log.WithErrorHandler` 观察异步写入失败，并在退出时调用 `ManagedWriter.Close(ctx)`。`Runtime.NewWriter` 返回 `log.ManagedWriter`，其关闭操作幂等。需要同时写多个出口（如 stdout + 文件 + OTLP）时，用 `log.NewMultiWriter(writers...)` 组合 Writer；写入阶段任一子 Writer 失败不阻断其余，最终用 `errors.Join` 聚合错误；关闭阶段同样尝试关闭全部可关闭子 Writer 并聚合关闭错误。仅实现 `log.Writer` 的自定义 Adapter 可通过 `log.ManageWriter` 获得 no-op 关闭能力。完整代码见 [README](../README.md) 和 [`example/09_gin/main.go`](../example/09_gin/main.go)。
+应用应检查构造错误，配置 `log.WithErrorHandler` 观察异步写入失败，并在退出时调用 `ManagedWriter.Close(ctx)`。`Runtime.NewLogWriter` 返回 `log.ManagedWriter`，其关闭操作幂等。需要同时写多个出口（如 stdout + 文件 + OTLP）时，用 `log.NewMultiWriter(writers...)` 组合 Writer；写入阶段任一子 Writer 失败不阻断其余，最终用 `errors.Join` 聚合错误；关闭阶段同样尝试关闭全部可关闭子 Writer 并聚合关闭错误。仅实现 `log.Writer` 的自定义 Adapter 可通过 `log.ManageWriter` 获得 no-op 关闭能力。完整代码见 [README](../README.md) 和 [`example/09_gin/main.go`](../example/09_gin/main.go)。
 
 ## OTLP 队列溢出与告警
 

@@ -12,12 +12,12 @@ import (
 	stdoutwriter "github.com/formal-you/go-observability/logwriter/stdout"
 )
 
-// NewWriter 按 Runtime 保存的 LogConfig 创建 ManagedWriter。
+// NewLogWriter 按 Runtime 保存的 LogConfig 创建 ManagedWriter。
 //
 // file/stdout Writer 接收 Runtime 的 Resource identity；OTLP Writer 复用 Runtime 拥有的
 // LoggerProvider，因此关闭 Writer 不会提前关闭 Provider。返回值的 Close 幂等，应用仍应
 // 在 Runtime.Shutdown 前调用它，以释放 Writer 自己拥有的资源。
-func (r *Runtime) NewWriter(ctx context.Context) (log.ManagedWriter, error) {
+func (r *Runtime) NewLogWriter(ctx context.Context) (log.ManagedWriter, error) {
 	if r == nil {
 		return nil, errors.New("telemetry: nil runtime")
 	}

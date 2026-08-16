@@ -41,10 +41,10 @@ func main() {
 	restore := providers.InstallGlobal()
 	defer restore()
 
-	// NewWriter 创建的 ManagedWriter 拥有与 Runtime 一致的 Resource 身份；
+	// NewLogWriter 创建的 ManagedWriter 拥有与 Runtime 一致的 Resource 身份；
 	// 关闭顺序应是先 Close Writer（释放 Writer 自己拥有的资源），再 Shutdown
 	// Runtime（按 Log -> Metric -> Trace 关闭 Provider）。
-	w, err := providers.NewWriter(ctx)
+	w, err := providers.NewLogWriter(ctx)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "create log writer:", err)
 		os.Exit(1)

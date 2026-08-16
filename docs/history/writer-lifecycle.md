@@ -8,7 +8,7 @@
 
 ## 用户问题
 
-`telemetry.Runtime.NewWriter` 原先返回 `log.Writer`，该 Interface 只描述写入，不描述资源关闭。file、stdout 和 OTLP Adapter 实际都持有需要关闭的资源，但示例与测试只能重复执行 `Close(context.Context)` 类型断言。
+`telemetry.Runtime.NewLogWriter` 原先返回 `log.Writer`，该 Interface 只描述写入，不描述资源关闭。file、stdout 和 OTLP Adapter 实际都持有需要关闭的资源，但示例与测试只能重复执行 `Close(context.Context)` 类型断言。
 
 这让 Adapter 的生命周期知识越过 Writer Seam 泄漏到调用方。新增接入点容易忘记关闭，`MultiWriter` 也没有统一表达子 Writer 的所有权与关闭规则。
 
@@ -47,8 +47,8 @@
 
 实施前至少比较以下方案，并通过 ADR 选择：
 
-- 新增托管 Writer Interface，由 `Runtime.NewWriter` 返回写入与关闭能力。（已选择）
-- 保持 `Runtime.NewWriter` 返回 `log.Writer`，新增统一关闭函数并在内部识别生命周期能力。
+- 新增托管 Writer Interface，由 `Runtime.NewLogWriter` 返回写入与关闭能力。（已选择）
+- 保持 `Runtime.NewLogWriter` 返回 `log.Writer`，新增统一关闭函数并在内部识别生命周期能力。
 
 比较维度：向后兼容、Interface 大小、组合 Writer 所有权、关闭错误传播、测试是否只穿过公开 Seam。
 

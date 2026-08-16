@@ -122,7 +122,7 @@ func TestInstallGlobalRestoresInLIFOOrder(t *testing.T) {
 	_ = r1.Shutdown(context.Background())
 }
 
-func TestNewWriterFileInjectsResourceMetadata(t *testing.T) {
+func TestNewLogWriterFileInjectsResourceMetadata(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	r, err := NewFileRuntime(Config{
 		Resource: ResourceConfig{ServiceName: "mall", ServiceVersion: "1.2.3"},
@@ -132,7 +132,7 @@ func TestNewWriterFileInjectsResourceMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Shutdown(context.Background())
-	w, err := r.NewWriter(context.Background())
+	w, err := r.NewLogWriter(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,14 +155,14 @@ func TestNewWriterFileInjectsResourceMetadata(t *testing.T) {
 	}
 }
 
-func TestNewWriterStdoutUsesResourceAndOutput(t *testing.T) {
+func TestNewLogWriterStdoutUsesResourceAndOutput(t *testing.T) {
 	r := &Runtime{
 		resource:  resourceForConfig(ResourceConfig{ServiceName: "stdout-svc", Environment: "test"}),
 		logConfig: LogConfig{Output: SignalOutputStdout, StdoutOptions: []stdoutwriter.Option{stdoutwriter.WithOutput(&bytes.Buffer{})}},
 	}
 	var buf bytes.Buffer
 	r.logConfig.StdoutOptions = []stdoutwriter.Option{stdoutwriter.WithOutput(&buf)}
-	w, err := r.NewWriter(context.Background())
+	w, err := r.NewLogWriter(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,8 +177,8 @@ func TestNewWriterStdoutUsesResourceAndOutput(t *testing.T) {
 	}
 }
 
-func TestNewWriterNoneIsNoop(t *testing.T) {
-	w, err := (&Runtime{logConfig: LogConfig{Output: SignalOutputNone}}).NewWriter(context.Background())
+func TestNewLogWriterNoneIsNoop(t *testing.T) {
+	w, err := (&Runtime{logConfig: LogConfig{Output: SignalOutputNone}}).NewLogWriter(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestNewRuntimeDisabledKeepsFileWriter(t *testing.T) {
 	if p.Tracer("x") == nil || p.Meter("x") == nil {
 		t.Error("disabled runtime Tracer/Meter should fall back to global no-op")
 	}
-	w, err := p.NewWriter(ctx)
+	w, err := p.NewLogWriter(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
