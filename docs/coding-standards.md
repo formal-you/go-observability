@@ -1,7 +1,7 @@
 # 代码与注释准则
 
 本文是仓库代码实现与 Review 的规范真源。开发步骤、Git 门禁和验证命令仍以
-[开发工作流](workflow.md) 为准；领域词义以 [`CONTEXT.md`](../CONTEXT.md) 为准。
+[GitOps SOP](gitops-sop.md) 为准；领域词义以 [`CONTEXT.md`](../CONTEXT.md) 为准。
 
 ## 1. Go 代码
 

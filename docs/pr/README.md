@@ -46,4 +46,4 @@
 
 归档文档至少记录 PR 编号、Issue、最终状态、合并或关闭日期。GitHub PR 本身继续保存 Review、CI 和提交讨论，仓库不复制完整会话。
 
-Issue、分支、PR、CI、合并和关闭的完整流程以 [开发工作流](../workflow.md#issue--pr-开放流程) 为准。
+Issue、分支、PR、CI、合并和关闭的完整流程以 [GitOps SOP](../gitops-sop.md#issue--pr-开放流程) 为准。

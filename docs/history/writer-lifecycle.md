@@ -68,7 +68,7 @@
 - 外部测试包只通过公开 Interface 验证创建、写入、关闭和错误传播。
 - 使用可控的本地 Adapter 或内存 OTel Provider 验证所有权，不依赖真实 Collector。
 - 保留必要的白盒测试验证关闭一次、错误聚合和并发内部不变量，但白盒测试不得代替黑盒验收。
-- 完成后执行 `docs/workflow.md` 的完整 Go 门禁和 `git diff --check`。
+- 完成后执行 `docs/gitops-sop.md` 的完整 Go 门禁和 `git diff --check`。
 
 ## 后续候选
 

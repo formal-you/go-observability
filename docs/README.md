@@ -15,7 +15,8 @@
 | [otel-logs-data-model.md](otel-logs-data-model.md) | OTel Logs LogRecord 各顶层字段与 go-observability 的映射 |
 | [testing.md](testing.md) | 需求、缺陷或公共行为变更时，如何用独立黑盒测试固化正式验收 |
 | [security.md](security.md) | 设计脱敏、采样和日志治理策略 |
-| [workflow.md](workflow.md) | 提交代码、测试与维护兼容性 |
+| [gitops-sop.md](gitops-sop.md) | 实际代码/文档变更必须遵循的 GitOps 治理与提交流程 |
+| [dev-sop.md](dev-sop.md) | 开发任务 SOP（demo 草案）：需求收敛、多 Agent 编排、契约先行到提交的完整剧本 |
 | [branching.md](branching.md) | 创建或重命名分支时遵循的类型、Issue 编号与 slug 规范 |
 | [github-remote-workflow.md](github-remote-workflow.md) | Codex 创建 Issue/PR、处理 CI、squash merge 与同步主分支时选择性阅读 |
 | [samber-comparison.md](samber-comparison.md) | 评估与 samber slog 生态的取舍 |

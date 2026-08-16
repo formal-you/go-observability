@@ -2,7 +2,7 @@
 
 本地用 Markdown 记录需求 / 缺陷 / 任务，模拟 GitHub Issue 的字段结构，不依赖远程仓库即可工作。每个文件是一次 issue 记录；内容稳定后，有远程仓库时按这些文件在 GitHub 新建 Issue，远程 Issue 是任务状态、讨论与完成证据的真源。
 
-**每个 issue 对应一个独立分支：形成 issue 的同时开出 `feat/<slug>` / `fix/<slug>` 分支**，实现与合并都挂在该分支上。分支的实际创建时机遵循 [开发工作流](../workflow.md#4-codex-授权语义) 的 Codex 授权语义（用户只说「创建 Issue」时不自动开分支，说「完成这个 Issue / 创建 PR」时才开分支）。
+**每个 issue 对应一个独立分支：形成 issue 的同时开出 `feat/<slug>` / `fix/<slug>` 分支**，实现与合并都挂在该分支上。分支的实际创建时机遵循 [GitOps SOP](../gitops-sop.md#4-codex-授权语义) 的 Codex 授权语义（用户只说「创建 Issue」时不自动开分支，说「完成这个 Issue / 创建 PR」时才开分支）。
 
 ## 文件名约定
 

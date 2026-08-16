@@ -1,6 +1,6 @@
 # SOP-github-flow.ps1 使用说明
 
-脚本位置：仓库根目录 `SOP-github-flow.ps1`（`docs/workflow.md` 的「SOP 自动化脚本（参考）」有使用摘要）
+脚本位置：仓库根目录 `SOP-github-flow.ps1`（`docs/gitops-sop.md` 的「SOP 自动化脚本（参考）」有使用摘要）
 
 作用：在一个命令里完成：
 

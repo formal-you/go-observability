@@ -110,7 +110,7 @@ go-observability/
 │
 ├── docs/                        # 用户文档（文档索引见 docs/README.md）
 │   ├── architecture.md          # 本文档
-│   ├── configuration.md / environment.md / onboarding.md / workflow.md
+│   ├── configuration.md / environment.md / onboarding.md / gitops-sop.md / dev-sop.md
 │   ├── security.md / samber-comparison.md / release-checklist.md
 │   └── go-observability-architecture.drawio   # 可编辑架构图
 │
