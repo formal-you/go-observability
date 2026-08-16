@@ -38,6 +38,6 @@
 - ErrorCode / ErrorType 严格文法、构造失败和旧入口兼容以 [ADR-0010](adr/errors/0010-strict-error-construction.md) 为准。
 - ErrorType 复用 OTel/gRPC 标准枚举（跨模块闭合枚举）以 [ADR-0016](adr/errors/0016-errortype-otel-grpc-standard-enum.md) 为准。
 - ErrorCode → ErrorType 固定映射（Error Registry）以 [ADR-0015](adr/errors/0015-error-registry.md) 为准，严格构造器对已注册码强制类型一致。
-- file/stdout 与 OTLP 双投影以 [OTel Logs 映射](otel-logs-data-model.md) 为准。
+- file/stdout 与 OTLP 双投影以 [OTel Logs 映射](reference/otel-logs-data-model.md) 为准。
 - HTTP AccessEvent 完整性、跨事件关联和后台事件边界以 [`example/blackbox`](../example/blackbox/README.md) 的公开场景与黑盒断言为准；最初的实施计划已归档为 [PR #16 历史提案](gitops/history/pr-0016-logging-system-optimization.md)。
 - 采样只在使用方显式配置后改变保留行为；默认行为必须由黑盒覆盖。

@@ -13,7 +13,7 @@
 | [`collector.example.yaml`](collector.example.yaml) | Trace、Metric、Log Collector 管线 |
 | [`docker-compose.example.yml`](docker-compose.example.yml) | 应用与参考栈的 Compose 连接示意 |
 
-完整本地栈见 [`observability`](../../observability/)；配置字段与优先级见 [配置指南](../../docs/configuration.md)。复制后务必替换服务名、环境、地址和认证配置，不要把真实凭证提交到 Git。
+完整本地栈见 [`observability`](../../observability/)；配置字段与优先级见 [配置指南](../../docs/reference/configuration.md)。复制后务必替换服务名、环境、地址和认证配置，不要把真实凭证提交到 Git。
 
 ## 从模板映射到 Runtime
 

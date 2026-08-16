@@ -1,7 +1,7 @@
 # 代码与注释准则
 
 本文是仓库代码实现与 Review 的规范真源。开发步骤、Git 门禁和验证命令仍以
-[GitOps SOP](gitops/gitops-sop.md) 为准；领域词义以 [`CONTEXT.md`](../CONTEXT.md) 为准。
+[GitOps SOP](../gitops/gitops-sop.md) 为准；领域词义以 [`CONTEXT.md`](../../CONTEXT.md) 为准。
 
 ## 1. Go 代码
 
@@ -46,6 +46,6 @@
 - 请求期预期内拒绝走 `errs.BizError`，非预期故障走 `errs.SystemError`，经 `ginmw.Abort` / error return 进入统一错误收口。
 - `Recover` 只兜真正的程序缺陷，并写出 `runtime.panic.occurred` + `error.type=INTERNAL` 的 `ErrorEvent`（含 `stacktrace` 与 `code.*`）；它不是容错方案。
 - panic 现场诊断以 ErrorEvent 内的 stack/code 为准，pprof 只用于持续剖析，不作为 panic 首要定位工具。
-- 决策依据见 [ADR-0021](adr/errors/0021-panic-boundary-and-recover.md)。
+- 决策依据见 [ADR-0021](../adr/errors/0021-panic-boundary-and-recover.md)。
 
 完成标准：修改后的代码通过 `gofmt`、build、vet、全量测试和 `git diff --check`；所有新增公共标识符均有准确 Go Doc，关键并发与资源所有权可仅通过相邻注释判断。

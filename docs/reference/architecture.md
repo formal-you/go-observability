@@ -1,6 +1,6 @@
 # 架构说明
 
-> 本文档与 `README.md`、`docs/configuration.md`、`AGENTS.md` 共同构成仓库内"项目真源"。
+> 本文档与 `README.md`、`docs/reference/configuration.md`、`AGENTS.md` 共同构成仓库内"项目真源"。
 > 用途：作为**代码 Review 的导航图**与改动前的边界核对清单；文档与代码不一致时以代码为准，并在同一提交中修正文档。
 
 ## 1. 项目定位与设计原则
@@ -11,7 +11,7 @@
 - **核心零依赖**：`log/` 包只依赖标准库与本仓库 `errs`（`errs` 只依赖标准库；`log/slog`、`net`、`time`、`fmt`、`strings` 为 log 包主要标准库依赖）；OTel SDK 依赖只允许出现在 `internal/attrkv`、`logwriter/*`、`telemetry`、`middleware/*`、`example/*`。
 - **批量导出分两层**：SDK 侧由 `telemetry.Config` 的批量导出间隔控制（trace 5s / metric 15s / log 1s），Collector 侧由 batch processor（timeout / send_batch_size）二次凑批；核心层每次 `Emit` 同步写出，不做批处理/定时器。
 - **出口可替换**：同一事件模型可投影到 JSONL / stdout / OTLP，业务埋点不因出口变化而重写。
-- **决策记录（ADR）**：错误模型（ErrorType / ErrorCode）等关键决策记录在 [docs/adr/](adr/README.md)，Review 时对照 ADR 判断实现是否漂移。
+- **决策记录（ADR）**：错误模型（ErrorType / ErrorCode）等关键决策记录在 [docs/adr/](../adr/README.md)，Review 时对照 ADR 判断实现是否漂移。
 
 ## 2. 分层架构
 
@@ -109,8 +109,8 @@ go-observability/
 │   └── samber/main.go           # 与 samber slog handler 互操作
 │
 ├── docs/                        # 用户文档（文档索引见 docs/README.md）
-│   ├── architecture.md          # 本文档
-│   ├── configuration.md / environment.md / onboarding.md
+│   ├── reference/               # 实现真源与参考指南（架构/代码准则/配置/环境变量/OTel 映射，索引见 reference/README.md）
+│   ├── onboarding.md
 │   ├── security.md / samber-comparison.md
 │   ├── gitops/                  # GitOps 治理组（分支/Issue/PR/发布，索引见 gitops/README.md）
 │   ├── dev-sop/                 # 开发流程体系（需求收敛/角色/多 Agent 编排，索引见 dev-sop/README.md）
@@ -246,4 +246,4 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 
 改动后的本地验证：`gofmt -w <改动文件>` → `go build ./...` → `go vet ./...` → `go test ./...`（本机低内存组合：`$env:GOMAXPROCS=1; $env:GOGC=30`）。
 
-完整示例见 [`example/mall`](../example/mall/)；可编辑架构图见 [go-observability-architecture.drawio](go-observability-architecture.drawio)。
+完整示例见 [`example/mall`](../../example/mall/)；可编辑架构图见 [go-observability-architecture.drawio](../go-observability-architecture.drawio)。

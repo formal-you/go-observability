@@ -16,7 +16,7 @@
 ## 评审闭环（subAgent-评审 / code-review）
 
 1. spec 符合性：是否满足 issue / 契约；
-2. 代码质量：是否符合 `docs/coding-standards.md`；
+2. 代码质量：是否符合 `docs/reference/coding-standards.md`；
 3. 结论交 masterAgent，必要时回退开发核心修复。
 
 ## 上下文缝合（降幻觉）

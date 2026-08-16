@@ -208,7 +208,7 @@ runtime, _ = telemetry.NewOTLPRuntime(ctx, "order-api", "otel-collector:4317")
 runtime, _ = telemetry.NewAllFileRuntime(ctx, "order-api", "logs")
 ```
 
-完整字段与配置模板见 [配置指南](docs/configuration.md)。
+完整字段与配置模板见 [配置指南](docs/reference/configuration.md)。
 
 
 <a name="registry"></a>
@@ -309,7 +309,7 @@ _ = hasName
 └── 🧹 统一 Resource 与 Shutdown
 ```
 
-更完整的数据流、所有权和关闭顺序见 [架构说明](docs/architecture.md)。
+更完整的数据流、所有权和关闭顺序见 [架构说明](docs/reference/architecture.md)。
 
 ---
 
@@ -433,7 +433,7 @@ https://collector:4317 → TLS URL 语义
 docker compose -f observability/docker-compose.yml up -d
 ```
 
-配置边界见 [配置指南](docs/configuration.md) 与 [环境变量速查](docs/environment.md)。
+配置边界见 [配置指南](docs/reference/configuration.md) 与 [环境变量速查](docs/reference/environment.md)。
 
 ---
 
@@ -493,8 +493,8 @@ go test ./...
 | | 文档 | 适合什么时候看 |
 |:---:|:---|:---|
 | 🚀 | [快速接入](docs/onboarding.md) | 第一次接入 Logger 与 telemetry |
-| ⚙️ | [配置指南](docs/configuration.md) | 选择 Config、环境变量与 Writer |
-| 🏗️ | [架构说明](docs/architecture.md) | 理解分层、数据流与所有权 |
+| ⚙️ | [配置指南](docs/reference/configuration.md) | 选择 Config、环境变量与 Writer |
+| 🏗️ | [架构说明](docs/reference/architecture.md) | 理解分层、数据流与所有权 |
 | 🛡️ | [安全政策](SECURITY.md) | 查看漏洞报告与处理原则 |
 | 🤝 | [贡献指南](CONTRIBUTING.md) | 准备开发、验证和提交 PR |
 | 🧭 | [文档索引](docs/README.md) | 浏览全部用户文档 |

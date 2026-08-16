@@ -43,4 +43,4 @@
 - 正面：Body 低基数可聚合；细名走 OTel 原生字段；file/stdout 有稳定的粗分类列。
 - 已知张力（已解决）：`eventType` 命名与 slog「消息」语义不一致，本次已把 Writer 首个参数由 `msg` 改名为 `eventType`（见 CHANGELOG）；event_type 是 event.name 的第一段，
   存在可推导冗余（已按备选方案 C 改名 eventType，见 CHANGELOG）。
-- 现状：决策已固化于 CONTEXT.md（Body 定义）与 docs/architecture.md（type 即 event_type）。
+- 现状：决策已固化于 CONTEXT.md（Body 定义）与 docs/reference/architecture.md（type 即 event_type）。

@@ -11,7 +11,7 @@
 //	go run ./example/14_otel_logs
 //
 // 教学要点：file 输出扁平 JSONL，OTLP 输出把 timestamp / level / trace/span
-// 映射到 LogRecord 顶层字段。完整映射见 docs/otel-logs-data-model.md。
+// 映射到 LogRecord 顶层字段。完整映射见 docs/reference/otel-logs-data-model.md。
 package main
 
 import (

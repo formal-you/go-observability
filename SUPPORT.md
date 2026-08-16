@@ -4,9 +4,9 @@
 
 | 问题 | 建议渠道 |
 | --- | --- |
-| 使用与配置 | 先查 [配置指南](docs/configuration.md) 和 [示例索引](example/README.md) |
+| 使用与配置 | 先查 [配置指南](docs/reference/configuration.md) 和 [示例索引](example/README.md) |
 | 缺陷与功能建议 | 公开仓库上线后使用 GitHub Issues，并附 Go 版本、最小复现和测试输出 |
-| 架构讨论 | 参考 [架构说明](docs/architecture.md)，在 Issue 中描述约束与预期行为 |
+| 架构讨论 | 参考 [架构说明](docs/reference/architecture.md)，在 Issue 中描述约束与预期行为 |
 | 安全漏洞 | 仅按 [安全政策](SECURITY.md) 使用私密渠道，不公开利用细节 |
 
 提问前请确认问题可在当前 `main` 重现，并移除日志中的凭证和个人数据。
