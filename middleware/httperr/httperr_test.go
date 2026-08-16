@@ -80,10 +80,17 @@ func TestClassifyError(t *testing.T) {
 }
 
 func TestResponseBody(t *testing.T) {
-	t.Run("validation", func(t *testing.T) {
+	t.Run("validation without code falls back", func(t *testing.T) {
 		body := ResponseBody(errs.NewValidation("bad"), "")
 		if body["code"] != "VALIDATION_ERROR" || body["message"] != "bad" {
-			t.Errorf("body = %v", body)
+			t.Errorf("body = %v, want VALIDATION_ERROR fallback", body)
+		}
+	})
+	t.Run("validation with code passthrough", func(t *testing.T) {
+		err := customAppError{kind: errs.KindValidation, code: "USER.INPUT.INVALID", typ: errs.TypeInvalidArgument, msg: "bad"}
+		body := ResponseBody(err, "")
+		if body["code"] != "USER.INPUT.INVALID" || body["message"] != "bad" {
+			t.Errorf("body = %v, want 真实校验业务码", body)
 		}
 	})
 	t.Run("business", func(t *testing.T) {
@@ -104,10 +111,10 @@ func TestResponseBody(t *testing.T) {
 			t.Errorf("body = %v", body)
 		}
 	})
-	t.Run("plain", func(t *testing.T) {
+	t.Run("plain unknown", func(t *testing.T) {
 		body := ResponseBody(errors.New("boom"), "")
-		if body["code"] != "SYS_ERROR" {
-			t.Errorf("code = %v, want SYS_ERROR", body["code"])
+		if body["code"] != "UNKNOWN_ERROR" || body["message"] != "发生未知错误" {
+			t.Errorf("body = %v, want UNKNOWN_ERROR/发生未知错误", body)
 		}
 	})
 	t.Run("request id", func(t *testing.T) {
@@ -243,3 +250,18 @@ func TestEmitGuardEvents(t *testing.T) {
 		}
 	})
 }
+
+// customAppError 实现 errs.AppError，覆盖内置构造器无法表达的分支
+// （如带业务码的校验错误），黑盒验证 ResponseBody 的真实业务码透出。
+type customAppError struct {
+	kind errs.ErrorKind
+	code errs.ErrorCode
+	typ  errs.ErrorType
+	msg  string
+}
+
+func (e customAppError) Error() string             { return e.msg }
+func (e customAppError) Kind() errs.ErrorKind      { return e.kind }
+func (e customAppError) ErrCode() errs.ErrorCode   { return e.code }
+func (e customAppError) ErrorType() errs.ErrorType { return e.typ }
+func (e customAppError) Unwrap() error             { return nil }

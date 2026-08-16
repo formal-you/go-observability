@@ -106,6 +106,60 @@ func TestErrorResponseValidationErrorWritesEventAndResponse(t *testing.T) {
 	attrString(t, attrs, "level", "WARN")
 }
 
+// TestErrorResponseValidationErrorWithCode 验证带业务码的校验错误（KindValidation + ErrCode）：
+// 状态码 400、响应体透出真实业务码（未发布版开发期契约，便于直接查看结果），事件投影为 business。
+func TestErrorResponseValidationErrorWithCode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &captureWriter{}
+	logger := log.NewLogger(w)
+	r := gin.New()
+	r.Use(ErrorResponse(ErrorConfig{Logger: logger, EventName: testErrEventName}))
+	r.GET("/orders", func(c *gin.Context) {
+		Abort(c, customAppError{kind: errs.KindValidation, code: "USER.INPUT.INVALID", typ: errs.TypeInvalidArgument, msg: "order id is required"})
+	})
+
+	rec := doRequest(r, "/orders")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("解析响应体失败: %v（body=%s）", err, rec.Body.String())
+	}
+	if resp["code"] != "USER.INPUT.INVALID" {
+		t.Errorf("code = %v, want 真实校验业务码", resp["code"])
+	}
+	if resp["message"] != "order id is required" {
+		t.Errorf("message = %v, want 校验错误透传", resp["message"])
+	}
+
+	if len(w.eventTypes) != 1 || w.eventTypes[0] != "business" {
+		t.Fatalf("eventTypes = %v, want [business]", w.eventTypes)
+	}
+	attrs := attrMap(w.attrsList[0])
+	attrString(t, attrs, "event.name", string(testErrEventName))
+	attrString(t, attrs, "error.type", "INVALID_ARGUMENT")
+	attrString(t, attrs, "error.code", "USER.INPUT.INVALID")
+	attrString(t, attrs, "app.result", "failed")
+	attrString(t, attrs, "level", "WARN")
+}
+
+// customAppError 实现 errs.AppError，覆盖内置构造器无法表达的分支
+// （如带业务码的校验错误），黑盒验证错误收口透出真实业务码。
+type customAppError struct {
+	kind errs.ErrorKind
+	code errs.ErrorCode
+	typ  errs.ErrorType
+	msg  string
+}
+
+func (e customAppError) Error() string             { return e.msg }
+func (e customAppError) Kind() errs.ErrorKind      { return e.kind }
+func (e customAppError) ErrCode() errs.ErrorCode   { return e.code }
+func (e customAppError) ErrorType() errs.ErrorType { return e.typ }
+func (e customAppError) Unwrap() error             { return nil }
+
 // TestErrorResponseSystemErrorHidesMessage 验证系统错误（KindSystem）：
 // 状态码 500、响应体固定 SYS_ERROR 消息不泄露内部细节、事件投影为 error 事件（ERROR）。
 func TestErrorResponseSystemErrorHidesMessage(t *testing.T) {
