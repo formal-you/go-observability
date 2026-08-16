@@ -19,7 +19,7 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
-	stdoutwriter "github.com/formal-you/go-observability/writer/stdout"
+	stdoutwriter "github.com/formal-you/go-observability/logwriter/stdout"
 )
 
 func TestNewRuntimeDoesNotInstallGlobals(t *testing.T) {

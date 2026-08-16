@@ -5,9 +5,10 @@
 ## [Unreleased]
 
 ### Changed
+- `writer/` 目录重命名为 `logwriter/`：`writer/file`、`writer/stdout`、`writer/otlp` 的公开导入路径改为 `logwriter/file`、`logwriter/stdout`、`logwriter/otlp`。迁移：全局替换导入路径 `github.com/formal-you/go-observability/writer/` → `github.com/formal-you/go-observability/logwriter/`；包名（`file`/`stdout`/`otlp`）不变。
 - `example/` 重构为编号教学课程：原 `minimal/nethttp/metrics/samber/config/otel/errorhandler` 与根 `example/main.go` 分别迁移为 `01_quickstart` 至 `16_config` 的教学目录；新增 `02_events`、`03_errors`、`04_sampler_masker`、`05_multiwriter`、`07_telemetry`、`10_grpc`、`11_kratos`、`12_security_audit`、`14_otel_logs`，并把 `mall` 扩展为端到端参考服务；`example/otel` 改写为使用本项目 `telemetry` 的 OTel Logs 双投影示例，不再保留上游裸 OTel demo。
 
-- 配置指南补充 Trace 采样决策传播、Masker 作用域、semconv 版本差距、OTLP 队列溢出告警、传输安全边界和 MultiWriter 写入语义；`writer/file` 在轮转未设置保留上限时输出 WARN 自诊断。
+- 配置指南补充 Trace 采样决策传播、Masker 作用域、semconv 版本差距、OTLP 队列溢出告警、传输安全边界和 MultiWriter 写入语义；`logwriter/file` 在轮转未设置保留上限时输出 WARN 自诊断。
 - `telemetry` 破坏性重构为按信号拆分配置：`Config` 拆为 `Resource` / `Trace` / `Metric` / `Log`；统一 `SignalOutput`（`file`/`otlp`/`stdout`/`none`，Trace 另有 `local`）；`Runtime.NewWriter` 改为 `NewWriter(ctx)`，日志参数进入 `LogConfig`；删除 `LogOutput`、`Providers`、`WriterConfig`、`Setup*`、`NewLogWriter`、`Runtime.Resource`、`Runtime.LoggerProvider` 兼容层。迁移：`ServiceName` 等移入 `Resource`，`LogOutputX` 改为 `SignalOutputX`，`TraceOutput/MetricOutput` 移入 `Trace/Metric.Output`，`NewWriter(ctx, WriterConfig{...})` 改为 `NewWriter(ctx)`。
 
 - Gin `Abort(nil)` 的固定系统错误改为包初始化时构造并验证，请求路径只复用已验证错误，避免在请求处理中触发库内固定契约构造失败。
@@ -101,6 +102,6 @@
 - 修复 `FieldMasker` 未递归处理 map、slice 与 `LogValuer` 导致的嵌套敏感字段泄漏。
 - 修复指针及 `%w` 包装错误丢失 retry、source、stack、upstream 信息，并为 typed-nil error 提供安全兜底。
 - 阻止 `BusinessPayload.ExtraAttrs` 覆盖身份、资源、业务、代码位置、`event.name` 与 `app.result` 等 canonical 字段。
-- `writer/file` JSONL 输出改为固定规范字段顺序（timestamp → level → msg → 链路/延迟 → event.name → 事件字段 → app.result 收尾），消除同一字段（尤其 `app.result`）在不同事件间相对位置漂移。
+- `logwriter/file` JSONL 输出改为固定规范字段顺序（timestamp → level → msg → 链路/延迟 → event.name → 事件字段 → app.result 收尾），消除同一字段（尤其 `app.result`）在不同事件间相对位置漂移。
 
 尚未创建首个版本标签，链接定义将在正式发布时补充。

@@ -18,8 +18,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	log "github.com/formal-you/go-observability/log"
+	otlpwriter "github.com/formal-you/go-observability/logwriter/otlp"
 	"github.com/formal-you/go-observability/middleware/otelutil"
-	otlpwriter "github.com/formal-you/go-observability/writer/otlp"
 )
 
 const blackboxEventCount = 13

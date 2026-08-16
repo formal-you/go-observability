@@ -7,9 +7,9 @@ import (
 	"log/slog"
 
 	"github.com/formal-you/go-observability/log"
-	"github.com/formal-you/go-observability/writer/file"
-	"github.com/formal-you/go-observability/writer/otlp"
-	stdoutwriter "github.com/formal-you/go-observability/writer/stdout"
+	"github.com/formal-you/go-observability/logwriter/file"
+	"github.com/formal-you/go-observability/logwriter/otlp"
+	stdoutwriter "github.com/formal-you/go-observability/logwriter/stdout"
 )
 
 // NewWriter 按 Runtime 保存的 LogConfig 创建 ManagedWriter。

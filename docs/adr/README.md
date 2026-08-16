@@ -57,6 +57,7 @@ ADR 按主题分目录存放，编号仍全局递增、不重用。
 | --- | --- | --- | --- |
 | [0014](telemetry/0014-managed-writer-lifecycle.md) | 通过 ManagedWriter 统一 Writer 生命周期 | Accepted | 2026-08-12 |
 | [0020](telemetry/0020-telemetry-per-signal-config.md) | Telemetry 按信号拆分配置并移除兼容层 | Accepted | 2026-08-15 |
+| [0022](telemetry/0022-logwriter-package-naming.md) | 日志写出实现目录命名为 logwriter/ | Accepted | 2026-08-16 |
 
 
 ## 模板
