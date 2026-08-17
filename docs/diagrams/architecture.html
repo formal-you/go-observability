@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>go-observability 系统架构</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #FAF9F6; min-height: 100vh; padding: 2.5rem 2rem; color: #1a1a1a;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.375rem; }
+    .pulse-dot { width: 10px; height: 10px; background: #D97757; border-radius: 50%;
+      animation: pulse 2.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.9); } }
+    h1 { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em; color: #1a1a1a; }
+    .subtitle { color: #8B8680; font-size: 0.8125rem; margin-left: 1.625rem; letter-spacing: 0.01em; }
+    .diagram-desc { color: #B0AAA4; font-size: 0.6875rem; margin-top: 0.5rem; margin-left: 1.625rem;
+      line-height: 1.5; font-style: italic; }
+    .diagram-container { background: #FFFFFF; border-radius: 12px; border: 1px solid #E8E4DE;
+      padding: 1.5rem; overflow-x: auto;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.02); }
+    svg { width: 100%; min-width: 900px; display: block; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem; margin-top: 1.5rem; }
+    .card { background: #FFFFFF; border-radius: 10px; border: 1px solid #E8E4DE;
+      padding: 1.125rem 1.25rem; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.625rem; }
+    .card-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .card-dot.terracotta { background: #D97757; }
+    .card-dot.sage { background: #5B8A72; }
+    .card-dot.slate { background: #6B7280; }
+    .card-dot.plum { background: #8B6F8A; }
+    .card-dot.rose { background: #C96464; }
+    .card h3 { font-size: 0.8125rem; font-weight: 600; color: #1a1a1a; }
+    .card ul { list-style: none; color: #6B6560; font-size: 0.75rem; line-height: 1.6; }
+    .card li { margin-bottom: 0.25rem; }
+    .footer { text-align: center; margin-top: 1.5rem; color: #B0AAA4; font-size: 0.6875rem; letter-spacing: 0.02em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>go-observability 系统架构</h1>
+      </div>
+      <p class="subtitle">slog 与 OpenTelemetry 之间的语义层 · 事件类型稳定 · 字段来源明确 · 三信号统一装配</p>
+      <p class="diagram-desc"><b>架构图 (Architecture Diagram)</b> — 结构性图形。描述系统顶层组件、连接关系与依赖方向。</p>
+    </div>
+    <div class="diagram-container">
+      <svg viewBox="0 0 1100 880">
+        <defs>
+
+          <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#B0AAA4" />
+          </marker>
+          <marker id="arrowhead-terracotta" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#D97757" />
+          </marker>
+          <marker id="arrowhead-rose" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#C96464" />
+          </marker>
+          <marker id="arrowhead-sage" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#5B8A72" />
+          </marker>
+          <marker id="arrowhead-plum" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#8B6F8A" />
+          </marker>
+          <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="0.6" fill="#E0DCD6"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#dots)" />
+<rect x="40" y="70" width="210" height="52" rx="8" fill="#FFF5F0" stroke="#D97757" stroke-width="1.2"/>
+<text x="145.0" y="89" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">Gin App</text>
+<text x="145.0" y="110" fill="#8B8680" font-size="9" text-anchor="middle">gin</text>
+
+<rect x="290" y="70" width="210" height="52" rx="8" fill="#FFF5F0" stroke="#D97757" stroke-width="1.2"/>
+<text x="395.0" y="89" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">net/http App</text>
+<text x="395.0" y="110" fill="#8B8680" font-size="9" text-anchor="middle">http</text>
+
+<rect x="540" y="70" width="210" height="52" rx="8" fill="#FFF5F0" stroke="#D97757" stroke-width="1.2"/>
+<text x="645.0" y="89" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">gRPC App</text>
+<text x="645.0" y="110" fill="#8B8680" font-size="9" text-anchor="middle">grpc</text>
+
+<rect x="790" y="70" width="210" height="52" rx="8" fill="#FFF5F0" stroke="#D97757" stroke-width="1.2"/>
+<text x="895.0" y="89" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">Kratos App</text>
+<text x="895.0" y="110" fill="#8B8680" font-size="9" text-anchor="middle">kratos v3</text>
+
+<rect x="40" y="180" width="140" height="50" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="110.0" y="199" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">middleware/httperr</text>
+<text x="110.0" y="218" fill="#8B8680" font-size="9" text-anchor="middle">错误收口契约</text>
+
+<rect x="200" y="180" width="140" height="50" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="270.0" y="199" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">middleware/otelutil</text>
+<text x="270.0" y="218" fill="#8B8680" font-size="9" text-anchor="middle">链路注入/提取</text>
+
+<rect x="360" y="180" width="140" height="50" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="430.0" y="199" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">middleware/gin</text>
+<text x="430.0" y="218" fill="#8B8680" font-size="9" text-anchor="middle">Gin 适配</text>
+
+<rect x="520" y="180" width="140" height="50" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="590.0" y="199" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">middleware/http</text>
+<text x="590.0" y="218" fill="#8B8680" font-size="9" text-anchor="middle">net/http 适配</text>
+
+<rect x="680" y="180" width="140" height="50" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="750.0" y="199" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">middleware/grpc</text>
+<text x="750.0" y="218" fill="#8B8680" font-size="9" text-anchor="middle">gRPC 适配</text>
+
+<rect x="840" y="180" width="140" height="50" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="910.0" y="199" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">middleware/kratos</text>
+<text x="910.0" y="218" fill="#8B8680" font-size="9" text-anchor="middle">Kratos 适配</text>
+
+<rect x="40" y="300" width="1020" height="140" rx="12" fill="#FDFCFB" stroke="#8B6F8A" stroke-width="1" stroke-dasharray="6,4"/>
+
+<text x="58" y="320" fill="#8B6F8A" font-size="10" font-weight="600">log/ 事件核心（零 OTel 依赖，只依赖标准库 + errs）</text>
+
+<rect x="70" y="352" width="140" height="46" rx="8" fill="#F5F3F8" stroke="#8B6F8A" stroke-width="1.2"/>
+<text x="140.0" y="371" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">Event 模型</text>
+<text x="140.0" y="386" fill="#8B6F8A" font-size="9" text-anchor="middle">六类事件</text>
+
+<rect x="230" y="352" width="140" height="46" rx="8" fill="#F5F3F8" stroke="#8B6F8A" stroke-width="1.2"/>
+<text x="300.0" y="371" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">Sampler</text>
+<text x="300.0" y="386" fill="#8B6F8A" font-size="9" text-anchor="middle">采样判定</text>
+
+<rect x="390" y="352" width="140" height="46" rx="8" fill="#F5F3F8" stroke="#8B6F8A" stroke-width="1.2"/>
+<text x="460.0" y="371" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">Masker</text>
+<text x="460.0" y="386" fill="#8B6F8A" font-size="9" text-anchor="middle">递归脱敏</text>
+
+<rect x="550" y="352" width="140" height="46" rx="8" fill="#F5F3F8" stroke="#8B6F8A" stroke-width="1.2"/>
+<text x="620.0" y="371" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">Normalize</text>
+<text x="620.0" y="386" fill="#8B6F8A" font-size="9" text-anchor="middle">字段归一化</text>
+
+<rect x="710" y="352" width="140" height="46" rx="8" fill="#F5F3F8" stroke="#8B6F8A" stroke-width="1.2"/>
+<text x="780.0" y="371" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">TraceExtractor</text>
+<text x="780.0" y="386" fill="#8B6F8A" font-size="9" text-anchor="middle">链路补全</text>
+
+<rect x="870" y="352" width="140" height="46" rx="8" fill="#F5F3F8" stroke="#8B6F8A" stroke-width="1.2"/>
+<text x="940.0" y="371" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">Writer 接口</text>
+<text x="940.0" y="386" fill="#8B6F8A" font-size="9" text-anchor="middle">治理管线末端</text>
+
+<rect x="40" y="500" width="260" height="56" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="170.0" y="519" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">errs 错误模型</text>
+<text x="170.0" y="544" fill="#8B8680" font-size="9" text-anchor="middle">ErrorKind/ErrorType/ErrorCode</text>
+
+<rect x="340" y="500" width="260" height="56" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="470.0" y="519" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">internal/attrkv</text>
+<text x="470.0" y="544" fill="#8B8680" font-size="9" text-anchor="middle">slog.Attr ↔ OTel 映射</text>
+
+<rect x="640" y="500" width="260" height="56" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="770.0" y="519" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">internal/otlpendpoint</text>
+<text x="770.0" y="544" fill="#8B8680" font-size="9" text-anchor="middle">endpoint 校验/规范化</text>
+
+<rect x="40" y="620" width="300" height="64" rx="8" fill="#F7F6F4" stroke="#6B7280" stroke-width="1.2"/>
+<text x="190.0" y="639" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">telemetry 三信号装配</text>
+<text x="190.0" y="672" fill="#8B8680" font-size="9" text-anchor="middle">Trace / Metric / Log Provider</text>
+
+<rect x="390" y="620" width="180" height="64" rx="8" fill="#F7F6F4" stroke="#6B7280" stroke-width="1.2"/>
+<text x="480.0" y="639" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">logwriter/file</text>
+<text x="480.0" y="672" fill="#8B8680" font-size="9" text-anchor="middle">JSONL 扁平投影</text>
+
+<rect x="610" y="620" width="180" height="64" rx="8" fill="#F7F6F4" stroke="#6B7280" stroke-width="1.2"/>
+<text x="700.0" y="639" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">logwriter/stdout</text>
+<text x="700.0" y="672" fill="#8B8680" font-size="9" text-anchor="middle">诊断输出</text>
+
+<rect x="830" y="620" width="190" height="64" rx="8" fill="#F7F6F4" stroke="#6B7280" stroke-width="1.2"/>
+<text x="925.0" y="639" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">logwriter/otlp</text>
+<text x="925.0" y="672" fill="#8B8680" font-size="9" text-anchor="middle">OTLP gRPC 双投影</text>
+
+<rect x="830" y="760" width="190" height="60" rx="8" fill="#FFF5F5" stroke="#C96464" stroke-width="1.2"/>
+<text x="925.0" y="779" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">OTel Collector</text>
+<text x="925.0" y="808" fill="#8B8680" font-size="9" text-anchor="middle">batch / tail sampling</text>
+
+<rect x="40" y="760" width="760" height="60" rx="8" fill="#FFF5F5" stroke="#C96464" stroke-width="1.2"/>
+<text x="420.0" y="779" fill="#1a1a1a" font-size="11" font-weight="600" text-anchor="middle">LGTM 本地可观测栈</text>
+<text x="420.0" y="808" fill="#8B8680" font-size="9" text-anchor="middle">Loki 日志 · Tempo Trace · Mimir Metric · Grafana 展示</text>
+
+<line x1="145" y1="122" x2="145" y2="180" stroke="#D97757" stroke-width="1" marker-end="url(#arrowhead-terracotta)"/>
+
+<line x1="395" y1="122" x2="395" y2="180" stroke="#D97757" stroke-width="1" marker-end="url(#arrowhead-terracotta)"/>
+
+<line x1="645" y1="122" x2="645" y2="180" stroke="#D97757" stroke-width="1" marker-end="url(#arrowhead-terracotta)"/>
+
+<line x1="895" y1="122" x2="895" y2="180" stroke="#D97757" stroke-width="1" marker-end="url(#arrowhead-terracotta)"/>
+
+<line x1="110" y1="230" x2="110" y2="300" stroke="#5B8A72" stroke-width="1" marker-end="url(#arrowhead-sage)"/>
+
+<line x1="270" y1="230" x2="270" y2="300" stroke="#5B8A72" stroke-width="1" marker-end="url(#arrowhead-sage)"/>
+
+<line x1="430" y1="230" x2="430" y2="300" stroke="#5B8A72" stroke-width="1" marker-end="url(#arrowhead-sage)"/>
+
+<line x1="590" y1="230" x2="590" y2="300" stroke="#5B8A72" stroke-width="1" marker-end="url(#arrowhead-sage)"/>
+
+<line x1="750" y1="230" x2="750" y2="300" stroke="#5B8A72" stroke-width="1" marker-end="url(#arrowhead-sage)"/>
+
+<line x1="910" y1="230" x2="910" y2="300" stroke="#5B8A72" stroke-width="1" marker-end="url(#arrowhead-sage)"/>
+
+<line x1="170" y1="500" x2="170" y2="440" stroke="#8B6F8A" stroke-width="1" marker-end="url(#arrowhead-plum)"/>
+
+<text x="182" y="475" fill="#8B6F8A" font-size="8">AppError 消费</text>
+
+<line x1="600" y1="528" x2="830" y2="652" stroke="#8B6F8A" stroke-width="1" marker-end="url(#arrowhead-plum)"/>
+
+<text x="640" y="560" fill="#8B6F8A" font-size="8">attrkv.Record 顶层字段映射</text>
+
+<line x1="340" y1="652" x2="390" y2="652" stroke="#6B7280" stroke-width="1" marker-end="url(#arrowhead)"/>
+
+<line x1="340" y1="652" x2="610" y2="652" stroke="#6B7280" stroke-width="1" marker-end="url(#arrowhead)"/>
+
+<line x1="340" y1="652" x2="830" y2="652" stroke="#6B7280" stroke-width="1" marker-end="url(#arrowhead)"/>
+
+<line x1="925" y1="684" x2="925" y2="760" stroke="#C96464" stroke-width="1" marker-end="url(#arrowhead-rose)"/>
+
+<line x1="830" y1="790" x2="800" y2="790" stroke="#C96464" stroke-width="1" marker-end="url(#arrowhead-rose)"/>
+
+<text x="40" y="852" fill="#1a1a1a" font-size="10" font-weight="600">Legend</text>
+
+<rect x="40" y="862" width="16" height="10" rx="3" fill="#FFF5F0" stroke="#D97757" stroke-width="1"/>
+
+<text x="62" y="870" fill="#6B6560" font-size="8">接入方应用</text>
+
+<rect x="160" y="862" width="16" height="10" rx="3" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1"/>
+
+<text x="182" y="870" fill="#6B6560" font-size="8">中间件 / 支撑</text>
+
+<rect x="300" y="862" width="16" height="10" rx="3" fill="#F5F3F8" stroke="#8B6F8A" stroke-width="1"/>
+
+<text x="322" y="870" fill="#6B6560" font-size="8">事件核心 / 映射</text>
+
+<rect x="440" y="862" width="16" height="10" rx="3" fill="#F7F6F4" stroke="#6B7280" stroke-width="1"/>
+
+<text x="462" y="870" fill="#6B6560" font-size="8">装配 / 出口</text>
+
+<rect x="570" y="862" width="16" height="10" rx="3" fill="#FFF5F5" stroke="#C96464" stroke-width="1"/>
+
+<text x="592" y="870" fill="#6B6560" font-size="8">外部依赖</text>
+
+      </svg>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <div class="card-header"><div class="card-dot terracotta"></div><h3>分层与依赖方向</h3></div>
+        <ul>
+          <li>• log/ 只依赖标准库 + errs（AppError 消费）</li>
+          <li>• middleware 依赖 log/ + errs</li>
+          <li>• logwriter/*、telemetry 依赖 log/ + internal/*</li>
+          <li>• OTel SDK 只出现在 internal/attrkv、logwriter/*、telemetry、middleware/*</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot sage"></div><h3>双投影</h3></div>
+        <ul>
+          <li>• file/stdout：扁平 JSON 列，保留 event.name / app.*</li>
+          <li>• OTLP：severity / EventName / timestamp 提升为 LogRecord 顶层</li>
+          <li>• 业务埋点不因出口变化而重写</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot plum"></div><h3>治理管线</h3></div>
+        <ul>
+          <li>• Logger.Emit：Sampler → Masker → Normalize → Writer</li>
+          <li>• TraceExtractor 从 ctx 补全 trace_id / span_id</li>
+          <li>• 批量导出间隔由 telemetry.Config 控制（trace 5s / metric 15s / log 1s）</li>
+        </ul>
+      </div>
+    </div>
+    <p class="footer">go-observability · github.com/formal-you/go-observability · OTel semconv 1.41.0 + app.* vendor 命名空间</p>
+  </div>
+</body>
+</html>
