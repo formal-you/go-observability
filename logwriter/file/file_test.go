@@ -196,3 +196,67 @@ func TestWriterRejectsInvalidRotation(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteStringEncoding 验证 writeKV 对字符串键值的直接写出与 encoding/json 逐字节一致：
+// 引号、反斜杠、HTML 转义字符、控制字符与多字节字符都走回退编码；
+// 非字符串值（整数/布尔）仍保持原 JSON 类型，不被打成字符串。
+func TestWriteStringEncoding(t *testing.T) {
+	cases := []struct {
+		key   string
+		value any
+	}{
+		{"app.note", "hello world"},
+		{"app.note", `say "hi"`},
+		{"app.note", `a\b`},
+		{"app.note", "a<b>&c"},
+		{"app.note", "line1\nline2"},
+		{"app.note", "ctrl\x01char"},
+		{"app.note", "中文é"},
+		{"app.note", ""},
+		{`we"ird\key`, "quoted-key"},
+		{"app.count", int64(42)},
+		{"app.ok", true},
+	}
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	w, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close(context.Background())
+	for _, c := range cases {
+		if err := w.Write(context.Background(), "business", slog.Any(c.key, c.value)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != len(cases) {
+		t.Fatalf("行数=%d, want %d", len(lines), len(cases))
+	}
+	for i, c := range cases {
+		line := lines[i]
+		if !json.Valid([]byte(line)) {
+			t.Fatalf("case %d: 非法 JSON: %s", i, line)
+		}
+		dec := json.NewDecoder(strings.NewReader(line))
+		dec.UseNumber()
+		var m map[string]json.RawMessage
+		if err := dec.Decode(&m); err != nil {
+			t.Fatalf("case %d: %v", i, err)
+		}
+		raw, ok := m[c.key]
+		if !ok {
+			t.Fatalf("case %d: 缺少键 %q: %s", i, c.key, line)
+		}
+		enc, err := json.Marshal(c.value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(raw) != string(enc) {
+			t.Errorf("case %d: 值编码与 json.Marshal 不一致: got %s want %s", i, raw, enc)
+		}
+	}
+}
