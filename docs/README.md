@@ -9,7 +9,7 @@
 | [testing.md](dev-sop/testing.md) | 正式测试契约：需求、缺陷或公共行为变更的黑盒验收真源 |
 | [security.md](security.md) | 设计脱敏、采样和日志治理策略 |
 | [gitops/](gitops/README.md) | GitOps 治理组：GitOps SOP、分支命名、Issue/PR 记录与归档、远程实操、发布清单 |
-| [dev-sop/](dev-sop/README.md) | 开发流程体系：需求收敛、角色模型、多 Agent 编排、验收模板与主剧本 |
+| [dev-sop/](dev-sop/README.md) | 开发流程体系：需求收敛、角色模型、多 Agent 编排、验收模板与主方案 |
 | [samber-comparison.md](samber-comparison.md) | 评估与 samber slog 生态的取舍 |
 | [todo.md](todo.md) | 非代码待办与飞书项目管理迁移准备 |
 | [reports/](reports/README.md) | 查看 Issue 验收、性能和 mutation 基线证据 |
