@@ -1,7 +1,7 @@
 # 开发任务 SOP（多 Agent 编排）
 
 > 状态：**demo 草案**——供评审迭代，确认后转正式。
-> 真源分工：本文是「一个开发任务从需求下达到提交」的执行剧本；Issue/PR/合并与授权语义以 [GitOps SOP](../gitops/gitops-sop.md) 为准；术语以 [CONTEXT.md](../../CONTEXT.md) 为准；黑盒验收契约以 [testing.md](testing.md) 为准。
+> 真源分工：本文是「一个开发任务从需求下达到提交」的执行方案；Issue/PR/合并与授权语义以 [GitOps SOP](../gitops/gitops-sop.md) 为准；术语以 [CONTEXT.md](../../CONTEXT.md) 为准；黑盒验收契约以 [testing.md](testing.md) 为准。
 > 技能来源：引用的技能来自 mattpocock-skills 插件（mattpocock-skills:<skill>），按需触发，不要求全部加载。
 > 组索引：[开发流程体系](README.md)（角色 / 需求收敛 / 验收 / 多 Agent 编排 / 模板）。
 
@@ -16,7 +16,7 @@
 
 **何时启用**：需求模糊、改动中等及以上、跨包/跨文档，或用户明确要求多 Agent 时。单行修复、纯拼写等小改动可直接执行，但契约与门禁不豁免。
 
-## 2. 执行剧本
+## 2. 执行方案
 
 | 阶段 | 主持人 | 技能（mattpocock-skills） | 产出 / 门禁 |
 |---|---|---|---|
@@ -62,5 +62,5 @@
 
 | 文档 | 负责 | 不负责 |
 |---|---|---|
-| [dev-sop.md](dev-sop.md)（本文） | 任务执行剧本：需求收敛、多 Agent 编排、契约先行、验证、DoD | Issue/PR/合并/授权语义 |
+| [dev-sop.md](dev-sop.md)（本文） | 任务执行方案：需求收敛、多 Agent 编排、契约先行、验证、DoD | Issue/PR/合并/授权语义 |
 | [gitops-sop.md](../gitops/gitops-sop.md) | Issue/PR/CI/合并/归档的 GitOps 治理与授权语义 | 具体怎么开发一个任务 |

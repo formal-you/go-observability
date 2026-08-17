@@ -19,7 +19,7 @@
 
 | 文档 | 何时读 |
 | --- | --- |
-| [dev-sop.md](dev-sop.md) | 主剧本：一个开发任务从下达到提交的 7 阶段流程 |
+| [dev-sop.md](dev-sop.md) | 主方案：一个开发任务从下达到提交的 7 阶段流程 |
 | [roles.md](roles.md) | 角色模型：masterAgent / subAgent 职责边界 |
 | [requirement-clarify.md](requirement-clarify.md) | 模糊需求收敛：契约草案、假设清单、改动分级 |
 | [acceptance.md](acceptance.md) | 契约与验收：黑盒先行、DoD、回归与漂移 |

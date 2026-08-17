@@ -15,7 +15,7 @@
 - 实现真源与参考（代码 / 配置 / 环境变量 / OTel 映射）：[参考文档](docs/reference/README.md)
 
 **按变更类型精确路由**：
-- **任何代码或文档变更**：先读 [开发任务 SOP](docs/dev-sop/dev-sop.md)（执行剧本）与 [GitOps SOP](docs/gitops/gitops-sop.md)（验证分级、文档同步、提交门禁）；需求模糊时先按 [需求收敛](docs/dev-sop/requirement-clarify.md) 澄清。
+- **任何代码或文档变更**：先读 [开发任务 SOP](docs/dev-sop/dev-sop.md)（执行方案）与 [GitOps SOP](docs/gitops/gitops-sop.md)（验证分级、文档同步、提交门禁）；需求模糊时先按 [需求收敛](docs/dev-sop/requirement-clarify.md) 澄清。
 - **创建、重命名分支或调整分支治理**：先读 [分支命名规范](docs/gitops/branching.md)。
 - **任何 Go 实现、公共 API、并发或代码注释变更**：先读 [代码与注释准则](docs/reference/coding-standards.md)；中文叙述保留标准英文术语，并明确资源所有权与并发契约。
 - **需求、缺陷、公共行为或测试变更**：先读 [需求收敛](docs/dev-sop/requirement-clarify.md) 与 [正式测试契约](docs/dev-sop/testing.md)；独立黑盒测试是需求验收依据。
