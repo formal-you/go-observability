@@ -13,7 +13,7 @@
 | [samber-comparison.md](samber-comparison.md) | 评估与 samber slog 生态的取舍 |
 | [todo.md](todo.md) | 非代码待办与飞书项目管理迁移准备 |
 | [reports/](reports/README.md) | 查看 Issue 验收、性能和 mutation 基线证据 |
-| [go-observability-architecture.drawio](go-observability-architecture.drawio) | 可编辑架构图 |
+| [telemetry-uml.drawio](telemetry-uml.drawio) | 可编辑 telemetry 装配 UML 图 |
 | [module-map.html](module-map.html) | 浏览器直接打开的 UML 模块地图 |
 | [blog/](blog/README.md) | 面向掘金的体系化文章源稿 |
 

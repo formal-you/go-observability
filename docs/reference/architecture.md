@@ -36,7 +36,7 @@ go-observability/
 │   ├── ISSUE_TEMPLATE/          # bug / feature 报告模板
 │   ├── dependabot.yml           # 依赖更新
 │   ├── pull_request_template.md
-│   └── workflows/ci.yml         # 双平台门禁：Ubuntu(verify/gofmt/vet/test/race/vuln) + Windows(vet/test)
+│   └── workflows/               # ci.yml（双平台门禁）+ branch-name.yml（分支名校验）
 │
 ├── log/                        # 核心日志包（零 OTel/外部依赖；除标准库外只依赖本仓库 errs）
 │   ├── doc.go                   # 包注释：核心包零外部依赖承诺
@@ -47,42 +47,32 @@ go-observability/
 │   ├── events.go                # 六类事件结构体（EventMetadata + Data）
 │   ├── normalize.go             # 归一化：metadata+payload → 扁平 attrs；reservedKeys 过滤；零值省略
 │   ├── log.go                   # Logger / Writer / Sampler / Masker / ErrorHandler / Option
+│   ├── multi_writer.go          # MultiWriter：多出口组合写出，错误聚合不阻断其余 Writer
 │   ├── sampler.go               # ResultKeepSampler + EventTypeKeepSampler（粗分类全量）+ EventKeepSampler（领域前缀）
 │   ├── sampler_rand.go          # 并发安全随机源（math/rand/v2）
 │   ├── masker.go                # FieldMasker：按键名递归脱敏（group/map/slice/LogValuer）
 │   ├── error_project.go         # EventFromError / LevelOf：errs.AppError → 事件投影
-│   ├── error_project_test.go    # 投影黑盒测试（值/指针/错误链/nil）
-│   ├── event_test.go            # 事件结构体与归一化测试
-│   ├── logger_test.go           # Logger 管线测试
-│   ├── sampler_masker_test.go   # 采样/脱敏测试
-│   └── blackbox_log_test.go     # 外部包黑盒测试（验证对外契约）
+│   └── *_test.go                # 单元 + 外部黑盒测试（blackbox_log / event_keep_sampler / identity_context / multi_writer / error_project …）
 │
 ├── errs/
 │   ├── errs.go                  # ErrorKind / ErrorType / ErrorCode / AppError / BizError / SystemError / StackRule / Error Registry
-│   ├── errs_test.go
-│   ├── error_registry_blackbox_test.go
-│   ├── stack_contract_blackbox_test.go
-│   └── strict_contract_test.go
-
+│   └── *_test.go                # 黑盒/严格构造/堆栈契约测试（error_registry / stack_contract / strict_contract）
+│
 ├── internal/                    # 内部共享（不公开 API）
-│   ├── attrkv/
-│   │   ├── attrkv.go            # slog.Attr ↔ OTel KeyValue；Record() 组装 LogRecord 顶层字段
-│   │   └── attrkv_test.go
-│   └── otlpendpoint/
-│       ├── endpoint.go          # OTLP gRPC endpoint 校验与规范化
-│       └── endpoint_test.go
+│   ├── attrkv/                  # slog.Attr ↔ OTel 值转换 + LogRecord 顶层字段映射（唯一核心映射层）
+│   └── otlpendpoint/            # OTLP gRPC endpoint 校验与规范化（host:port / http(s) URL）
 │
-├── logwriter/                      # 写出后端（实现 log 包 Writer，可替换）
-│   ├── file/file.go             # JSONL 文件 Writer（append/轮转，并发安全，含 Close）
-│   ├── stdout/stdout.go         # stdoutlog exporter 包装（本地演示）
-│   └── otlp/otlp.go             # OTLP gRPC Writer（BatchProcessor；可注入外部 LoggerProvider）
+├── logwriter/                   # 写出后端（实现 log.Writer，可替换）
+│   ├── file/                    # JSONL 文件 Writer（append/轮转，并发安全，含 Close）
+│   ├── stdout/                  # stdout 本地演示出口
+│   └── otlp/                    # OTLP gRPC Writer（BatchProcessor；可注入外部 LoggerProvider）
 │
-├── middleware/               # 按框架体系分组（gin / http / grpc / kratos），共享契约与工具独立成包
-│   ├── httperr/httperr.go       # 框架无关错误契约核心：Kind→状态码、安全 reason/message/metadata、扁平响应体、span 元数据
-│   ├── otelutil/otelutil.go     # 框架无关 OTel 工具：链路注入/提取、TraceExtractor、分层 span helper（WithSpan / StartSpan）
-│   ├── gin/                     # Gin 体系：AccessLog / ErrorResponse / Recover / SecurityLog / AuditLog / Trace / Metrics / Abort
-│   ├── http/                    # net/http 体系：ErrorResponse / Recover / SetError / SetSecurity / SetAudit / SecurityLog / AuditLog / Trace / Metrics
-│   ├── grpc/                    # gRPC 体系：Trace / Metrics unary 拦截器
+├── middleware/                  # 按框架体系分组（gin / http / grpc / kratos），共享契约与工具独立成包
+│   ├── httperr/                 # 框架无关错误契约核心：Kind→状态码、安全 reason/message/metadata、扁平响应体、span 元数据
+│   ├── otelutil/                # 框架无关 OTel 工具：链路注入/提取、TraceExtractor、分层 span helper（WithSpan / StartSpan）
+│   ├── gin/                     # Gin 体系：access / errresp / recover / security / audit / trace / metrics
+│   ├── http/                    # net/http 体系：errresp / recover / SetError / security / audit / trace / metrics
+│   ├── grpc/                    # gRPC 体系：trace / metrics unary 拦截器
 │   ├── kratos/                  # kratos v3 适配：HTTP ErrorEncoder + gRPC ErrorMapper + 错误日志 filter（httperr 契约 + kratos 原生错误双识别）
 │   └── internal/mwutil/         # 内部共享底层工具（状态码记录、路由/RPC 解析、span 收尾、直方图）
 │
@@ -91,7 +81,9 @@ go-observability/
 │   ├── runtime_config.go        # 默认值、配置校验、Resource 与环境变量
 │   ├── runtime_providers.go     # Trace / Metric / Log Provider 构造（含 NewFileRuntime / NewLogRuntime / NewOTLPRuntime / NewAllFileRuntime）
 │   ├── runtime_global.go        # InstallGlobal / restore / Shutdown
-│   └── runtime_writer.go        # Runtime.NewLogWriter：file / stdout / otlp / none
+│   ├── runtime_logwriter.go     # Runtime.NewLogWriter：file / stdout / otlp / none
+│   └── *_test.go                # 装配/预设/Writer 生命周期黑盒与契约测试（presets / writer_lifecycle / trace_integration / otlp_reliability / output_modes / runtime_contract）
+│
 ├── observability/               # 本地 LGTM 参考栈（docker compose，非生产方案）
 │   ├── docker-compose.yml       # Collector + Tempo + Loki + Mimir + Grafana
 │   ├── otel-collector-config.yaml / loki.yaml / mimir.yaml / tempo.yaml
@@ -100,30 +92,32 @@ go-observability/
 │
 ├── example/                     # 接入方示范（samber 生态只允许出现在这里）
 │   ├── README.md                # 示例索引
-│   ├── main.go                  # 主示例：Gin + telemetry + OTLP/JSONL 出口选择
-│   ├── config/                  # 应用 / Collector 配置模板（.env.example、docker-compose.example）
-│   ├── minimal/main.go          # 不依赖框架的最小 JSONL 示例
-│   ├── mall/                    # 领域事件注册表示范：order.* 事实名 + app.* 专属键
-│   ├── metrics/main.go          # 使用方定义 RED 与业务指标
-│   ├── nethttp/main.go          # 标准库 HTTP access 事件
-│   └── samber/main.go           # 与 samber slog handler 互操作
+│   ├── 01_quickstart … 16_config  # 编号教学课程：quickstart / events / errors / sampler-masker / multiwriter / errorhandler / telemetry / http / gin / grpc / kratos / security-audit / metrics / otel-logs / samber / config
+│   ├── 17_layered_span/         # otelutil 分层 span helper 示例
+│   ├── blackbox/                # 端到端黑盒：真实 Gin 请求 + OTLP/JSONL 双投影验收
+│   └── mall/                    # 领域事件注册表示范：order.* 事实名 + app.* 专属键
 │
-├── docs/                        # 用户文档（文档索引见 docs/README.md）
-│   ├── reference/               # 实现真源与参考指南（架构/代码准则/配置/环境变量/OTel 映射，索引见 reference/README.md）
-│   ├── onboarding.md
-│   ├── security.md / samber-comparison.md
-│   ├── gitops/                  # GitOps 治理组（分支/Issue/PR/发布，索引见 gitops/README.md）
-│   ├── dev-sop/                 # 开发流程体系（需求收敛/角色/多 Agent 编排，索引见 dev-sop/README.md）
-│   └── go-observability-architecture.drawio   # 可编辑架构图
+├── docs/                        # 文档（索引见 docs/README.md）
+│   ├── reference/               # 实现真源与参考指南（架构/代码准则/配置/环境变量/OTel 映射）
+│   ├── dev-sop/                 # 开发流程体系（需求收敛/角色/多 Agent 编排/验收，索引见 dev-sop/README.md）
+│   ├── gitops/                  # GitOps 治理组（分支/Issue/PR/发布/归档，索引见 gitops/README.md）
+│   ├── adr/                     # 关键架构决策（错误模型/事件名/中间件/安全审计/telemetry）
+│   ├── blog/                    # 面向掘金的体系化文章源稿
+│   ├── reports/                 # Issue 验收、性能与 mutation 基线证据
+│   ├── security.md / onboarding.md / samber-comparison.md / todo.md
+│   ├── module-map.html          # 浏览器直接打开的 UML 模块地图
+│   └── telemetry-uml.drawio     # 可编辑 telemetry 装配 UML 图
 │
 ├── AGENTS.md                    # 仓库开发守则（真源之一；防漂移硬规则）
+├── CONTEXT.md                   # 项目术语表（真源之一；术语冲突时以它为准）
 ├── README.md                    # 项目首页（真源之一）
 ├── CHANGELOG.md / LICENSE / SECURITY.md / SUPPORT.md / CONTRIBUTING.md / CODE_OF_CONDUCT.md
-├── go.mod / go.sum              # Go 1.26；OTel 依赖集中在装配层
-└── log/ 测试文件                # 与 log/ 包同目录的黑盒/单元测试（见上）
+├── SOP-github-flow.ps1          # 一键 GitHub 流程：Issue→分支→PR→CI→squash merge（ops）
+├── SOP-github-flow-README.md    # SOP 脚本使用说明
+└── go.mod / go.sum              # Go 1.26；OTel 依赖集中在装配层
 ```
 
-> `logs/` 与 `example/logs/` 是示例运行产物（已被 `.gitignore` 忽略），不属于源码。
+> `example/logs/` 是示例运行产物（已被 `.gitignore` 忽略）；根 `logs/` 为本地运行产物，均不属于源码。
 
 ## 4. 核心数据流
 
@@ -246,4 +240,4 @@ file/stdout 的扁平投影按**固定字段顺序**输出：`timestamp` → `le
 
 改动后的本地验证：`gofmt -w <改动文件>` → `go build ./...` → `go vet ./...` → `go test ./...`（本机低内存组合：`$env:GOMAXPROCS=1; $env:GOGC=30`）。
 
-完整示例见 [`example/mall`](../../example/mall/)；可编辑架构图见 [go-observability-architecture.drawio](../go-observability-architecture.drawio)。
+完整示例见 [`example/mall`](../../example/mall/)；模块地图见 [`module-map.html`](../module-map.html)（浏览器打开），telemetry 装配 UML 见 [`telemetry-uml.drawio`](../telemetry-uml.drawio)。
