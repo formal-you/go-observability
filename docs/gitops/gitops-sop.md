@@ -71,8 +71,8 @@ git diff --check
 
 ## SOP 自动化脚本（参考）
 
-仓库根目录提供一键 GitHub 流程脚本 [`SOP-github-flow.ps1`](../SOP-github-flow.ps1)（使用说明见
-[`SOP-github-flow-README.md`](../SOP-github-flow-README.md)），把本文「Issue / PR 开放流程」的机械步骤自动化：
+本目录提供一键 GitHub 流程脚本 [`SOP-github-flow.ps1`](SOP-github-flow.ps1)（使用说明见
+[`SOP-github-flow-README.md`](SOP-github-flow-README.md)），把本文「Issue / PR 开放流程」的机械步骤自动化：
 
 ```text
 创建 Issue -> 创建分支 -> 暂存文件 -> 本地验证 -> 提交 -> push -> 创建 PR -> 等 CI -> squash merge -> 更新本地 main
@@ -80,18 +80,20 @@ git diff --check
 
 ### 每次准备 3 样东西
 
-1. `.issue-body.md`：Issue 正文；
-2. `.pr-body.md`：PR 正文（脚本自动补 `Closes #N` 与验证结果段）；
+1. `.issue-body.md`：Issue 正文（模板见 [`template/.issue-body.md`](template/.issue-body.md)）；
+2. `.pr-body.md`：PR 正文（模板见 [`template/.pr-body.md`](template/.pr-body.md)，脚本自动补 `Closes #N` 与验证结果段）；
 3. 文件清单：`-Files` 数组或 `-FileList .files.txt`（每行一个文件）。
+
+运行前把 body 模板从 `template/` 复制到仓库根目录，或给脚本传 `-IssueBodyFile` / `-PrBodyFile` 指向 `template/` 下的文件。
 
 ### 示例
 
 ```powershell
-.\SOP-github-flow.ps1 `
+.\docs\gitops\SOP-github-flow.ps1 `
   -Type refactor `
   -Slug newlogwriter-rename `
   -Title "refactor: rename Runtime.NewWriter to NewLogWriter" `
-  -Files @("CHANGELOG.md", "telemetry/runtime_writer.go") `
+  -Files @("CHANGELOG.md", "telemetry/runtime_logwriter.go") `
   -WaitSeconds 60
 ```
 
@@ -103,7 +105,7 @@ git diff --check
 - 提交前默认运行 `gofmt` / `go build ./...` / `go vet ./...` / `go test ./...` / `git diff --cached --check`（`-SkipVerify` 可关闭）。
 - 脚本不删除分支；合并后仍需按「合并与完成」核对 Issue 关闭与本地 main 同步。
 
-完整参数表与详细用法见 [`SOP-github-flow-README.md`](../SOP-github-flow-README.md)。
+完整参数表与详细用法见 [`SOP-github-flow-README.md`](SOP-github-flow-README.md)。
 
 ## 兼容性规则
 

@@ -101,6 +101,8 @@ go-observability/
 │   ├── reference/               # 实现真源与参考指南（架构/代码准则/配置/环境变量/OTel 映射）
 │   ├── dev-sop/                 # 开发流程体系（需求收敛/角色/多 Agent 编排/验收，索引见 dev-sop/README.md）
 │   ├── gitops/                  # GitOps 治理组（分支/Issue/PR/发布/归档，索引见 gitops/README.md）
+│   │   ├── SOP-github-flow.ps1 / SOP-github-flow-README.md  # 一键 GitHub 流程脚本与使用说明
+│   │   └── template/            # Issue/PR body 模板
 │   ├── adr/                     # 关键架构决策（错误模型/事件名/中间件/安全审计/telemetry）
 │   ├── blog/                    # 面向掘金的体系化文章源稿
 │   ├── reports/                 # Issue 验收、性能与 mutation 基线证据
@@ -112,8 +114,6 @@ go-observability/
 ├── CONTEXT.md                   # 项目术语表（真源之一；术语冲突时以它为准）
 ├── README.md                    # 项目首页（真源之一）
 ├── CHANGELOG.md / LICENSE / SECURITY.md / SUPPORT.md / CONTRIBUTING.md / CODE_OF_CONDUCT.md
-├── SOP-github-flow.ps1          # 一键 GitHub 流程：Issue→分支→PR→CI→squash merge（ops）
-├── SOP-github-flow-README.md    # SOP 脚本使用说明
 └── go.mod / go.sum              # Go 1.26；OTel 依赖集中在装配层
 ```
 
