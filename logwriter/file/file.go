@@ -168,20 +168,32 @@ func marshalLine(eventType string, attrs []slog.Attr, metadata ResourceMetadata)
 	buf.WriteByte('{')
 	first := true
 	writeKV := func(key string, value any) error {
-		kb, err := json.Marshal(key)
-		if err != nil {
-			return err
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		if jsonSafeString(key) {
+			buf.WriteByte('"')
+			buf.WriteString(key)
+			buf.WriteByte('"')
+		} else {
+			kb, err := json.Marshal(key)
+			if err != nil {
+				return err
+			}
+			buf.Write(kb)
+		}
+		buf.WriteByte(':')
+		if s, ok := value.(string); ok && jsonSafeString(s) {
+			buf.WriteByte('"')
+			buf.WriteString(s)
+			buf.WriteByte('"')
+			return nil
 		}
 		vb, err := json.Marshal(value)
 		if err != nil {
 			return err
 		}
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		buf.Write(kb)
-		buf.WriteByte(':')
 		buf.Write(vb)
 		return nil
 	}
@@ -232,4 +244,22 @@ func (w *Writer) Close(_ context.Context) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.file.Close()
+}
+
+// jsonSafeChar 报告 b 是否可直接写入 JSON 字符串字面量，且与 encoding/json.Marshal
+// 的字符串编码逐字节一致：ASCII 可打印、非引号/反斜杠，并排除 < > &
+//（encoding/json 默认对这三个字符做 HTML 转义，写成 \u003c 等）。
+func jsonSafeChar(b byte) bool {
+	return b >= 0x20 && b < 0x7f && b != '"' && b != '\\' && b != '<' && b != '>' && b != '&'
+}
+
+// jsonSafeString 判断 s 是否全部由 jsonSafeChar 组成；是则 writeKV 直接写出，
+// 否则回退 json.Marshal，保证与既有 JSONL 输出逐字节一致。
+func jsonSafeString(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if !jsonSafeChar(s[i]) {
+			return false
+		}
+	}
+	return true
 }
