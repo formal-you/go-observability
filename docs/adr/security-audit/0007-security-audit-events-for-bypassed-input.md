@@ -2,7 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-08-11
-- 关联：ADR-0004（msg/event_type → LogRecord.Body）、CONTEXT.md（六类事件）、docs/architecture.md（错误投影 / 一个请求最多一个错误出口）
+- 关联：ADR-0004（msg/event_type → LogRecord.Body）、CONTEXT.md（六类事件）、docs/reference/architecture.md（错误投影 / 一个请求最多一个错误出口）
 
 ## 背景（Context）
 
@@ -84,6 +84,6 @@
 
 - 方案 A / B / C 作为备选记录，未单独采纳（其能力已被 D 的组合覆盖）。
 - 已显式放宽「一个请求最多一个错误出口」为「错误出口唯一，安全 / 审计事件可并存」，并同步
-  `docs/architecture.md`、`middleware/gin/errresp.go` 注释与 `CONTEXT.md` 术语。
+  `docs/reference/architecture.md`、`middleware/gin/errresp.go` 注释与 `CONTEXT.md` 术语。
 - 输入记录一律走 `app.*` 摘要 + `FieldMasker`，默认不落原始 body；后端保留策略由接入方负责。
 - 选定后：新增事件名常量、示例（example）与黑盒断言测试，并回填本 ADR 状态为 Accepted 及最终方案。

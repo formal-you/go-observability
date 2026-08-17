@@ -1,6 +1,6 @@
 # SOP-github-flow.ps1 使用说明
 
-脚本位置：仓库根目录 `SOP-github-flow.ps1`（`docs/workflow.md` 的「SOP 自动化脚本（参考）」有使用摘要）
+脚本位置：`docs/gitops/SOP-github-flow.ps1`（与本文同目录；`gitops-sop.md` 的「SOP 自动化脚本（参考）」有使用摘要）
 
 作用：在一个命令里完成：
 
@@ -13,12 +13,12 @@
 - 已安装并登录 `gh`。
 - 当前目录是目标 git 仓库根目录。
 - 当前分支是 `main`（或 `-BaseBranch` 指定的分支）。
-- 已准备好两个 body 文件，和一份要提交的文件清单。
+- 已准备好两个 body 文件（模板在 `template/`，运行前复制到仓库根目录或经 `-IssueBodyFile` / `-PrBodyFile` 指定），和一份要提交的文件清单。
 
 ## 每次只需准备 3 样东西
 
-1. `.issue-body.md`：Issue 正文。
-2. `.pr-body.md`：PR 正文。
+1. `.issue-body.md`：Issue 正文（模板：`template/.issue-body.md`）。
+2. `.pr-body.md`：PR 正文（模板：`template/.pr-body.md`）。
 3. 文件清单：可以用 `-Files` 参数，也可以写到一个 `.files.txt`，每行一个文件路径。
 
 ## 示例
@@ -26,14 +26,14 @@
 ### 方式一：直接传文件数组
 
 ```powershell
-.\SOP-github-flow.ps1 `
+.\docs\gitops\SOP-github-flow.ps1 `
   -Type refactor `
   -Slug newlogwriter-rename `
   -Title "refactor: rename Runtime.NewWriter to NewLogWriter and file to runtime_logwriter.go" `
   -Files @(
     "CHANGELOG.md",
-    "telemetry/runtime_writer.go",
-    "telemetry/runtime_logwriter.go"
+    "telemetry/runtime_logwriter.go",
+    "telemetry/runtime_config.go"
   ) `
   -WaitSeconds 60
 ```
@@ -46,12 +46,12 @@
 $files = @'
 CHANGELOG.md
 README.md
-telemetry/runtime_writer.go
 telemetry/runtime_logwriter.go
+telemetry/runtime_config.go
 '@
 $files | Set-Content -LiteralPath .files.txt -NoNewline
 
-.\SOP-github-flow.ps1 `
+.\docs\gitops\SOP-github-flow.ps1 `
   -Type refactor `
   -Slug newlogwriter-rename `
   -Title "refactor: rename Runtime.NewWriter to NewLogWriter and file to runtime_logwriter.go" `
@@ -91,7 +91,7 @@ $files | Set-Content -LiteralPath .files.txt -NoNewline
 
 脚本会生成：
 
-- `.issue-body.md` / `.pr-body.md`：你准备的内容。
+- `.issue-body.md` / `.pr-body.md`：你准备的内容（模板见 `template/`）。
 - 临时 PR body 放在系统 `%TEMP%`，不会污染仓库。
 - `.files.txt`：可选的文件清单。
 

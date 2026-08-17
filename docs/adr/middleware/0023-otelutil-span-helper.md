@@ -2,7 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-08-16
-- 关联：ADR-0006（中间件分组，otelutil 定位）、CONTEXT.md（Span / 生命周期术语）、docs/architecture.md（采样边界）
+- 关联：ADR-0006（中间件分组，otelutil 定位）、CONTEXT.md（Span / 生命周期术语）、docs/reference/architecture.md（采样边界）
 
 ## 背景（Context）
 

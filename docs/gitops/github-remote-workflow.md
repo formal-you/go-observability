@@ -1,6 +1,6 @@
 # GitHub 远程协作实操
 
-本文供 Codex 在需要创建或更新 GitHub Issue、PR、CI、合并与主分支同步时选择性读取。通用生命周期和授权边界以 [开发工作流](workflow.md#issue--pr-开放流程) 为准；本文只记录本仓库已验证的远程操作顺序、失败回退和收尾证据。
+本文供 Codex 在需要创建或更新 GitHub Issue、PR、CI、合并与主分支同步时选择性读取。通用生命周期和授权边界以 [GitOps SOP](gitops-sop.md#issue--pr-开放流程) 为准；本文只记录本仓库已验证的远程操作顺序、失败回退和收尾证据。
 
 ## 开始前
 

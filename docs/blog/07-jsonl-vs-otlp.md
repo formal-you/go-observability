@@ -87,6 +87,6 @@ Log: telemetry.LogConfig{
 1. 不要把出口选择写进业务代码；
 2. 本地开发用 file/stdout，生产用 OTLP；
 3. 用同一份事件模型保证两边的字段一致；
-4. 查看完整字段映射文档 `docs/otel-logs-data-model.md`。
+4. 查看完整字段映射文档 `docs/reference/otel-logs-data-model.md`。
 
 下一篇：[08 · mall 端到端诊断故事](08-mall-end-to-end.md)。

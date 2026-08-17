@@ -27,4 +27,4 @@ docker compose -f ./observability/docker-compose.yml up -d
 OTEL_EXPORTER_OTLP_ENDPOINT=127.0.0.1:4317 go run ./example/14_otel_logs
 ```
 
-file/stdout 是扁平 JSONL；OTLP 把 timestamp、level、trace/span 映射到 LogRecord 顶层字段。完整字段映射见 [`docs/otel-logs-data-model.md`](../../docs/otel-logs-data-model.md)。
+file/stdout 是扁平 JSONL；OTLP 把 timestamp、level、trace/span 映射到 LogRecord 顶层字段。完整字段映射见 [`docs/otel-logs-data-model.md`](../../docs/reference/otel-logs-data-model.md)。

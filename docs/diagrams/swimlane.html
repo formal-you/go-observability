@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>go-observability 泳道图 — 一次 HTTP 请求全链路</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #FAF9F6; min-height: 100vh; padding: 2.5rem 2rem; color: #1a1a1a;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.375rem; }
+    .pulse-dot { width: 10px; height: 10px; background: #D97757; border-radius: 50%;
+      animation: pulse 2.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.9); } }
+    h1 { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em; color: #1a1a1a; }
+    .subtitle { color: #8B8680; font-size: 0.8125rem; margin-left: 1.625rem; letter-spacing: 0.01em; }
+    .diagram-desc { color: #B0AAA4; font-size: 0.6875rem; margin-top: 0.5rem; margin-left: 1.625rem;
+      line-height: 1.5; font-style: italic; }
+    .diagram-container { background: #FFFFFF; border-radius: 12px; border: 1px solid #E8E4DE;
+      padding: 1.5rem; overflow-x: auto;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.02); }
+    svg { width: 100%; min-width: 900px; display: block; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem; margin-top: 1.5rem; }
+    .card { background: #FFFFFF; border-radius: 10px; border: 1px solid #E8E4DE;
+      padding: 1.125rem 1.25rem; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.625rem; }
+    .card-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .card-dot.terracotta { background: #D97757; }
+    .card-dot.sage { background: #5B8A72; }
+    .card-dot.slate { background: #6B7280; }
+    .card-dot.plum { background: #8B6F8A; }
+    .card-dot.rose { background: #C96464; }
+    .card h3 { font-size: 0.8125rem; font-weight: 600; color: #1a1a1a; }
+    .card ul { list-style: none; color: #6B6560; font-size: 0.75rem; line-height: 1.6; }
+    .card li { margin-bottom: 0.25rem; }
+    .footer { text-align: center; margin-top: 1.5rem; color: #B0AAA4; font-size: 0.6875rem; letter-spacing: 0.02em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>go-observability 泳道图 — 一次 HTTP 请求全链路</h1>
+      </div>
+      <p class="subtitle">客户端 → Gin 中间件链 → 业务 → Logger 治理管线 → 出口</p>
+      <p class="diagram-desc"><b>泳道图 (Swimlane Diagram)</b> — 行为性图形。跨组件/角色职责流程（活动图变体）。</p>
+    </div>
+    <div class="diagram-container">
+      <svg viewBox="0 0 1100 880">
+        <defs>
+
+          <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#B0AAA4" />
+          </marker>
+          <marker id="arrowhead-terracotta" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#D97757" />
+          </marker>
+          <marker id="arrowhead-rose" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#C96464" />
+          </marker>
+          <marker id="arrowhead-sage" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#5B8A72" />
+          </marker>
+          <marker id="arrowhead-plum" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#8B6F8A" />
+          </marker>
+          <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="0.6" fill="#E0DCD6"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#dots)" />
+<rect x="20" y="60" width="1060" height="90" rx="10" fill="#FAFAF7" stroke="#E8E4DE" stroke-width="1"/>
+
+<text x="32" y="82" fill="#8B8680" font-size="10" font-weight="600">客户端</text>
+
+<rect x="20" y="180" width="1060" height="170" rx="10" fill="#FAFAF7" stroke="#E8E4DE" stroke-width="1"/>
+
+<text x="32" y="202" fill="#8B8680" font-size="10" font-weight="600">Gin 中间件链</text>
+
+<rect x="20" y="380" width="1060" height="120" rx="10" fill="#FAFAF7" stroke="#E8E4DE" stroke-width="1"/>
+
+<text x="32" y="402" fill="#8B8680" font-size="10" font-weight="600">业务服务</text>
+
+<rect x="20" y="520" width="1060" height="140" rx="10" fill="#FAFAF7" stroke="#E8E4DE" stroke-width="1"/>
+
+<text x="32" y="542" fill="#8B8680" font-size="10" font-weight="600">log.Logger 治理管线</text>
+
+<rect x="20" y="680" width="1060" height="140" rx="10" fill="#FAFAF7" stroke="#E8E4DE" stroke-width="1"/>
+
+<text x="32" y="702" fill="#8B8680" font-size="10" font-weight="600">出口</text>
+
+<rect x="400" y="80" width="180" height="44" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="490.0" y="98" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">HTTP 请求</text>
+<text x="490.0" y="113" fill="#8B8680" font-size="9" text-anchor="middle">客户端发起</text>
+
+<rect x="80" y="210" width="180" height="44" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="170.0" y="236.0" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">TraceMiddleware</text>
+
+<rect x="300" y="210" width="180" height="44" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="390.0" y="236.0" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">AccessLog</text>
+
+<rect x="520" y="210" width="180" height="44" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="610.0" y="236.0" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">Security/AuditGuard</text>
+
+<rect x="740" y="210" width="180" height="44" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="830.0" y="236.0" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">MetricsMiddleware</text>
+
+<rect x="930" y="210" width="140" height="44" rx="8" fill="#F5F8F6" stroke="#5B8A72" stroke-width="1.2"/>
+<text x="1000.0" y="236.0" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">ErrResp/Recover</text>
+
+<rect x="400" y="410" width="220" height="50" rx="8" fill="#F7F6F4" stroke="#6B7280" stroke-width="1.2"/>
+<text x="510.0" y="428" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">业务 Handler / 领域逻辑</text>
+<text x="510.0" y="449" fill="#8B8680" font-size="9" text-anchor="middle">返回 error 或 nil</text>
+
+<rect x="300" y="560" width="260" height="60" rx="8" fill="#F5F3F8" stroke="#8B6F8A" stroke-width="1.2"/>
+<text x="430.0" y="578" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">Logger.Emit</text>
+<text x="430.0" y="609" fill="#8B8680" font-size="9" text-anchor="middle">采样 → 脱敏 → 归一化</text>
+
+<rect x="620" y="560" width="220" height="60" rx="8" fill="#F5F3F8" stroke="#8B6F8A" stroke-width="1.2"/>
+<text x="730.0" y="578" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">TraceExtractor</text>
+<text x="730.0" y="609" fill="#8B8680" font-size="9" text-anchor="middle">ctx → trace_id / span_id</text>
+
+<rect x="300" y="720" width="200" height="60" rx="8" fill="#F7F6F4" stroke="#6B7280" stroke-width="1.2"/>
+<text x="400.0" y="738" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">logwriter/file</text>
+<text x="400.0" y="769" fill="#8B8680" font-size="9" text-anchor="middle">JSONL 追加写</text>
+
+<rect x="560" y="720" width="200" height="60" rx="8" fill="#F7F6F4" stroke="#6B7280" stroke-width="1.2"/>
+<text x="660.0" y="738" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">logwriter/otlp</text>
+<text x="660.0" y="769" fill="#8B8680" font-size="9" text-anchor="middle">OTLP gRPC</text>
+
+<rect x="820" y="720" width="160" height="60" rx="8" fill="#F7F6F4" stroke="#6B7280" stroke-width="1.2"/>
+<text x="900.0" y="738" fill="#1a1a1a" font-size="10" font-weight="600" text-anchor="middle">stdout</text>
+<text x="900.0" y="769" fill="#8B8680" font-size="9" text-anchor="middle">诊断</text>
+
+<line x1="490" y1="124" x2="170" y2="210" stroke="#D97757" stroke-width="1" marker-end="url(#arrowhead-terracotta)"/>
+<text x="210" y="170" fill="#8B8680" font-size="8">请求进入中间件链</text>
+
+<line x1="260" y1="232" x2="300" y2="232" stroke="#5B8A72" stroke-width="1" marker-end="url(#arrowhead-sage)"/>
+
+<line x1="480" y1="232" x2="520" y2="232" stroke="#5B8A72" stroke-width="1" marker-end="url(#arrowhead-sage)"/>
+
+<line x1="700" y1="232" x2="740" y2="232" stroke="#5B8A72" stroke-width="1" marker-end="url(#arrowhead-sage)"/>
+
+<line x1="920" y1="232" x2="930" y2="232" stroke="#5B8A72" stroke-width="1" marker-end="url(#arrowhead-sage)"/>
+
+<line x1="1000" y1="254" x2="620" y2="410" stroke="#5B8A72" stroke-width="1" marker-end="url(#arrowhead-sage)"/>
+<text x="700" y="330" fill="#8B8680" font-size="8">调用业务</text>
+
+<line x1="510" y1="460" x2="510" y2="560" stroke="#8B6F8A" stroke-width="1" marker-end="url(#arrowhead-plum)"/>
+
+<line x1="620" y1="460" x2="620" y2="560" stroke="#8B6F8A" stroke-width="1" marker-end="url(#arrowhead-plum)"/>
+
+<line x1="430" y1="620" x2="430" y2="720" stroke="#6B7280" stroke-width="1" marker-end="url(#arrowhead)"/>
+
+<line x1="560" y1="620" x2="560" y2="720" stroke="#6B7280" stroke-width="1" marker-end="url(#arrowhead)"/>
+
+<line x1="730" y1="620" x2="730" y2="720" stroke="#6B7280" stroke-width="1" marker-end="url(#arrowhead)"/>
+
+<line x1="840" y1="620" x2="840" y2="720" stroke="#6B7280" stroke-width="1" marker-end="url(#arrowhead)"/>
+
+<path d="M1000,254 L1000,370 L40,370 L40,124 L400,124" fill="none" stroke="#D97757" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrowhead-terracotta)"/>
+
+<text x="60" y="362" fill="#D97757" font-size="8">响应返回（含 ErrorEvent 收口）</text>
+
+<text x="40" y="860" fill="#1a1a1a" font-size="10" font-weight="600">Legend</text>
+
+<line x1="40" y1="872" x2="64" y2="872" stroke="#D97757" stroke-width="1" marker-end="url(#arrowhead-terracotta)"/>
+<text x="72" y="876" fill="#6B6560" font-size="8">请求 / 响应</text>
+
+<line x1="170" y1="872" x2="194" y2="872" stroke="#5B8A72" stroke-width="1" marker-end="url(#arrowhead-sage)"/>
+<text x="202" y="876" fill="#6B6560" font-size="8">中间件链 / 调用</text>
+
+<line x1="310" y1="872" x2="334" y2="872" stroke="#8B6F8A" stroke-width="1" marker-end="url(#arrowhead-plum)"/>
+<text x="342" y="876" fill="#6B6560" font-size="8">事件写出</text>
+
+      </svg>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <div class="card-header"><div class="card-dot sage"></div><h3>中间件链</h3></div>
+        <ul>
+          <li>• TraceMiddleware：链路注入/提取 + 分层 span</li>
+          <li>• AccessLog：每请求一条 AccessEvent</li>
+          <li>• Security/AuditGuard：认证/授权判定自动留痕</li>
+          <li>• ErrResp/Recover：错误收口 + panic 兜底</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot plum"></div><h3>治理管线</h3></div>
+        <ul>
+          <li>• Logger.Emit：采样 → 脱敏 → 归一化 → 写出</li>
+          <li>• TraceExtractor 从 ctx 补全链路标识</li>
+          <li>• 事件类型由 type 粗分类承载</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot slate"></div><h3>出口</h3></div>
+        <ul>
+          <li>• file：JSONL 扁平列，便于 grep/jq 检索</li>
+          <li>• otlp：OTLP gRPC 到 Collector / LGTM</li>
+          <li>• stdout：本地开发诊断</li>
+        </ul>
+      </div>
+    </div>
+    <p class="footer">go-observability · github.com/formal-you/go-observability</p>
+  </div>
+</body>
+</html>

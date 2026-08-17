@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>go-observability 图表导航</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #FAF9F6;
+      min-height: 100vh; padding: 2.5rem 2rem; color: #1a1a1a; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.375rem; }
+    .pulse-dot { width: 10px; height: 10px; background: #D97757; border-radius: 50%;
+      animation: pulse 2.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.9); } }
+    h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+    .subtitle { color: #8B8680; font-size: 0.85rem; margin-top: 0.375rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+    .card { display: block; background: #FFFFFF; border-radius: 12px; border: 1px solid #E8E4DE; padding: 1.25rem;
+      text-decoration: none; color: inherit; box-shadow: 0 1px 2px rgba(0,0,0,0.03); transition: transform .15s ease, box-shadow .15s ease; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    .card-dot.terracotta { background: #D97757; }
+    .card-dot.sage { background: #5B8A72; }
+    .card-dot.slate { background: #6B7280; }
+    .card-dot.plum { background: #8B6F8A; }
+    .card-dot.rose { background: #C96464; }
+    h3 { font-size: 0.95rem; font-weight: 600; }
+    .tag { font-size: 0.62rem; font-weight: 500; color: #8B8680; border: 1px solid #E8E4DE; border-radius: 999px;
+      padding: 1px 8px; margin-left: 4px; vertical-align: 1px; }
+    .card-desc { color: #6B6560; font-size: 0.78rem; line-height: 1.55; }
+    .card-go { color: #D97757; font-size: 0.72rem; font-weight: 600; margin-top: 0.625rem; }
+    .footer { text-align: center; margin-top: 2rem; color: #B0AAA4; font-size: 0.7rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row"><div class="pulse-dot"></div><h1>go-observability 图表导航</h1></div>
+      <p class="subtitle">由 insight-diagram skill 生成 · 10 张 UML / 架构图 · 全部通过 review_svg.py 几何校验</p>
+    </div>
+    <div class="grid">
+      <a class="card" href="architecture.html">
+        <div class="card-header"><div class="card-dot terracotta"></div><h3>系统架构图 <span class="tag">结构性 · 最常用</span></h3></div>
+        <p class="card-desc">分层架构：接入应用 → 中间件收口 → log/ 核心 → 双投影出口 → Collector/LGTM</p>
+        <p class="card-go">打开 →</p>
+      </a>
+      <a class="card" href="class.html">
+        <div class="card-header"><div class="card-dot plum"></div><h3>类图 <span class="tag">结构性</span></h3></div>
+        <p class="card-desc">log/ 六类事件 + 核心接口、errs 错误模型、logwriter 写出层、telemetry 装配</p>
+        <p class="card-go">打开 →</p>
+      </a>
+      <a class="card" href="component.html">
+        <div class="card-header"><div class="card-dot sage"></div><h3>组件图 <span class="tag">结构性</span></h3></div>
+        <p class="card-desc">包级组件与依赖方向：核心零依赖、出口可替换</p>
+        <p class="card-go">打开 →</p>
+      </a>
+      <a class="card" href="package.html">
+        <div class="card-header"><div class="card-dot slate"></div><h3>包图 <span class="tag">结构性</span></h3></div>
+        <p class="card-desc">按层分组的模块依赖：集成 / 核心 / 映射 / 装配出口 / 示例</p>
+        <p class="card-go">打开 →</p>
+      </a>
+      <a class="card" href="deployment.html">
+        <div class="card-header"><div class="card-dot rose"></div><h3>部署图 <span class="tag">结构性</span></h3></div>
+        <p class="card-desc">应用进程 → OTel Collector → LGTM；本地 JSONL 双轨</p>
+        <p class="card-go">打开 →</p>
+      </a>
+      <a class="card" href="usecase.html">
+        <div class="card-header"><div class="card-dot sage"></div><h3>用例图 <span class="tag">行为性</span></h3></div>
+        <p class="card-desc">三类参与者 × 12 项核心能力（埋点 / 治理 / 运维审计）</p>
+        <p class="card-go">打开 →</p>
+      </a>
+      <a class="card" href="sequence.html">
+        <div class="card-header"><div class="card-dot plum"></div><h3>序列图 <span class="tag">行为性</span></h3></div>
+        <p class="card-desc">Logger.Emit 治理管线：采样 → 脱敏 → 归一化 → 写出</p>
+        <p class="card-go">打开 →</p>
+      </a>
+      <a class="card" href="flowchart.html">
+        <div class="card-header"><div class="card-dot terracotta"></div><h3>流程图 <span class="tag">行为性 · 最常用</span></h3></div>
+        <p class="card-desc">错误收口：Kind 分派 → 响应 + ErrorEvent 唯一 + 安全/审计并存</p>
+        <p class="card-go">打开 →</p>
+      </a>
+      <a class="card" href="activity.html">
+        <div class="card-header"><div class="card-dot slate"></div><h3>活动图 <span class="tag">行为性</span></h3></div>
+        <p class="card-desc">telemetry.Runtime 装配流程与失败回滚</p>
+        <p class="card-go">打开 →</p>
+      </a>
+      <a class="card" href="swimlane.html">
+        <div class="card-header"><div class="card-dot rose"></div><h3>泳道图 <span class="tag">行为性 · 活动图变体</span></h3></div>
+        <p class="card-desc">一次 HTTP 请求跨 5 泳道全链路</p>
+        <p class="card-go">打开 →</p>
+      </a>
+    </div>
+    <p class="footer">go-observability · github.com/formal-you/go-observability · 生成于 2026-08-17</p>
+  </div>
+</body>
+</html>

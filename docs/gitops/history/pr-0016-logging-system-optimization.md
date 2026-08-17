@@ -3,7 +3,7 @@
 > 本文是 Issue [#14](https://github.com/formal-you/go-observability/issues/14) 与已合并
 > PR [#16](https://github.com/formal-you/go-observability/pull/16) 的实施快照，不再定义当前行为。
 > 其中关于 `sample.json` 不是合法 JSON、能力仍在本地分支等描述已经过期；当前契约以
-> [正式测试契约](../testing.md)、[架构说明](../architecture.md) 和
+> [正式测试契约](../dev-sop/testing.md)、[架构说明](../../reference/architecture.md) 和
 > [`example/blackbox`](../../example/blackbox/README.md) 为准。
 
 - 状态：Archived；PR #16 已于 2026-08-11 合并，未完成事项转为独立 Issue 管理

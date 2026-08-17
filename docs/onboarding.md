@@ -23,8 +23,8 @@ tail -n 1 ./logs/events.jsonl
 
 1. [README](../README.md)：最小 JSONL 接入和项目边界。
 2. [示例索引](../example/README.md)：选择 Gin、net/http、Metric 或 OTLP 示例。
-3. [配置指南](configuration.md)：理解应用、环境变量和 Collector 三层配置。
-4. [架构说明](architecture.md)：修改公共 API 前了解数据流。
+3. [配置指南](reference/configuration.md)：理解应用、环境变量和 Collector 三层配置。
+4. [架构说明](reference/architecture.md)：修改公共 API 前了解数据流。
 5. [架构决策记录](adr/README.md)：在破坏性更新前核对哪些 ADR 已被 Superseded。
 6. [安全指南](security.md)：上线前完成脱敏、采样和存储治理。
 
