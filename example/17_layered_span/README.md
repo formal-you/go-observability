@@ -18,6 +18,7 @@ go run ./example/17_layered_span
   `c.Request.Context()`；
 - **业务层**用 `otelutil.WithSpan(ctx, "service.order.Create", func(ctx context.Context) error { ... })`
   包一层函数：自动 Start/End，错误自动 `SetStatus(Error)+RecordError`，panic 标记后重抛；
+- **每层一个函数**：`handlerCreateOrder → serviceCreateOrder → storeSaveOrder → dbInsertOrder`，本层处理代码写在调用下一层之前，不再嵌套闭包；
 - **ctx 逐层下传**是形成父子树的关键：每层必须使用 `WithSpan` 返回的新 ctx；
 - `otelutil.WithStartOption(trace.WithAttributes(...))` 给 db 层 span 加
   `db.system=mysql`；

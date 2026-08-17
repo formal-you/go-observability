@@ -66,28 +66,50 @@ func newEngine() *gin.Engine {
 	return r
 }
 
-// layeredHandler 演示用 otelutil.WithSpan 逐层包装：每层返回新 ctx 并继续下传，
-// 子 span 才能挂到父 span 之下；错误沿层返回时自动 SetStatus(Error)+RecordError。
+// layeredHandler 组装入口：handler 层调用 service 层，每层一个函数。
 func layeredHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		_, err := otelutil.WithSpan(ctx, "handler.order.Create", func(ctx context.Context) error {
-			_, err := otelutil.WithSpan(ctx, "service.order.Create", func(ctx context.Context) error {
-				_, err := otelutil.WithSpan(ctx, "store.order.Save", func(ctx context.Context) error {
-					_, err := otelutil.WithSpan(ctx, "db.order.insert", func(ctx context.Context) error {
-						// 模拟数据库写入；返回 nil 表示成功。
-						return nil
-					}, otelutil.WithStartOption(trace.WithAttributes(attribute.String("db.system", "mysql"))))
-					return err
-				})
-				return err
-			})
-			return err
-		})
-		if err != nil {
+		if err := handlerCreateOrder(ctx); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	}
+}
+
+// handlerCreateOrder 是 handler 层：本层处理代码（校验、组装）写在调用 service 层之前。
+func handlerCreateOrder(ctx context.Context) error {
+	_, err := otelutil.WithSpan(ctx, "handler.order.Create", func(ctx context.Context) error {
+		// handler 层处理：参数校验、请求模型组装...
+		return serviceCreateOrder(ctx)
+	})
+	return err
+}
+
+// serviceCreateOrder 是 service 层：本层处理代码（编排、幂等键等）写在调用 store 层之前。
+func serviceCreateOrder(ctx context.Context) error {
+	_, err := otelutil.WithSpan(ctx, "service.order.Create", func(ctx context.Context) error {
+		// service 层处理：业务编排、幂等键、事务边界...
+		return storeSaveOrder(ctx)
+	})
+	return err
+}
+
+// storeSaveOrder 是 store 层：本层处理代码（实体组装）写在调用 db 层之前。
+func storeSaveOrder(ctx context.Context) error {
+	_, err := otelutil.WithSpan(ctx, "store.order.Save", func(ctx context.Context) error {
+		// store 层处理：实体组装、仓储约束...
+		return dbInsertOrder(ctx)
+	})
+	return err
+}
+
+// dbInsertOrder 是 db 层：最底层 span，带 db.system 属性。
+func dbInsertOrder(ctx context.Context) error {
+	_, err := otelutil.WithSpan(ctx, "db.order.insert", func(ctx context.Context) error {
+		// 模拟数据库写入；返回 nil 表示成功。
+		return nil
+	}, otelutil.WithStartOption(trace.WithAttributes(attribute.String("db.system", "mysql"))))
+	return err
 }
