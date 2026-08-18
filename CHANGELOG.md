@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Changed
+- Gin `ErrorConfig` 删除 `StatusForError` 公共配置字段，错误状态码与响应体统一通过 `ResponseProjector` 决定（ADR-0024）；`middleware/httperr.StatusForError` 核心默认映射保留。现有 Gin 调用方需迁移到 `ResponseProjector`。
 - `middleware/httperr.ResponseBody` 校验错误（KindValidation）透出真实业务码（无码回退 `VALIDATION_ERROR`），普通 error（非 AppError）响应码由 `SYS_ERROR` 改为 `UNKNOWN_ERROR`、消息改为「发生未知错误」；system 错误仍返回固定 `SYS_ERROR`/「系统繁忙，请稍后重试」，不泄露内部细节。
 - `writer/` 目录重命名为 `logwriter/`：`writer/file`、`writer/stdout`、`writer/otlp` 的公开导入路径改为 `logwriter/file`、`logwriter/stdout`、`logwriter/otlp`。迁移：全局替换导入路径 `github.com/formal-you/go-observability/writer/` → `github.com/formal-you/go-observability/logwriter/`；包名（`file`/`stdout`/`otlp`）不变。
 - `example/` 重构为编号教学课程：原 `minimal/nethttp/metrics/samber/config/otel/errorhandler` 与根 `example/main.go` 分别迁移为 `01_quickstart` 至 `16_config` 的教学目录；新增 `02_events`、`03_errors`、`04_sampler_masker`、`05_multiwriter`、`07_telemetry`、`10_grpc`、`11_kratos`、`12_security_audit`、`14_otel_logs`，并把 `mall` 扩展为端到端参考服务；`example/otel` 改写为使用本项目 `telemetry` 的 OTel Logs 双投影示例，不再保留上游裸 OTel demo。

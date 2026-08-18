@@ -51,6 +51,7 @@ ADR 按主题分目录存放，编号仍全局递增、不重用。
 | [0005](middleware/0005-error-middleware-httperr-core.md) | 错误收口中间件抽取 httperr 契约核心 + 框架薄壳 | Accepted | 2026-08-11 |
 | [0006](middleware/0006-middleware-framework-grouped.md) | 中间件按框架体系分组（gin / http / grpc / kratos） | Accepted | 2026-08-11 |
 | [0023](middleware/0023-otelutil-span-helper.md) | 手动分层 span 通用 helper（otelutil.WithSpan / StartSpan） | Accepted | 2026-08-16 |
+| [0024](middleware/0024-gin-response-projector-only.md) | Gin 错误响应仅保留 ResponseProjector 扩展点 | Accepted | 2026-08-18 |
 
 ### 遥测装配（telemetry）
 
