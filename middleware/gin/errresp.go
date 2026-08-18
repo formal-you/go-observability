@@ -84,15 +84,16 @@ func ErrorResponse(cfg ErrorConfig) gin.HandlerFunc {
 			panic("ginmw: ErrorConfig 必须提供 EventName 或 EventNameResolver")
 		}
 	}
-	statusForError := cfg.StatusForError
-	if statusForError == nil {
-		statusForError = httperr.StatusForError
-	}
 	projector := cfg.ResponseProjector
 	if projector == nil {
-		// 默认投影组合调用方可能覆盖的 StatusForError 与缺省响应体，保证向后兼容。
-		projector = func(err error, requestID string) (int, any) {
-			return statusForError(err), httperr.ResponseBody(err, requestID)
+		if cfg.StatusForError == nil {
+			// 默认投影组合调用方可能覆盖的 StatusForError 与缺省响应体，保证向后兼容。
+			projector = httperr.DefaultProjector
+		} else {
+			statusForError := cfg.StatusForError
+			projector = func(err error, requestID string) (int, any) {
+				return statusForError(err), httperr.ResponseBody(err, requestID)
+			}
 		}
 	}
 
