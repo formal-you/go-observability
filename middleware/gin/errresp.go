@@ -34,9 +34,6 @@ type ErrorConfig struct {
 	// 可选，未提供则不输出该字段。
 	GetRequestID func(c *gin.Context) string
 
-	// StatusForError 错误到 HTTP 状态码的映射；空值使用 httperr.StatusForError。
-	StatusForError func(err error) int
-
 	// ResponseProjector 自定义错误响应体与状态码；nil 使用默认（扁平 {code,message,request_id?}）。
 	// 接入方可用它注入自定义契约形状（如嵌套 error 对象），状态码与响应体一次决定。
 	ResponseProjector httperr.Projector
@@ -86,15 +83,7 @@ func ErrorResponse(cfg ErrorConfig) gin.HandlerFunc {
 	}
 	projector := cfg.ResponseProjector
 	if projector == nil {
-		if cfg.StatusForError == nil {
-			// 默认投影组合调用方可能覆盖的 StatusForError 与缺省响应体，保证向后兼容。
-			projector = httperr.DefaultProjector
-		} else {
-			statusForError := cfg.StatusForError
-			projector = func(err error, requestID string) (int, any) {
-				return statusForError(err), httperr.ResponseBody(err, requestID)
-			}
-		}
+		projector = httperr.DefaultProjector
 	}
 
 	return func(c *gin.Context) {

@@ -325,25 +325,33 @@ func TestErrorResponseWithRecoverNoDoubleWrite(t *testing.T) {
 	attrString(t, attrs, "event.name", "runtime.panic.occurred")
 }
 
-// TestErrorResponseCustomStatusForError 验证 StatusForError 可整体覆盖状态码映射。
-func TestErrorResponseCustomStatusForError(t *testing.T) {
+// TestErrorResponseCustomStatusViaProjector 验证仅覆盖状态码时通过 ResponseProjector 复用默认响应体。
+func TestErrorResponseCustomStatusViaProjector(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &captureWriter{}
 	logger := log.NewLogger(w)
 	r := gin.New()
 	r.Use(ErrorResponse(ErrorConfig{
-		Logger:         logger,
-		EventName:      testErrEventName,
-		StatusForError: func(error) int { return http.StatusTeapot },
+		Logger:    logger,
+		EventName: testErrEventName,
+		ResponseProjector: func(err error, requestID string) (int, any) {
+			return http.StatusTeapot, httperr.ResponseBody(err, requestID)
+		},
 	}))
 	r.GET("/orders/:id", func(c *gin.Context) {
 		Abort(c, errs.NewBusiness("ORDER.CREATE.STOCK_INSUFFICIENT", "FAILED_PRECONDITION", "stock insufficient"))
 	})
 
 	rec := doRequest(r, "/orders/1")
-
 	if rec.Code != http.StatusTeapot {
 		t.Fatalf("status = %d, want 418", rec.Code)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if body["code"] != "ORDER.CREATE.STOCK_INSUFFICIENT" {
+		t.Fatalf("body = %#v, want default business code", body)
 	}
 }
 
